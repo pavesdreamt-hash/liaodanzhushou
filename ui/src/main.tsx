@@ -146,7 +146,7 @@ function ConfirmedApp(){
     if(page==='order'&&selectedOrderId)disposers.push(installOrderDetail(doc,selectedOrderId));
     if(page==='workbench'){
       disposers.push(installDesktopChatWorkbench(doc));
-      // This page reserves a full-width 48px strip above all business controls.
+      // This page reserves the shared 56px application title bar above all business controls.
       const updateWorkbenchChrome=()=>chrome(0,Boolean(doc.querySelector('dialog[open],.overlay:not([hidden])')));
       updateWorkbenchChrome();
       const chromeObserver=new MutationObserver(updateWorkbenchChrome);
@@ -178,7 +178,7 @@ function ConfirmedApp(){
   };
   const iframe=<iframe key={`${page}:${page==='order'?selectedOrderId||'':page==='product'?selectedProductId||'':page==='profit-detail'?selectedProfitDay||'':''}`} ref={frame} className="confirmed-frame" title="聊单助手" srcDoc={html} onLoad={setup}/>;
   if(!merged)return iframe;
-  return <div className="desktop-shell">{iframe}{!dragArea.blocked&&<div className="order-window-drag" aria-hidden="true" style={{right:page==='workbench'?0:dragArea.right,height:page==='workbench'?48:56}}/>}</div>;
+  return <div className="desktop-shell">{iframe}{!dragArea.blocked&&<div className="order-window-drag" aria-hidden="true" style={{right:page==='workbench'?0:dragArea.right,height:56}}/>}</div>;
 }
 
 createRoot(document.getElementById('root')!).render(<StrictMode><ConfirmedApp/></StrictMode>);

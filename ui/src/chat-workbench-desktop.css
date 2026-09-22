@@ -98,12 +98,16 @@
 #chat-workbench-desktop .cwb-list-head .cwb-search input{font-size:14px}
 #chat-workbench-desktop .cwb-list-head .cwb-filters button{font-size:13px}
 
+/* D-045: keep the chat content edge at one third of the window. */
+#chat-workbench-desktop{--cwb-list-width:max(240px,calc(33.333vw - 72px))}
+#chat-workbench-desktop.is-nav-open{--cwb-list-width:max(240px,calc(33.333vw - 216px))}
+
 /* D-037: match the confirmed navigation hierarchy in its expanded state. */
 #chat-workbench-desktop.is-nav-open{grid-template-columns:208px var(--cwb-list-width) 8px minmax(360px,1fr) minmax(260px,330px)}
-#chat-workbench-desktop .cwb-nav{gap:0;padding:18px 12px 12px}
+#chat-workbench-desktop .cwb-nav{gap:0;padding:22px 12px 12px}
 #chat-workbench-desktop .cwb-nav-section{display:grid;gap:6px}
 #chat-workbench-desktop .cwb-nav-section+.cwb-nav-section{margin-top:22px}
-#chat-workbench-desktop .cwb-nav-label{display:none;margin:0 10px 3px;color:var(--cwb-muted);font-size:12px;line-height:1.4}
+#chat-workbench-desktop .cwb-nav-label{display:none;margin:0 10px 9px;color:var(--cwb-muted);font-size:12px;line-height:1.4}
 #chat-workbench-desktop .cwb-nav-section button{min-height:44px;padding:0 12px;gap:10px;font-size:15px}
 #chat-workbench-desktop .cwb-nav-section button svg{width:18px;height:18px}
 #chat-workbench-desktop .cwb-nav-footer{margin-top:auto;display:grid;gap:7px}
@@ -115,3 +119,12 @@
 #chat-workbench-desktop.is-nav-open .cwb-nav-section span{opacity:1;pointer-events:auto}
 @media(max-width:1180px){#chat-workbench-desktop.is-nav-open{grid-template-columns:208px var(--cwb-list-width) 7px minmax(340px,1fr) 260px}}
 @media(max-width:980px){#chat-workbench-desktop.is-nav-open{grid-template-columns:64px var(--cwb-list-width) 7px minmax(0,1fr)}#chat-workbench-desktop .cwb-nav-label{display:none!important}#chat-workbench-desktop .cwb-nav-section button{justify-content:center;padding:0}#chat-workbench-desktop .cwb-nav-toggle{margin-inline:auto}}
+
+/* D-046: share the business-page title bar while retaining the workbench's column divider. */
+#chat-workbench-desktop{position:relative;box-sizing:border-box;padding-top:56px}
+#chat-workbench-desktop .cwb-topbar{position:absolute;z-index:2;inset:0 0 auto;height:56px;padding:0 20px 0 104px;display:flex;align-items:center;background:var(--cwb-panel);border-bottom:1px solid var(--cwb-line);-webkit-app-region:drag}
+#chat-workbench-desktop .cwb-brand{display:flex;align-items:center;gap:9px;color:var(--cwb-text)}
+#chat-workbench-desktop .cwb-brand-mark{width:34px;height:34px;display:grid;place-items:center;color:#fff;background:var(--cwb-accent);border-radius:10px}
+#chat-workbench-desktop .cwb-brand-mark svg{width:18px;height:18px}
+#chat-workbench-desktop .cwb-brand strong{font-size:16px;font-weight:600}
+#chat-workbench-desktop .cwb-top-version{padding:2px 5px;color:var(--cwb-muted);border:1px solid var(--cwb-line);border-radius:5px;font-size:10px;line-height:1.3}
