@@ -48,7 +48,7 @@ export class WhatsAppWebClient {
    client.on('message_edit',message=>{if(current())this.handleMessage(message,generation,true);});
    client.on('message_revoke_everyone',message=>{if(current())this.handleMessage(message,generation,true);});
    await client.initialize();
-  }catch{if(!this.closed&&generation===this.generation)await this.fail('连接未完成，将自动重试；登录资料保留');}finally{if(attemptClient&&(this.closed||generation!==this.generation))await this.destroy(attemptClient);if(this.connectAttempt===attempt)this.connecting=null;}})();return this.connecting;
+  }catch(error){if(!this.closed&&generation===this.generation){const code=String(error?.code||'');const message=code==='WHATSAPP_CHROME_MISSING'?error.message:code==='WHATSAPP_TIMEOUT'?error.message:code==='WHATSAPP_CONNECTION'?error.message:'WhatsApp Web 初始化失败，正在自动重试；登录资料保留。';this.lastConnectionError={code:code||'WHATSAPP_INITIALIZE_FAILED',message:String(error?.message||'').slice(0,240)};await this.fail(message,code==='WHATSAPP_LOGIN_REQUIRED'||code==='WHATSAPP_AUTH_REQUIRED');}}finally{if(attemptClient&&(this.closed||generation!==this.generation))await this.destroy(attemptClient);if(this.connectAttempt===attempt)this.connecting=null;}})();return this.connecting;
  }
  async ready(client,generation){
   const ended=()=>{if(!this.closed&&generation===this.generation&&this.client===client)void this.fail('后台浏览器连接中断，正在自动恢复；登录资料保留');};client.pupBrowser?.once?.('disconnected',ended);client.pupPage?.once?.('error',ended);client.pupPage?.once?.('close',ended);
