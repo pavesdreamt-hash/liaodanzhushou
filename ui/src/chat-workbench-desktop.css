@@ -67,6 +67,37 @@
 
 #chat-workbench-desktop .cwb-version{display:block;margin:2px auto 0;color:#8a8294;font-size:10px;line-height:1.2;text-align:center;white-space:nowrap}
 
+/* D-040: genuine WhatsApp profile images and last-message ownership. */
+#chat-workbench-desktop .cwb-avatar{overflow:hidden}
+#chat-workbench-desktop .cwb-avatar img{display:block;width:100%;height:100%;object-fit:cover}
+#chat-workbench-desktop .cwb-avatar.has-photo{border-color:#ded6e8;background:#f2eef8!important}
+#chat-workbench-desktop .cwb-conversation .cwb-conversation-state{display:flex;align-items:center;gap:4px;font-size:11px}
+#chat-workbench-desktop .cwb-conversation .cwb-conversation-state i{width:12px;height:12px}
+#chat-workbench-desktop .cwb-conversation .cwb-conversation-state.is-merchant{color:#158862}
+#chat-workbench-desktop .cwb-conversation .cwb-conversation-state.is-merchant i{color:#158862}
+#chat-workbench-desktop .cwb-conversation .cwb-conversation-state.is-customer{color:#b45309}
+#chat-workbench-desktop .cwb-conversation .cwb-conversation-state.is-customer i{color:#b45309}
+
+/* D-041: temporary message-history notices. */
+#chat-workbench-desktop .cwb-history-state{max-height:32px;overflow:hidden;opacity:1;transform:translateY(0);transition:max-height .24s ease,padding .24s ease,opacity .18s ease,transform .24s ease,border-color .24s ease}
+#chat-workbench-desktop .cwb-history-state.is-auto-hidden{max-height:0;padding-top:0;padding-bottom:0;opacity:0;transform:translateY(-6px);border-bottom-color:transparent;pointer-events:none}
+@media(prefers-reduced-motion:reduce){#chat-workbench-desktop .cwb-history-state{transition:none}}
+
+/* D-042: readable Chinese translations without using an error color. */
+#chat-workbench-desktop .cwb-translation-line{color:#4c1d95}
+
+/* D-043: one-step larger customer-list identity and header text. */
+#chat-workbench-desktop .cwb-conversation{grid-template-columns:42px minmax(0,1fr) auto}
+#chat-workbench-desktop .cwb-avatar{width:42px;height:42px}
+#chat-workbench-desktop .cwb-avatar svg{width:19px;height:19px}
+#chat-workbench-desktop .cwb-conversation strong{font-size:14px}
+#chat-workbench-desktop .cwb-conversation time{font-size:12px}
+#chat-workbench-desktop .cwb-list-head h1{font-size:16px}
+#chat-workbench-desktop .cwb-list-head h1 b{font-size:11px}
+#chat-workbench-desktop .cwb-list-head .cwb-refresh{color:var(--cwb-accent);font-size:14px}
+#chat-workbench-desktop .cwb-list-head .cwb-search input{font-size:14px}
+#chat-workbench-desktop .cwb-list-head .cwb-filters button{font-size:13px}
+
 /* D-037: match the confirmed navigation hierarchy in its expanded state. */
 #chat-workbench-desktop.is-nav-open{grid-template-columns:208px var(--cwb-list-width) 8px minmax(360px,1fr) minmax(260px,330px)}
 #chat-workbench-desktop .cwb-nav{gap:0;padding:18px 12px 12px}
