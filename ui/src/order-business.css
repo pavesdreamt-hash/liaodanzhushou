@@ -1,0 +1,22 @@
+#ui040 .ob-orders{display:flex;flex-direction:column;gap:12px;min-height:0;flex:1}
+#ui040 .main>.tabs,#ui040 .main>.tab-panel{display:none!important}
+#ui008-order-detail:not([data-empty-data="true"]) .od-content{visibility:hidden}
+#ui040 .ob-toolbar{display:flex;align-items:end;gap:12px;flex-wrap:wrap;background:var(--card,#fff);padding:13px;border:1px solid #e8e2ed;border-radius:12px}
+#ui040 .ob-toolbar label,#ui008-order-detail .ob-field{display:flex;flex-direction:column;gap:5px;color:#6f657a;font-size:12px}
+#ui040 .ob-toolbar input,#ui040 .ob-toolbar select,#ui008-order-detail .ob-field input,.ob-preview-order input{min-height:35px;border:1px solid #ded6e7;border-radius:7px;padding:5px 9px;background:#fff;color:#2e2835;font:inherit}
+#ui040 .ob-search{min-width:245px}.ob-count{margin-left:auto;color:#6f657a;font-size:12px}
+#ui040 .ob-orders .table-wrap{min-height:0;overflow:auto;background:#fff;border:1px solid #e8e2ed;border-radius:12px}
+#ui040 .ob-orders td{white-space:pre-line;vertical-align:middle}.ob-empty{text-align:center;padding:38px!important;color:#766b80}
+.ob-feedback{display:block;min-height:22px;color:#6d3bb4;font-size:12px}.ob-note{margin:8px 0;color:#6f657a;font-size:13px;line-height:1.5}
+.ob-import{width:min(850px,calc(100vw - 60px));max-height:85vh;overflow:auto;padding:22px;border:1px solid #e2d8ed;border-radius:14px;background:#fff;color:#302b37;box-shadow:0 20px 60px #22133630}
+.ob-import::backdrop{background:#2015297a}.ob-import h2{margin:0 0 12px;font-size:18px}.ob-import footer{display:flex;justify-content:end;gap:9px;position:sticky;bottom:-22px;padding:12px 0 0;background:#fff}
+.ob-phone-dialog{width:min(480px,calc(100vw - 40px));border:1px solid #e2d8ed;border-radius:14px;padding:22px;background:#fff}.ob-phone-dialog::backdrop{background:#2015297a}.ob-phone-dialog .ob-field{margin:10px 0}.ob-phone-dialog .ob-field input{min-height:36px;border:1px solid #ded6e7;border-radius:7px;padding:5px 9px}.ob-phone-dialog footer{display:flex;justify-content:end;gap:9px;margin-top:14px}
+.ob-preview-list{display:flex;flex-direction:column;gap:10px;max-height:52vh;overflow:auto}.ob-preview-order{border:1px solid #e9e2ee;border-radius:10px;padding:12px}.ob-preview-order h3{margin:0;font-size:14px}
+.ob-review-row{display:grid;grid-template-columns:minmax(160px,1fr) minmax(120px,160px) minmax(120px,160px);gap:8px;align-items:center;margin:8px 0}.ob-review-row label{display:flex;flex-direction:column;gap:3px;font-size:11px}.ob-preview-order>label{display:block;margin:8px 0;font-size:12px}.ob-review-error{color:#b42318;font-size:12px}
+#ui008-order-detail .ob-card{padding:14px 16px}#ui008-order-detail .ob-card h2{margin:0 0 12px}#ui008-order-detail .ob-field-grid,#ui008-order-detail .ob-read-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+#ui008-order-detail .ob-draft{display:flex;flex-direction:column;gap:12px}#ui008-order-detail .ob-draft-items{display:flex;flex-direction:column;gap:10px}#ui008-order-detail .ob-draft-item{display:grid;grid-template-columns:1.2fr .6fr 1fr 1fr auto;gap:7px;align-items:end}
+#ui008-order-detail .ob-draft .btn,.ob-import .btn,.ob-phone-dialog .btn{min-height:34px;padding:6px 12px;border:1px solid #dcd2e8;border-radius:8px;background:#fff;color:#503e65;font:inherit;cursor:pointer}
+#ui008-order-detail .ob-draft .btn.primary,.ob-import .btn.primary,.ob-phone-dialog .btn.primary{border-color:#7c3aed;background:#7c3aed;color:#fff}
+#ui008-order-detail .ob-draft .btn:disabled,.ob-import .btn:disabled,.ob-phone-dialog .btn:disabled{opacity:.5;cursor:default}
+#ui008-order-detail .ob-read-field{display:flex;flex-direction:column;gap:3px;min-width:0}#ui008-order-detail .ob-read-field span{color:#81768c;font-size:12px}#ui008-order-detail .ob-read-field strong{overflow-wrap:anywhere;font-size:13px}#ui008-order-detail .ob-actions{display:flex;align-items:center;gap:12px}
+@media(max-width:1120px){#ui008-order-detail .ob-draft-item{grid-template-columns:repeat(2,minmax(0,1fr))}#ui008-order-detail .ob-field-grid,#ui008-order-detail .ob-read-grid{grid-template-columns:1fr}}

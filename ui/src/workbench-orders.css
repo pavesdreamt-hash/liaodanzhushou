@@ -1,0 +1,25 @@
+/* Real order cards only; the confirmed workbench layout and other pages stay separate. */
+#chat-workbench-aligned #cw-task-list{container:workbench-orders / inline-size;padding-inline:10px}
+#chat-workbench-aligned #cw-task-list .cw-task-row,
+#chat-workbench-aligned #cw-task-list .cw-task-row[data-selected="true"]{
+  width:100%;margin:0 0 10px;padding:12px;align-items:center;
+  border:1px solid var(--cw-line);border-radius:12px;background:var(--cw-surface)
+}
+#chat-workbench-aligned #cw-task-list .cw-task-row[data-selected="true"]{
+  border-color:var(--cw-accent-mid);background:var(--cw-accent-soft)
+}
+#chat-workbench-aligned #cw-task-list .cw-task-row[data-selected="true"] .cw-open{background:var(--cw-surface)}
+#chat-workbench-aligned #cw-task-list .cw-row-main{width:100%}
+#chat-workbench-aligned #cw-task-list .cw-row-status{display:block}
+#chat-workbench-aligned #cw-task-list .cw-row-main:focus-visible,
+#chat-workbench-aligned #cw-task-list .cw-open:focus-visible{outline:2px solid var(--cw-accent);outline-offset:3px}
+#chat-workbench-aligned .cw-attention-count{
+  min-width:18px;height:18px;padding:0 4px;display:inline-flex;align-items:center;justify-content:center;
+  border-radius:999px;background:var(--cw-orange);color:#fff;font-size:10px;font-weight:600;line-height:1
+}
+@container workbench-orders (max-width:680px){
+  #chat-workbench-aligned #cw-task-list .cw-row-main{grid-template-columns:minmax(0,1fr);gap:5px}
+  #chat-workbench-aligned #cw-task-list .cw-row-message{grid-column:1;grid-row:auto}
+  #chat-workbench-aligned #cw-task-list .cw-row-status{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  #chat-workbench-aligned #cw-task-list .cw-status-time{margin:0}
+}

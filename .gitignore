@@ -1,0 +1,42 @@
+node_modules/
+dist/
+coverage/
+.cache/
+.DS_Store
+*.log
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+
+# OAuth credentials and tokens must only live in macOS Application Support.
+google-oauth.json
+google-desktop-oauth.json
+*client_secret*.json
+*.enc
+resources/google-oauth.json
+
+# Browser sessions and generated runtime/evidence data are never source code.
+kdocs-profile/
+browser-profile/
+diagnostics/
+phase2-evidence/
+monitor-runs/
+backups/
+state/
+snapshots/
+changes/
+output/
+test-output/
+
+# Built rollback archives stay available locally but are not stored in Git.
+archives/**/*.zip
+
+# Never commit WhatsApp local authentication or generated library caches.
+.wwebjs_auth/
+.wwebjs_cache/
+whatsapp-live-auth/
+
+# Generated application output and local review evidence; Git history is the source of truth.
+renderer/
+dist/
+artifacts/

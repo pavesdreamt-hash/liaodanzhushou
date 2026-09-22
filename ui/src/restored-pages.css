@@ -1,0 +1,27 @@
+.live-page-status{margin:0 0 12px;padding:9px 12px;border:1px solid #e2d8fa;border-radius:9px;background:#f8f5ff;color:#514469;font-size:12px;line-height:1.5}
+.live-table-empty{padding:26px!important;text-align:center!important;color:#655d70!important;white-space:normal!important}
+.live-empty-inline{grid-column:1/-1;align-self:center;justify-self:center;padding:12px;color:#655d70;text-align:center}
+.live-empty-panel{padding:28px;text-align:center;color:#655d70}
+.live-dialog{max-width:min(520px,calc(100vw - 36px));padding:22px;border:1px solid #e2d8fa;border-radius:16px;background:#fff;color:#292431;box-shadow:0 22px 65px #22134c33}
+.live-dialog::backdrop{background:#18112366}
+.live-dialog h2{margin:0 0 16px;font-size:18px}
+.live-dialog output{display:block;white-space:pre-wrap;color:#6a4e91;font-size:12px}
+.live-dialog-field{display:grid;gap:6px;margin:10px 0;color:#635b6c;font-size:13px}
+.live-dialog-field input{height:36px;padding:0 10px;border:1px solid #dcd5e8;border-radius:8px;color:#292431;background:#fff}
+.live-dialog footer{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}
+.live-dialog button{min-height:35px;padding:0 13px;border:1px solid #ddd4ec;border-radius:8px;background:#fff;color:#40334f;cursor:pointer}
+.live-dialog button.primary{border-color:#7439e8;background:#7439e8;color:#fff}
+.live-dialog button.danger{border-color:#dc4e4e;color:#bf3030}
+.live-dialog button:disabled{opacity:.55;cursor:not-allowed}
+.live-day-picker{width:142px;height:34px;border:1px solid #dcd5e8;border-radius:8px}
+:is(#ui011-inventory,#ui034,#ui041,#ui036,#ui032,#ui035) :is(.connection,.wa){color:#686574!important}
+#ui036 .account .avatar{background:#e8e6ec;color:#686574}
+#ui041 .state{background:#f3f1f7;color:#686574}
+#ui041 .state::before{background:#686574}
+:is(#ui011-inventory,#ui032,#ui035,#ui036) button:disabled,:is(#ui011-inventory,#ui032,#ui035,#ui036) select:disabled{opacity:.58;cursor:not-allowed}
+
+.wa-login-dialog{width:min(480px,calc(100vw - 36px))}
+.wa-login-dialog .wa-login-hint{margin:0 0 12px;color:#706778;font-size:13px;line-height:1.55}
+.wa-login-dialog .wa-login-qr{display:block;width:260px;height:260px;object-fit:contain;margin:16px auto;border:1px solid #e1d9ee;border-radius:10px;background:#fff}
+.wa-login-dialog .wa-login-qr[hidden]{display:none}
+.wa-login-dialog .wa-login-account{margin-top:14px;padding:10px;border-radius:8px;color:#16815f;background:#e8f8f2;font-size:13px}

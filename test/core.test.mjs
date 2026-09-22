@@ -1,0 +1,12 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {cleanDisplay,coreText} from '../shared/text.mjs';
+import {assembleLine,columnLabel,columnNumber} from '../shared/reconstruct.mjs';
+import {numericDelta,textDelta,compareBusiness} from '../src/sync/diff.mjs';
+import {historyHeaders} from '../src/sync/history.mjs';
+import {assignSourceKeys,baseSourceKey,sourceModel} from '../src/mapping/source-key.mjs';
+test('文本标准化保留显示数字、消除视觉换行',()=>{assert.equal(cleanDisplay('  45.0\r\n  '),'45.0');assert.equal(coreText('260-\n280'),'260-280');assert.equal(coreText('A\u3000  B'),'A B');});
+test('Canvas分片按坐标组装并去除重绘影响的基础规则',()=>{const font='12px Arial',glyphs=[{text:'男用',x:10,maxWidth:24,font,align:'left'},{text:'延时1',x:34,maxWidth:30,font,align:'left'}];assert.equal(assembleLine(glyphs).text,'男用延时1');assert.equal(columnNumber('S'),19);assert.equal(columnLabel(19),'S');});
+test('型号优先且两条同名记录独立',()=>{assert.equal(sourceModel('033 OG拍打双震棒（VT006）'),'VT006');assert.equal(baseSourceKey('033 OG拍打双震棒（VT006）'),'MODEL:VT006');const rows=assignSourceKeys([{sourceName:'狼牙套'},{sourceName:'狼牙套'}]);assert.deepEqual(rows.map(x=>x.sourceKey),['NAME:狼牙套|OCC:1','NAME:狼牙套|OCC:2']);});
+test('数字与非数字变化规则',()=>{assert.equal(numericDelta('220','240'),'+20');assert.equal(numericDelta('145.0','140'),'-5');assert.equal(numericDelta('260-280','270-290'),'260-280→270-290');assert.equal(numericDelta('45.0','45.0'),'');});
+test('成本售价库存名称及附加信息变化均正确归类',()=>{const old={sourceName:'旧名',cost:'220',suggestedPrice:'300',stock:'无货',additionalInfo:''},now={sourceName:'新名',cost:'240',suggestedPrice:'310',stock:'有货',additionalInfo:'最后两件'};const result=compareBusiness(old,now);assert.equal(result.kind,'modified');assert.equal(result.costChange,'+20');assert.equal(result.priceChange,'+10');assert.equal(result.stockChange,'无货 → 有货');assert.equal(result.additionalInfoChange,'空白 → 最后两件');assert.ok(result.details.some(x=>x.field==='sourceName'));assert.equal(textDelta('最后两件',''),'最后两件 → 空白');});
+test('同一天只有真正新增版本时才附加时间',()=>{const date=new Date('2026-08-29T07:20:00Z');assert.deepEqual(historyHeaders(date,[], 'Asia/Shanghai'),['8.29成本','8.29建议售价','8.29库存','8.29附加信息']);assert.deepEqual(historyHeaders(date,['8.29成本','8.29建议售价','8.29库存','8.29附加信息'],'Asia/Shanghai'),['8.29 15:20成本','8.29 15:20建议售价','8.29 15:20库存','8.29 15:20附加信息']);});

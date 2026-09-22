@@ -1,0 +1,9 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {chromium} from 'playwright-core';import {mkdtemp,rm,writeFile,mkdir} from 'node:fs/promises';import os from 'node:os';import path from 'node:path';
+import {WhatsAppBrowser} from '../src/orders/whatsapp-browser.mjs';
+test('visible Chrome fictional WhatsApp tabs survive repeated open, tracked tab close and browser restart',async()=>{
+ const dir=await mkdtemp(path.join(os.tmpdir(),'assistant-chrome-fictional-'));let context,launches=0;const out=path.resolve(process.env.KDOCS_TEST_ARTIFACT_DIRECTORY||'artifacts/assistant-s23-8.10');
+ const browser=new WhatsAppBrowser({userDataPath:dir,launch:async options=>{launches++;context=await chromium.launchPersistentContext(path.join(dir,'profile'),{...options});await context.route('**/*',route=>route.fulfill({status:200,contentType:'text/html',body:'<title>Fictional WhatsApp lifecycle</title><main>仅虚构标签生命周期，不是实际WhatsApp连接</main>'}));return context;}});
+ try{await browser.open();const first=browser.page;await browser.open();await browser.open();assert.equal(browser.page,first);assert.equal(launches,1);assert.equal(context.pages().length,1);const second=await context.newPage();await second.goto('https://web.whatsapp.com/');await first.close();await browser.open();assert.equal(browser.page,second);assert.equal(launches,1);await second.close();await browser.open();assert.equal(launches,1);assert.equal(context.pages().length,1);await context.close();await browser.open();assert.equal(launches,2);await mkdir(out,{recursive:true});await writeFile(path.join(out,'chrome-lifecycle.json'),JSON.stringify({result:'PASS-LOCAL',visibleChrome:true,fictionalPage:true,realWhatsAppRead:false,reuse:true,tabRecovery:true,contextRestart:true},null,2));}
+ finally{await context?.close();await rm(dir,{recursive:true,force:true});}
+});

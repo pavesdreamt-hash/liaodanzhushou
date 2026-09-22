@@ -1,0 +1,12 @@
+import {EventEmitter} from 'node:events';
+import {readFile,writeFile} from 'node:fs/promises';
+
+// Explicit fictional fixture, reachable only behind main's isolated test gate.
+export async function fictionalLiveClient(filename){
+ const state=async()=>{const f=JSON.parse(await readFile(filename,'utf8'));if(f.fictional!==true)throw Error('Only fictional live fixtures are allowed');return f;};const initial=await state(),client=new EventEmitter();let timer,seen=new Set(),connected=true;
+ client.info={wid:{_serialized:initial.accountPhone+'@c.us'}};
+ const message=raw=>({...raw,id:{_serialized:raw.id,remote:initial.targetPhone+'@c.us'},fromMe:raw.direction==='merchant',timestamp:Math.floor(Date.parse(raw.sentAt)/1000),body:raw.text,type:raw.type||'chat',downloadMedia:async()=>{const f=await state();if(f.mediaFailure)return undefined;return f.media||{mimetype:'image/png',data:'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aYZkAAAAASUVORK5CYII='};}});
+ client.getNumberId=async n=>({_serialized:n+'@c.us'});client.getContactLidAndPhone=async ids=>ids.map(pn=>({pn,lid:pn.replace('@c.us','@lid')}));client.getChatById=async id=>({id:{_serialized:id},fetchMessages:async({limit})=>(await state()).messages.slice(-limit).map(message)});
+ client.initialize=async()=>{client.emit('authenticated');client.emit('ready');timer=setInterval(async()=>{try{const f=await state();if(f.connected===false){if(connected)client.emit('disconnected','TIMEOUT');connected=false;return;}for(const m of f.messages){if(!seen.has(m.id)){seen.add(m.id);client.emit('message_create',message(m));}}}catch{/* A partial fixture write is retried on the next test tick. */}},100);timer.unref();};
+ client.destroy=async()=>clearInterval(timer);client.sendMessage=async(remote,content)=>{const f=await state();if(f.allowManualSend!==true)throw Error('Sending is forbidden in live fixtures');if(remote!==f.targetPhone+'@c.us')throw Error('Fictional recipient mismatch');const raw={id:'true_'+remote+'_fixture_'+Date.now()+'_'+f.messages.length,direction:'merchant',sentAt:new Date().toISOString(),text:typeof content==='string'?content:'[图片]',type:typeof content==='string'?'chat':'image'};f.messages.push(raw);await writeFile(filename,JSON.stringify(f));return {...message(raw),ack:1};};return client;
+}

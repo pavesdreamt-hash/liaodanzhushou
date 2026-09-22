@@ -1,0 +1,8 @@
+/* Image dialogs are shared by the chat and product-image modules. */
+.reply-dialog .reply-dialog-body{display:flex;flex-wrap:wrap;gap:12px}
+.reply-dialog .reply-dialog-body>p,.reply-dialog .reply-dialog-body>output,.reply-dialog .reply-dialog-body>input{width:100%;margin:4px 0}
+.reply-dialog .reply-image-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;width:100%}
+.reply-dialog .reply-image-grid button{display:flex;flex-direction:column;align-items:center;width:100%;gap:5px;padding:6px;font-size:12px;overflow:hidden}
+.reply-dialog .reply-image-grid img{width:100%;height:100px;object-fit:contain}
+.reply-dialog .reply-full-image{max-width:100%;max-height:60vh;object-fit:contain;margin:auto}
+.reply-dialog .reply-preview-text{white-space:pre-wrap;overflow-wrap:anywhere;font-size:14px;color:#292433}

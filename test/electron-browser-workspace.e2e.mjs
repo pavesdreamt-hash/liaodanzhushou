@@ -1,0 +1,107 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {_electron as electron} from 'playwright-core';
+import {chromium} from 'playwright-core';
+import electronPath from 'electron';
+import {mkdtemp,readFile,rm,writeFile} from 'node:fs/promises';
+import path from 'node:path';
+import os from 'node:os';
+import {openOrderDatabase} from '../src/orders/database.mjs';
+import {OrderRepository} from '../src/orders/order-repository.mjs';
+import {OrderService} from '../src/orders/order-service.mjs';
+import {OrderAppService} from '../src/orders/order-app-service.mjs';
+
+test('Electron 44 菜单栏后台通过默认浏览器打开本地订单工作区',async()=>{
+  const directory=await mkdtemp(path.join(os.tmpdir(),'electron-browser-workspace-'));
+  const userData=path.join(directory,'user-data'),urlFile=path.join(directory,'workspace-url.txt'),trayBoundsFile=path.join(directory,'tray-bounds.json');
+  let database,application,browser;
+  try{
+    database=await openOrderDatabase({userDataPath:userData});
+    const repository=new OrderRepository(database),created=new OrderService(repository).createOrder({source:'manual',shopplus_order_no:'BROWSER-FICTIONAL',shopplus_created_at:'2026-09-08T08:00:00.000Z',currency:'AED',order_status:'fictional',delivery_status:'unshipped',payment_method:'COD',customer_first_name:'Browser',customer_last_name:'Fictional',customer_full_name:'Browser Fictional',customer_phone:'+000000009',customer_email:'browser@example.invalid',country:'Example Country',province:'Example Province',city:'Example City',street:'Example Street',residence:'',order_total:'10.00',product_total:'10.00',discount_amount:'0',items:[{sku_code:'YB01',product_name_snapshot:'YB01 Fictional',quantity:1,unit_list_price:'10.00',unit_actual_price:'10.00',unit_cost_snapshot:'2.00',cost_source:'fictional'}]}),orderApp=new OrderAppService({database,userDataPath:userData});
+    orderApp.confirmOrder({orderId:created.id,note:'fictional WhatsApp confirmation'});orderApp.recordAddressVerification({orderId:created.id,status:'matched',detailConfirmed:true});
+    database.close();database=null;
+    const exe=process.env.KDOCS_TEST_EXECUTABLE;application=await electron.launch({executablePath:exe||electronPath,args:[...(exe?[]:['.']),`--orders-test-user-data=${userData}`,'--orders-test-browser-workspace',`--orders-test-browser-url-file=${urlFile}`,`--orders-test-tray-bounds-file=${trayBoundsFile}`],cwd:path.resolve('.'),env:{...process.env,NODE_ENV:'test'}});
+    let url='';
+    for(let i=0;i<120&&!url;i++){await new Promise(resolve=>setTimeout(resolve,100));url=await readFile(urlFile,'utf8').catch(()=> '');}
+    assert.match(url,/^http:\/\/127\.0\.0\.1:\d+\/\?token=/);
+    assert.equal(application.windows().length,0);
+    const trayBounds=JSON.parse(await readFile(trayBoundsFile,'utf8'));assert.ok(trayBounds.width>0&&trayBounds.width<=48,`菜单栏点击区域宽度异常：${trayBounds.width}`);assert.ok(trayBounds.height>0&&trayBounds.height<=32,`菜单栏点击区域高度异常：${trayBounds.height}`);
+    browser=await chromium.launch({headless:true});
+    const page=await browser.newPage({viewport:{width:1280,height:800}});
+    page.on('pageerror',error=>console.error('Browser test page error:',error.message));await page.goto(url,{waitUntil:'networkidle'});
+    await page.getByRole('button',{name:'订单管理'}).click();
+    await page.getByRole('button',{name:'订单列表'}).click();
+    await page.locator('#orders-table-body').getByText('BROWSER-FICTIONAL',{exact:true}).waitFor();
+    assert.equal(await page.locator('html').evaluate(element=>element.scrollWidth===element.clientWidth),true);
+    const sequenceOffsets=await page.evaluate(()=>[document.querySelector('.order-list-table th:first-child'),document.querySelector('.order-list-table td:first-child')].map(element=>{const style=getComputedStyle(element);return {padding:parseFloat(style.paddingLeft),font:parseFloat(style.fontSize)};}));
+    for(const offset of sequenceOffsets)assert.ok(Math.abs(offset.padding-(24+offset.font*2))<1);
+    assert.equal(await page.locator('#orders-list-page .order-list-table th:last-child').evaluate(el=>getComputedStyle(el).textAlign),'center');
+    assert.equal(await page.locator('#orders-list-page .order-list-table td:last-child .order-state').first().evaluate(el=>getComputedStyle(el).justifyContent),'center');
+    const shiftedColumns=await page.locator('#orders-list-page .order-list-table tr').first().locator('th').evaluateAll(cells=>cells.map(cell=>parseFloat(getComputedStyle(cell).textIndent)));
+    assert.equal(shiftedColumns[0],0);for(const offset of shiftedColumns.slice(1,-1))assert.ok(offset>0);assert.equal(shiftedColumns.at(-1),0);
+    await page.locator('#orders-table-body tr').filter({hasText:'BROWSER-FICTIONAL'}).click();
+    await page.locator('.compact-order-overview').waitFor();
+    assert.deepEqual(await page.locator('.compact-order-overview .overview-header').first().locator('span').allTextContents(),['创建时间','支付方式','总数量','总金额']);
+    assert.deepEqual(await page.locator('.compact-order-overview .overview-header').last().locator('span').allTextContents(),['商品编号','商品价格','商品数量','包裹数量']);
+    assert.equal(await page.locator('.compact-order-overview strong').first().evaluate(el=>getComputedStyle(el).fontSize),'16px');
+    assert.deepEqual(await page.locator('.profit-product-head span').allTextContents(),['商品','数量','价格']);
+    const headingSizes=await page.locator('.compact-order-overview .overview-header>* ,.profit-product-head,.profit-subtitle,.profit-metrics>div>span,.package-profit-result>span,.profit-calculator-total>span').evaluateAll(elements=>[...new Set(elements.map(el=>getComputedStyle(el).fontSize))]);
+    assert.deepEqual(headingSizes,['14px']);
+    assert.equal(await page.locator('.profit-product-row:not(.profit-product-head)').first().evaluate(el=>getComputedStyle(el).fontSize),'16px');
+    const productCentering=await page.locator('.profit-product-row:not(.profit-product-head)').first().evaluate(el=>{const row=el.getBoundingClientRect(),item=el.firstElementChild.getBoundingClientRect();return {align:getComputedStyle(el).alignItems,offset:Math.abs((row.top+row.bottom-item.top-item.bottom)/2)};});assert.equal(productCentering.align,'center');assert.ok(productCentering.offset<1);
+    const widths=await page.locator('.profit-product-head').evaluate(el=>getComputedStyle(el).gridTemplateColumns.split(' ').map(parseFloat));
+    assert.equal(widths.length,3);assert.ok(Math.max(...widths)-Math.min(...widths)<1);
+    assert.equal(await page.locator('.profit-workbench .discount-limit-editor').count(),0);
+    assert.deepEqual(await page.locator('.profit-metrics-header span').allTextContents(),['成交金额','成本','包裹利润']);
+    assert.equal(await page.locator('.profit-metrics-header').evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(246, 248, 251)');
+    assert.equal(await page.locator('.shipping-registration').evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(246, 248, 251)');
+    assert.equal(await page.locator('.profit-calculator-total').evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(246, 248, 251)');
+    assert.ok(await page.locator('.profit-discount-row select').first().evaluate(el=>el.getBoundingClientRect().width>=80));
+    assert.deepEqual(await page.locator('.shipping-registration .inline-fee-editor').locator('button').allTextContents(),['确定','修改']);
+    assert.deepEqual(await page.locator('.shipping-registration .inline-fee-editor').locator('button').evaluateAll(buttons=>buttons.map(button=>button.scrollHeight<=button.clientHeight&&button.scrollWidth<=button.clientWidth)),[true,true]);
+    assert.equal(await page.locator('.shipping-registration .fee-reason').count(),0);
+    assert.equal(await page.locator('[aria-label$="实际物流费AED"]').count(),1);
+    const alignedInputs=await page.evaluate(()=>{const discount=document.querySelector('.profit-discount-row input'),shipping=document.querySelector('.shipping-registration input');const discountRect=discount.getBoundingClientRect(),shippingRect=shipping.getBoundingClientRect();return {leftDelta:Math.abs(discountRect.left-shippingRect.left),widthDelta:Math.abs(discountRect.width-shippingRect.width)};});
+    assert.ok(alignedInputs.leftDelta<1);assert.ok(alignedInputs.widthDelta<1);
+    assert.equal(await page.locator('.profit-workbench .remittance-box').count(),0);
+    assert.equal(await page.locator('.remittance-card.remittance-box').count(),0);
+    assert.equal(await page.locator('.detail-column-right>.remittance-card').count(),1);
+    const workbenchHeights=await page.evaluate(()=>[document.querySelector('.profit-product-row:not(.profit-product-head)'),document.querySelector('.profit-discount-row'),document.querySelector('.profit-metrics>div:not(.profit-metrics-header)')].map(element=>Math.round(element.getBoundingClientRect().height)));
+    assert.deepEqual(workbenchHeights,[48,48,48]);
+    const resultHeights=await page.evaluate(()=>['.shipping-registration','.profit-calculator-total','.remittance-card'].map(selector=>Math.round(document.querySelector(selector).getBoundingClientRect().height)));
+    assert.deepEqual(resultHeights.slice(0,2),[48,48]);assert.equal(resultHeights[2],Math.round(await page.locator('.detail-history').evaluate(element=>element.getBoundingClientRect().height))); // Remittance follows the existing history-card height rule.
+    const metricTransforms=await page.locator('.profit-workbench .profit-metrics>div:not(.profit-metrics-header)>strong').evaluateAll(elements=>elements.map(element=>getComputedStyle(element).transform));
+    assert.equal(metricTransforms[0],'none');assert.notEqual(metricTransforms[1],'none');assert.notEqual(metricTransforms[2],'none');
+    const metricTexts=await page.locator('.profit-workbench .profit-metrics>div:not(.profit-metrics-header)>strong').allTextContents();assert.deepEqual(metricTexts,['AED 10.00','AED 2.00','']); // No final profit before a package result and actual fee.
+    assert.equal(await page.locator('.profit-workbench .profit-calculator-total').evaluate(element=>getComputedStyle(element).marginTop),'16px');
+    const alignedProfit=await page.evaluate(()=>{const node=document.querySelector('.profit-workbench .profit-calculator-total>strong'),original=node.textContent;node.textContent='AED 0.00（RMB 0.00）';const cost=document.querySelector('.profit-workbench .profit-metrics>div:nth-child(3)>strong').getBoundingClientRect(),order=node.getBoundingClientRect();node.textContent=original;return {delta:Math.abs(cost.left-order.left),cost:cost.left,order:order.left};});assert.ok(alignedProfit.delta<1,JSON.stringify(alignedProfit));
+    assert.equal(await page.locator('.profit-workbench .profit-calculator-total').evaluate(element=>getComputedStyle(element).gap),'0px');
+    assert.equal(await page.locator('.profit-workbench .profit-calculator-total>strong').evaluate(element=>getComputedStyle(element).textOverflow),'clip');
+    const remittanceHeading=await page.evaluate(()=>{const profit=document.querySelector('.profit-workbench>.section-title-row h3').getBoundingClientRect(),remittance=document.querySelector('.remittance-card>strong').getBoundingClientRect();return {leftDelta:Math.abs(profit.left-remittance.left),fontEqual:getComputedStyle(document.querySelector('.profit-workbench>.section-title-row h3')).fontSize===getComputedStyle(document.querySelector('.remittance-card>strong')).fontSize};});assert.ok(remittanceHeading.leftDelta<1,JSON.stringify(remittanceHeading));assert.equal(remittanceHeading.fontEqual,true);
+    const remittanceHistoryHeight=await page.evaluate(()=>Math.abs(document.querySelector('.remittance-card').getBoundingClientRect().height-document.querySelector('.detail-history').getBoundingClientRect().height));assert.ok(remittanceHistoryHeight<1);
+    for(const label of ['报单编号','客户信息','地址信息','包裹信息','成交信息']){const row=page.locator('.report-three-column>div').filter({hasText:label});await row.getByRole('button',{name:'确认',exact:true}).click();await row.locator('strong').filter({hasText:'✅'}).waitFor();}
+    await page.getByRole('button',{name:'生成报单',exact:true}).click();await page.locator('#txt-preview-dialog').waitFor({state:'visible'});
+    const downloadPromise=page.waitForEvent('download');await page.getByRole('button',{name:'下载TXT',exact:true}).click();const download=await downloadPromise,downloadPath=await download.path();assert.equal(download.suggestedFilename(),'BROWSER-FICTIONAL_9.8-1.txt');assert.match(await readFile(downloadPath,'utf8'),/Report No: 9\.8-1/);
+    assert.match(page.url(),/#order\//);
+    await page.reload({waitUntil:'domcontentloaded'});
+    await page.locator('.compact-order-overview').waitFor();
+    assert.equal(await page.locator('#detail-order-no').textContent(),'BROWSER-FICTIONAL');
+    assert.equal(await page.locator('.report-three-column>div>strong').filter({hasText:/✅|已确认 ✓/}).count(),7);
+    assert.equal(await page.getByRole('button',{name:'在 Google Maps 中打开'}).count(),1);
+    await page.locator('#order-detail-close').click();
+    await page.getByRole('button',{name:'利润登记',exact:true}).click();
+    await page.locator('#orders-profit-page').waitFor();
+    assert.deepEqual(await page.locator('.profit-table th').allTextContents(),['序号','日期','订单编号','客户电话','商品','商品数量','利润']);
+    assert.equal(await page.locator('#profit-table-body tr').count(),0);
+    assert.match(page.url(),/#orders\/profit$/);
+    await page.reload({waitUntil:'domcontentloaded'});
+    await page.locator('#orders-profit-page').waitFor();
+    assert.equal(await page.locator('#orders-profit-page').isVisible(),true);
+    await page.getByRole('button',{name:'订单管理',exact:true}).click();await page.getByRole('button',{name:'新建订单',exact:true}).click();await page.getByRole('heading',{name:'草稿 #2',exact:true}).waitFor();await page.getByRole('button',{name:'订单助手',exact:true}).click();await page.locator('.assistant-binding-summary').filter({hasText:'当前未连接'}).waitFor();assert.equal(await page.getByRole('button',{name:'刷新聊天',exact:true}).isDisabled(),true);await page.getByRole('button',{name:'AI 使用说明',exact:true}).scrollIntoViewIfNeeded();await page.getByRole('button',{name:'AI 使用说明',exact:true}).focus();await page.getByRole('tooltip').filter({hasText:'AI 尚未配置，可手动编辑并复制英文草稿。'}).waitFor();await page.keyboard.press('Escape');assert.equal(await page.locator('#order-detail-page').isVisible(),true);assert.equal(await page.getByRole('button',{name:'AI 拟回复',exact:true}).isDisabled(),true);await page.getByRole('tab',{name:/资料核对/}).click();const review=page.getByRole('dialog',{name:'补充与核对',exact:true});assert.equal(await review.getByRole('button',{name:'提取并核对',exact:true}).isDisabled(),true);await review.getByRole('button',{name:'关闭',exact:true}).click();assert.equal(await page.locator('.order-assistant').getByRole('button',{name:'刷新聊天'}).isDisabled(),true);
+  }finally{
+    if(database)database.close();
+    if(browser)await browser.close().catch(()=>{});
+    if(application)await application.close().catch(()=>{});
+    await rm(directory,{recursive:true,force:true});
+  }
+});

@@ -1,0 +1,940 @@
+<div id="chat-workbench-aligned" aria-label="聊单助手完整工作台界面预览">
+  <style>
+    #chat-workbench-aligned {
+      --cw-accent: #7c3aed;
+      --cw-accent-soft: color-mix(in srgb, var(--cw-accent) 11%, transparent);
+      --cw-accent-mid: color-mix(in srgb, var(--cw-accent) 22%, transparent);
+      --cw-bg: light-dark(#f7f6fb, #141319);
+      --cw-surface: light-dark(#ffffff, #201f27);
+      --cw-surface-2: light-dark(#faf9fd, #292731);
+      --cw-text: light-dark(#241f2f, #f6f2fa);
+      --cw-muted: light-dark(#746e7f, #aaa4b3);
+      --cw-line: light-dark(#e7e3ec, #393640);
+      --cw-green: light-dark(#168b68, #63d5af);
+      --cw-green-soft: light-dark(#e8f7f1, #183a30);
+      --cw-orange: light-dark(#bd6817, #f1a859);
+      --cw-orange-soft: light-dark(#fff4e7, #3f2c1a);
+      --cw-blue: light-dark(#3478c6, #7bb8ff);
+      --cw-blue-soft: light-dark(#edf5ff, #1f3147);
+      --cw-phone-bg: light-dark(#eee8df, #24221f);
+      --cw-phone-head: light-dark(#08776b, #075c54);
+      --cw-bubble-in: light-dark(#ffffff, #302e35);
+      --cw-bubble-out: light-dark(#d9fdd3, #175447);
+      --cw-phone-line: light-dark(#dad5cf, #3c3935);
+      --cw-shadow: light-dark(0 16px 48px rgba(48, 34, 74, .09), 0 18px 52px rgba(0, 0, 0, .34));
+      width: 100%;
+      color: var(--cw-text);
+      background: transparent;
+      font-family: Inter, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+    }
+    #chat-workbench-aligned * { box-sizing: border-box; }
+    #chat-workbench-aligned button,
+    #chat-workbench-aligned textarea { font: inherit; }
+    #chat-workbench-aligned .cw-app {
+      position: relative;
+      min-height: 770px;
+      overflow: hidden;
+      border: 1px solid var(--cw-line);
+      border-radius: 22px;
+      background: var(--cw-bg);
+      box-shadow: var(--cw-shadow);
+    }
+    #chat-workbench-aligned .cw-topbar {
+      height: 62px;
+      padding: 0 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      background: var(--cw-surface);
+      border-bottom: 1px solid var(--cw-line);
+    }
+    #chat-workbench-aligned .cw-brand,
+    #chat-workbench-aligned .cw-brand-copy,
+    #chat-workbench-aligned .cw-top-actions,
+    #chat-workbench-aligned .cw-page-actions,
+    #chat-workbench-aligned .cw-section-title,
+    #chat-workbench-aligned .cw-row-person,
+    #chat-workbench-aligned .cw-row-actions,
+    #chat-workbench-aligned .cw-phone-title,
+    #chat-workbench-aligned .cw-phone-head-main,
+    #chat-workbench-aligned .cw-chat-toolbar,
+    #chat-workbench-aligned .cw-mode-status,
+    #chat-workbench-aligned .cw-source,
+    #chat-workbench-aligned .cw-phone-meta {
+      display: flex;
+      align-items: center;
+    }
+    #chat-workbench-aligned .cw-brand { gap: 10px; min-width: 0; }
+    #chat-workbench-aligned .cw-brand-mark {
+      width: 35px;
+      height: 35px;
+      display: grid;
+      place-items: center;
+      flex: 0 0 auto;
+      color: #fff;
+      background: var(--cw-accent);
+      border-radius: 11px;
+    }
+    #chat-workbench-aligned .cw-brand-mark svg { width: 18px; height: 18px; }
+    #chat-workbench-aligned .cw-brand-copy { gap: 7px; }
+    #chat-workbench-aligned .cw-brand-name { font-size: 16px; font-weight: 500; white-space: nowrap; }
+    #chat-workbench-aligned .cw-version {
+      padding: 2px 6px;
+      color: var(--cw-muted);
+      background: var(--cw-surface-2);
+      border: 1px solid var(--cw-line);
+      border-radius: 6px;
+      font-size: 11px;
+    }
+    #chat-workbench-aligned .cw-top-actions { gap: 7px; }
+    #chat-workbench-aligned .cw-preview-label { color: var(--cw-muted); font-size: 12px; }
+    #chat-workbench-aligned .cw-icon-button,
+    #chat-workbench-aligned .cw-nav-item,
+    #chat-workbench-aligned .cw-action,
+    #chat-workbench-aligned .cw-stat,
+    #chat-workbench-aligned .cw-tab,
+    #chat-workbench-aligned .cw-task-row,
+    #chat-workbench-aligned .cw-row-main,
+    #chat-workbench-aligned .cw-open,
+    #chat-workbench-aligned .cw-attention,
+    #chat-workbench-aligned .cw-close-preview,
+    #chat-workbench-aligned .cw-mode,
+    #chat-workbench-aligned .cw-translate,
+    #chat-workbench-aligned .cw-send {
+      border: 0;
+      color: inherit;
+      background: transparent;
+    }
+    #chat-workbench-aligned .cw-icon-button {
+      width: 34px;
+      height: 34px;
+      display: grid;
+      place-items: center;
+      border-radius: 9px;
+    }
+    #chat-workbench-aligned .cw-icon-button:hover { background: var(--cw-surface-2); }
+    #chat-workbench-aligned .cw-user {
+      width: 31px;
+      height: 31px;
+      display: grid;
+      place-items: center;
+      color: var(--cw-accent);
+      background: var(--cw-accent-soft);
+      border-radius: 50%;
+      font-size: 12px;
+    }
+    #chat-workbench-aligned .cw-shell { display: grid; grid-template-columns: 154px minmax(0, 1fr); }
+    #chat-workbench-aligned .cw-sidebar {
+      min-height: 707px;
+      padding: 23px 11px 16px;
+      display: flex;
+      flex-direction: column;
+      background: var(--cw-surface);
+      border-right: 1px solid var(--cw-line);
+    }
+    #chat-workbench-aligned .cw-nav-group + .cw-nav-group { margin-top: 24px; }
+    #chat-workbench-aligned .cw-nav-label { padding: 0 9px 8px; color: var(--cw-muted); font-size: 11px; }
+    #chat-workbench-aligned .cw-nav-item {
+      width: 100%;
+      min-height: 41px;
+      padding: 0 9px;
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      color: var(--cw-muted);
+      border-radius: 10px;
+      font-size: 12px;
+      text-align: left;
+    }
+    #chat-workbench-aligned .cw-nav-item svg { width: 16px; height: 16px; flex: 0 0 auto; }
+    #chat-workbench-aligned .cw-nav-item:hover { color: var(--cw-text); background: var(--cw-surface-2); }
+    #chat-workbench-aligned .cw-nav-item[aria-current="page"] { color: var(--cw-accent); background: var(--cw-accent-soft); font-weight: 500; }
+    #chat-workbench-aligned .cw-connection {
+      margin-top: auto;
+      padding: 14px 8px 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--cw-muted);
+      border-top: 1px solid var(--cw-line);
+      font-size: 11px;
+      line-height: 1.45;
+    }
+    #chat-workbench-aligned .cw-online {
+      width: 8px;
+      height: 8px;
+      flex: 0 0 auto;
+      border-radius: 50%;
+      background: var(--cw-green);
+      box-shadow: 0 0 0 4px var(--cw-green-soft);
+    }
+    #chat-workbench-aligned .cw-main { min-width: 0; padding: 20px; }
+    #chat-workbench-aligned .cw-page-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+    #chat-workbench-aligned .cw-heading { min-width: 0; }
+    #chat-workbench-aligned .cw-heading h1 { margin: 0; font-size: 22px; line-height: 1.25; font-weight: 500; }
+    #chat-workbench-aligned .cw-heading p { margin: 6px 0 0; color: var(--cw-muted); font-size: 12px; line-height: 1.5; }
+    #chat-workbench-aligned .cw-page-actions { gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+    #chat-workbench-aligned .cw-action {
+      min-height: 36px;
+      padding: 0 12px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      border: 1px solid var(--cw-line);
+      border-radius: 9px;
+      background: var(--cw-surface);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+    #chat-workbench-aligned .cw-action svg { width: 14px; height: 14px; }
+    #chat-workbench-aligned .cw-action:hover { color: var(--cw-accent); border-color: var(--cw-accent-mid); }
+    #chat-workbench-aligned .cw-action-primary { color: #fff; border-color: var(--cw-accent); background: var(--cw-accent); }
+    #chat-workbench-aligned .cw-action-primary:hover { color: #fff; filter: brightness(.96); }
+    #chat-workbench-aligned .cw-workspace {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 286px;
+      grid-template-rows: auto minmax(0, 1fr);
+      gap: 12px 14px;
+      align-items: stretch;
+    }
+    #chat-workbench-aligned.cw-preview-collapsed .cw-workspace { grid-template-columns: minmax(0, 1fr); }
+    #chat-workbench-aligned.cw-preview-collapsed .cw-phone-column { display: none; }
+    #chat-workbench-aligned .cw-center,
+    #chat-workbench-aligned .cw-phone-column { display: contents; }
+    #chat-workbench-aligned .cw-stats {
+      grid-column: 1;
+      grid-row: 1;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 9px;
+    }
+    #chat-workbench-aligned .cw-stat {
+      min-width: 0;
+      padding: 12px 13px;
+      text-align: left;
+      border: 1px solid var(--cw-line);
+      border-radius: 12px;
+      background: var(--cw-surface);
+    }
+    #chat-workbench-aligned .cw-stat:hover { border-color: var(--cw-accent-mid); }
+    #chat-workbench-aligned .cw-stat[aria-pressed="true"] { border-color: var(--cw-accent); background: var(--cw-accent-soft); }
+    #chat-workbench-aligned .cw-stat-label { display: block; color: var(--cw-muted); font-size: 11px; }
+    #chat-workbench-aligned .cw-stat-value { display: block; margin-top: 5px; font-size: 20px; line-height: 1; font-weight: 500; }
+    #chat-workbench-aligned .cw-stat-note { display: block; margin-top: 6px; color: var(--cw-muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #chat-workbench-aligned .cw-panel {
+      grid-column: 1;
+      grid-row: 2;
+      min-width: 0;
+      min-height: 0;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      border: 1px solid var(--cw-line);
+      border-radius: 14px;
+      background: var(--cw-surface);
+    }
+    #chat-workbench-aligned .cw-queue-head { padding: 15px 15px 0; }
+    #chat-workbench-aligned .cw-section-title { justify-content: space-between; gap: 12px; }
+    #chat-workbench-aligned .cw-section-heading { display: flex; align-items: center; gap: 9px; min-width: 0; }
+    #chat-workbench-aligned .cw-section-title h2,
+    #chat-workbench-aligned .cw-phone-title h2 { margin: 0; font-size: 15px; font-weight: 500; }
+    #chat-workbench-aligned .cw-result-count { color: var(--cw-muted); font-size: 11px; }
+    #chat-workbench-aligned .cw-attention {
+      min-height: 27px;
+      padding: 0 7px;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      color: var(--cw-orange);
+      background: var(--cw-orange-soft);
+      border-radius: 7px;
+      font-size: 11px;
+      white-space: nowrap;
+    }
+    #chat-workbench-aligned .cw-attention svg { width: 12px; height: 12px; }
+    #chat-workbench-aligned .cw-tabs { display: flex; gap: 3px; margin-top: 11px; overflow-x: auto; scrollbar-width: none; }
+    #chat-workbench-aligned .cw-tabs::-webkit-scrollbar { display: none; }
+    #chat-workbench-aligned .cw-tab {
+      min-height: 32px;
+      padding: 0 8px;
+      flex: 0 0 auto;
+      color: var(--cw-muted);
+      border-bottom: 2px solid transparent;
+      font-size: 11px;
+    }
+    #chat-workbench-aligned .cw-tab[aria-selected="true"] { color: var(--cw-accent); border-bottom-color: var(--cw-accent); font-weight: 500; }
+    #chat-workbench-aligned .cw-task-list {
+      min-height: 0;
+      height: 0;
+      flex: 1;
+      padding: 3px 10px 7px 15px;
+      overflow-y: auto;
+      scrollbar-gutter: stable;
+      scrollbar-width: thin;
+    }
+    #chat-workbench-aligned .cw-task-row {
+      width: 100%;
+      padding: var(--cw-row-pad, 13px) 0;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+      text-align: left;
+      border-top: 1px solid var(--cw-line);
+    }
+    #chat-workbench-aligned .cw-row-main {
+      min-width: 0;
+      padding: 0;
+      display: grid;
+      grid-template-columns: minmax(128px, .8fr) minmax(148px, 1.1fr) minmax(104px, .7fr);
+      gap: 10px;
+      align-items: center;
+      color: var(--cw-text);
+      text-align: left;
+    }
+    #chat-workbench-aligned .cw-task-row:hover .cw-phone-number { color: var(--cw-accent); }
+    #chat-workbench-aligned .cw-task-row[data-selected="true"] { margin-inline: -8px; width: calc(100% + 16px); padding-inline: 8px; border-radius: 10px; background: var(--cw-accent-soft); }
+    #chat-workbench-aligned .cw-row-person { gap: 8px; min-width: 0; }
+    #chat-workbench-aligned .cw-avatar {
+      width: 28px;
+      height: 28px;
+      display: grid;
+      place-items: center;
+      flex: 0 0 auto;
+      color: var(--cw-accent);
+      background: var(--cw-accent-soft);
+      border-radius: 50%;
+      font-size: 11px;
+      font-weight: 500;
+    }
+    #chat-workbench-aligned .cw-person-copy,
+    #chat-workbench-aligned .cw-row-message,
+    #chat-workbench-aligned .cw-row-status { min-width: 0; }
+    #chat-workbench-aligned .cw-phone-line { display: flex; align-items: center; gap: 5px; min-width: 0; }
+    #chat-workbench-aligned .cw-phone-number,
+    #chat-workbench-aligned .cw-message-title { display: block; font-size: 11px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #chat-workbench-aligned .cw-order-ref,
+    #chat-workbench-aligned .cw-message-preview,
+    #chat-workbench-aligned .cw-status-time { display: block; color: var(--cw-muted); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #chat-workbench-aligned .cw-order-ref,
+    #chat-workbench-aligned .cw-message-preview { margin-top: 4px; }
+    #chat-workbench-aligned .cw-source { gap: 4px; margin-top: 5px; color: var(--cw-muted); font-size: 11px; }
+    #chat-workbench-aligned .cw-source svg { width: 11px; height: 11px; }
+    #chat-workbench-aligned .cw-status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      max-width: 100%;
+      padding: 4px 6px;
+      border-radius: 7px;
+      font-size: 11px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    #chat-workbench-aligned .cw-status-pill svg { width: 11px; height: 11px; flex: 0 0 auto; }
+    #chat-workbench-aligned .cw-unread {
+      min-width: 17px;
+      height: 17px;
+      padding: 0 5px;
+      display: inline-grid;
+      place-items: center;
+      flex: 0 0 auto;
+      color: #fff;
+      background: var(--cw-accent);
+      border-radius: 9px;
+      font-size: 9px;
+    }
+    #chat-workbench-aligned .cw-reply { color: var(--cw-accent); background: var(--cw-accent-soft); }
+    #chat-workbench-aligned .cw-info { color: var(--cw-orange); background: var(--cw-orange-soft); }
+    #chat-workbench-aligned .cw-confirm { color: var(--cw-blue); background: var(--cw-blue-soft); }
+    #chat-workbench-aligned .cw-follow { color: var(--cw-green); background: var(--cw-green-soft); }
+    #chat-workbench-aligned .cw-status-time { margin-top: 5px; }
+    #chat-workbench-aligned .cw-row-actions { justify-content: flex-end; }
+    #chat-workbench-aligned .cw-open {
+      min-height: 30px;
+      padding: 0 8px;
+      color: var(--cw-accent);
+      background: var(--cw-accent-soft);
+      border-radius: 8px;
+      font-size: 11px;
+      white-space: nowrap;
+    }
+    #chat-workbench-aligned .cw-open:hover { background: var(--cw-accent-mid); }
+    #chat-workbench-aligned .cw-detail { color: var(--cw-muted); background: var(--cw-surface-2); }
+    #chat-workbench-aligned .cw-empty { padding: 42px 15px; color: var(--cw-muted); font-size: 12px; text-align: center; }
+    #chat-workbench-aligned .cw-phone-controls {
+      grid-column: 2;
+      grid-row: 1;
+      min-width: 0;
+    }
+    #chat-workbench-aligned .cw-phone-title { min-height: 32px; justify-content: space-between; margin-bottom: 9px; }
+    #chat-workbench-aligned .cw-phone-title-actions { display: flex; align-items: center; gap: 6px; }
+    #chat-workbench-aligned .cw-expand {
+      min-height: 30px;
+      padding: 0 7px;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      color: var(--cw-accent);
+      background: transparent;
+      border: 0;
+      border-radius: 8px;
+      font-size: 11px;
+      white-space: nowrap;
+    }
+    #chat-workbench-aligned .cw-expand:hover { background: var(--cw-accent-soft); }
+    #chat-workbench-aligned .cw-expand svg { width: 14px; height: 14px; }
+    #chat-workbench-aligned .cw-mode-switch {
+      margin-bottom: 9px;
+      padding: 4px;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 3px;
+      border-radius: 11px;
+      background: var(--cw-surface-2);
+    }
+    #chat-workbench-aligned .cw-mode {
+      min-height: 32px;
+      padding: 0 5px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      color: var(--cw-muted);
+      border-radius: 8px;
+      font-size: 11px;
+      white-space: nowrap;
+    }
+    #chat-workbench-aligned .cw-mode svg { width: 13px; height: 13px; }
+    #chat-workbench-aligned .cw-mode[aria-pressed="true"] { color: #fff; background: var(--cw-accent); font-weight: 500; }
+    #chat-workbench-aligned .cw-mode-status { gap: 6px; min-height: 25px; margin-bottom: 7px; color: var(--cw-accent); font-size: 11px; }
+    #chat-workbench-aligned .cw-mode-status svg { width: 13px; height: 13px; }
+    #chat-workbench-aligned .cw-status-line { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 7px; }
+    #chat-workbench-aligned .cw-status-line .cw-mode-status { min-width: 0; margin-bottom: 0; }
+    #chat-workbench-aligned .cw-close-preview {
+      min-height: 27px;
+      padding: 0 2px;
+      flex: 0 0 auto;
+      color: var(--cw-muted);
+      font-size: 11px;
+      white-space: nowrap;
+    }
+    #chat-workbench-aligned .cw-close-preview:hover { color: var(--cw-text); }
+    #chat-workbench-aligned .cw-phone {
+      grid-column: 2;
+      grid-row: 2;
+      min-height: 0;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      border: 8px solid light-dark(#242232, #08070b);
+      border-radius: 34px;
+      background: var(--cw-phone-bg);
+      box-shadow: 0 12px 28px light-dark(rgba(43, 31, 62, .14), rgba(0, 0, 0, .3));
+    }
+    #chat-workbench-aligned .cw-phone-top {
+      position: relative;
+      min-height: 94px;
+      padding: 24px 12px 12px;
+      color: #fff;
+      background: var(--cw-phone-head);
+    }
+    #chat-workbench-aligned .cw-notch {
+      position: absolute;
+      top: 0;
+      left: 50%;
+      width: 106px;
+      height: 19px;
+      transform: translateX(-50%);
+      background: light-dark(#242232, #08070b);
+      border-radius: 0 0 13px 13px;
+    }
+    #chat-workbench-aligned .cw-phone-meta { justify-content: space-between; margin-bottom: 11px; font-size: 10px; }
+    #chat-workbench-aligned .cw-signal { display: flex; gap: 5px; align-items: center; }
+    #chat-workbench-aligned .cw-phone-head-main { gap: 8px; }
+    #chat-workbench-aligned .cw-phone-back { width: 17px; height: 17px; }
+    #chat-workbench-aligned .cw-phone-avatar { width: 31px; height: 31px; color: #fff; background: rgba(255,255,255,.17); }
+    #chat-workbench-aligned .cw-phone-contact { min-width: 0; flex: 1; }
+    #chat-workbench-aligned .cw-contact-phone { display: block; font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #chat-workbench-aligned .cw-contact-order { display: block; margin-top: 3px; color: rgba(255,255,255,.72); font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #chat-workbench-aligned .cw-phone-more { width: 16px; height: 16px; }
+    #chat-workbench-aligned .cw-chat-toolbar {
+      min-height: 39px;
+      padding: 0 11px;
+      justify-content: space-between;
+      gap: 7px;
+      color: var(--cw-muted);
+      background: var(--cw-surface);
+      border-bottom: 1px solid var(--cw-phone-line);
+      font-size: 10px;
+    }
+    #chat-workbench-aligned .cw-check { display: inline-flex; align-items: center; gap: 5px; }
+    #chat-workbench-aligned .cw-check input { accent-color: var(--cw-accent); }
+    #chat-workbench-aligned .cw-translate {
+      min-height: 27px;
+      padding: 0 6px;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      border-radius: 7px;
+      font-size: 10px;
+    }
+    #chat-workbench-aligned .cw-translate:hover { background: var(--cw-surface-2); }
+    #chat-workbench-aligned .cw-translate svg { width: 13px; height: 13px; }
+    #chat-workbench-aligned .cw-messages {
+      min-height: 286px;
+      flex: 1;
+      padding: 12px 10px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      background-color: var(--cw-phone-bg);
+      background-image: radial-gradient(circle at 8px 8px, light-dark(rgba(121,105,85,.06), rgba(255,255,255,.025)) 1.2px, transparent 1.3px);
+      background-size: 24px 24px;
+      scrollbar-width: thin;
+    }
+    #chat-workbench-aligned .cw-day {
+      align-self: center;
+      padding: 4px 8px;
+      color: var(--cw-muted);
+      background: var(--cw-surface);
+      border-radius: 8px;
+      font-size: 10px;
+    }
+    #chat-workbench-aligned .cw-bubble {
+      max-width: 88%;
+      padding: 8px 9px 6px;
+      border-radius: 10px;
+      font-size: 11px;
+      line-height: 1.45;
+      box-shadow: 0 1px 1px light-dark(rgba(45,35,28,.09), rgba(0,0,0,.2));
+    }
+    #chat-workbench-aligned .cw-bubble-in { align-self: flex-start; background: var(--cw-bubble-in); border-top-left-radius: 3px; }
+    #chat-workbench-aligned .cw-bubble-out { align-self: flex-end; background: var(--cw-bubble-out); border-top-right-radius: 3px; }
+    #chat-workbench-aligned .cw-original { margin: 0; }
+    #chat-workbench-aligned .cw-translation { margin: 6px 0 0; padding-top: 6px; color: var(--cw-muted); border-top: 1px solid color-mix(in srgb, var(--cw-muted) 18%, transparent); }
+    #chat-workbench-aligned .cw-bubble-time { display: block; margin-top: 5px; color: var(--cw-muted); font-size: 9px; text-align: right; }
+    #chat-workbench-aligned .cw-composer { padding: 9px; background: var(--cw-surface); border-top: 1px solid var(--cw-phone-line); }
+    #chat-workbench-aligned .cw-reply-preview {
+      margin-bottom: 7px;
+      padding: 7px 8px;
+      height: 58px;
+      overflow: hidden;
+      color: var(--cw-muted);
+      background: var(--cw-surface-2);
+      border-left: 3px solid var(--cw-accent);
+      border-radius: 7px;
+      font-size: 10px;
+      line-height: 1.45;
+    }
+    #chat-workbench-aligned .cw-compose-row { display: grid; grid-template-columns: minmax(0, 1fr) 34px; gap: 7px; align-items: end; }
+    #chat-workbench-aligned .cw-input {
+      width: 100%;
+      min-height: 35px;
+      max-height: 70px;
+      padding: 8px 10px;
+      resize: vertical;
+      color: var(--cw-text);
+      background: var(--cw-surface);
+      border: 1px solid var(--cw-line);
+      border-radius: 18px;
+      font-size: 11px;
+      line-height: 1.45;
+    }
+    #chat-workbench-aligned .cw-input::placeholder { color: var(--cw-muted); }
+    #chat-workbench-aligned .cw-send {
+      width: 34px;
+      height: 34px;
+      display: grid;
+      place-items: center;
+      color: #fff;
+      background: var(--cw-accent);
+      border-radius: 50%;
+    }
+    #chat-workbench-aligned .cw-send svg { width: 16px; height: 16px; }
+    #chat-workbench-aligned .cw-home-line { width: 90px; height: 4px; margin: 8px auto 7px; border-radius: 2px; background: light-dark(#bdb8b5, #5b575a); }
+    #chat-workbench-aligned .cw-toast {
+      position: absolute;
+      right: 20px;
+      bottom: 18px;
+      z-index: 8;
+      max-width: min(350px, calc(100% - 40px));
+      padding: 10px 13px;
+      color: var(--cw-text);
+      background: var(--cw-surface);
+      border: 1px solid var(--cw-line);
+      border-radius: 10px;
+      box-shadow: var(--cw-shadow);
+      font-size: 11px;
+      opacity: 0;
+      transform: translateY(8px);
+      pointer-events: none;
+      transition: opacity .16s ease, transform .16s ease;
+    }
+    #chat-workbench-aligned .cw-toast.is-visible { opacity: 1; transform: translateY(0); }
+    @media (max-width: 900px) {
+      #chat-workbench-aligned .cw-shell { grid-template-columns: 62px minmax(0, 1fr); }
+      #chat-workbench-aligned .cw-sidebar { padding-inline: 8px; }
+      #chat-workbench-aligned .cw-nav-label,
+      #chat-workbench-aligned .cw-nav-item span,
+      #chat-workbench-aligned .cw-connection { display: none; }
+      #chat-workbench-aligned .cw-nav-item { justify-content: center; padding: 0; }
+      #chat-workbench-aligned .cw-workspace { grid-template-columns: minmax(0, 1fr) 268px; }
+      #chat-workbench-aligned .cw-row-main { grid-template-columns: minmax(116px, .8fr) minmax(130px, 1fr); }
+      #chat-workbench-aligned .cw-row-status { display: none; }
+    }
+    @media (max-width: 730px) {
+      #chat-workbench-aligned .cw-shell { display: block; }
+      #chat-workbench-aligned .cw-sidebar {
+        min-height: 0;
+        padding: 7px 10px;
+        flex-direction: row;
+        gap: 4px;
+        overflow-x: auto;
+        border-right: 0;
+        border-bottom: 1px solid var(--cw-line);
+        scrollbar-width: none;
+      }
+      #chat-workbench-aligned .cw-sidebar::-webkit-scrollbar { display: none; }
+      #chat-workbench-aligned .cw-nav-group { display: contents; }
+      #chat-workbench-aligned .cw-nav-group + .cw-nav-group { margin-top: 0; }
+      #chat-workbench-aligned .cw-nav-item { width: 42px; flex: 0 0 42px; }
+      #chat-workbench-aligned .cw-main { padding: 16px 13px; }
+      #chat-workbench-aligned .cw-page-head { flex-direction: column; }
+      #chat-workbench-aligned .cw-page-actions { justify-content: flex-start; }
+      #chat-workbench-aligned .cw-workspace { display: block; }
+      #chat-workbench-aligned .cw-center { display: block; }
+      #chat-workbench-aligned .cw-phone-column { display: block; width: min(320px, 100%); margin: 14px auto 0; }
+      #chat-workbench-aligned.cw-preview-collapsed .cw-phone-column { display: none; }
+      #chat-workbench-aligned .cw-stats { margin-bottom: 12px; }
+      #chat-workbench-aligned .cw-panel { height: auto; display: block; }
+      #chat-workbench-aligned .cw-task-list { height: auto; max-height: 442px; }
+      #chat-workbench-aligned .cw-phone { height: auto; display: block; }
+      #chat-workbench-aligned .cw-messages { min-height: 286px; max-height: 286px; }
+    }
+    @media (max-width: 430px) {
+      #chat-workbench-aligned .cw-app { border-radius: 15px; }
+      #chat-workbench-aligned .cw-topbar { padding-inline: 13px; }
+      #chat-workbench-aligned .cw-preview-label,
+      #chat-workbench-aligned .cw-version,
+      #chat-workbench-aligned .cw-user { display: none; }
+      #chat-workbench-aligned .cw-heading h1 { font-size: 20px; }
+      #chat-workbench-aligned .cw-page-actions { display: grid; grid-template-columns: 1fr 1fr; }
+      #chat-workbench-aligned .cw-stats { grid-template-columns: 1fr; }
+      #chat-workbench-aligned .cw-row-main { grid-template-columns: minmax(0, 1fr); }
+      #chat-workbench-aligned .cw-row-message { grid-column: 1; grid-row: 2; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      #chat-workbench-aligned .cw-toast { transition: none; }
+    }
+  </style>
+
+  <section class="cw-app" aria-label="聊单助手桌面应用">
+    <header class="cw-topbar">
+      <div class="cw-brand">
+        <span class="cw-brand-mark" aria-hidden="true"><i data-lucide="messages-square"></i></span>
+        <span class="cw-brand-copy"><span class="cw-brand-name">聊单助手</span><span class="cw-version">1.0</span></span>
+      </div>
+      <div class="cw-top-actions">
+        <span class="cw-preview-label">统一工作台</span>
+        <button class="cw-icon-button cursor-interaction" type="button" aria-label="帮助" data-tooltip="查看使用说明"><i data-lucide="circle-help" aria-hidden="true"></i></button>
+        <span class="cw-user" aria-label="当前用户">我</span>
+      </div>
+    </header>
+
+    <div class="cw-shell">
+      <aside class="cw-sidebar" aria-label="主导航">
+        <nav class="cw-nav-group" aria-label="我的工作台">
+          <div class="cw-nav-label">我的工作台</div>
+          <button class="cw-nav-item cursor-interaction" type="button" aria-current="page"><i data-lucide="layout-dashboard" aria-hidden="true"></i><span>聊单工作台</span></button>
+          <button class="cw-nav-item cursor-interaction" type="button"><i data-lucide="users" aria-hidden="true"></i><span>订单与客户</span></button>
+          <button class="cw-nav-item cursor-interaction" type="button"><i data-lucide="package" aria-hidden="true"></i><span>商品库存</span></button>
+        </nav>
+        <nav class="cw-nav-group" aria-label="助手管理">
+          <div class="cw-nav-label">助手管理</div>
+          <button class="cw-nav-item cursor-interaction" type="button"><i data-lucide="bot" aria-hidden="true"></i><span>助手配置</span></button>
+          <button class="cw-nav-item cursor-interaction" type="button"><i data-lucide="sliders-horizontal" aria-hidden="true"></i><span>连接与设置</span></button>
+        </nav>
+        <div class="cw-connection"><span class="cw-online" aria-hidden="true"></span><span>WhatsApp 已连接<br>本地同步在线</span></div>
+      </aside>
+
+      <main class="cw-main">
+        <div class="cw-page-head">
+          <div class="cw-heading"><h1>聊单工作台</h1><p>先处理需要你关注的聊天和订单。</p></div>
+          <div class="cw-page-actions">
+            <button class="cw-action cursor-interaction" type="button" data-toast="导入的订单会进入待处理列表"><i data-lucide="file-up" aria-hidden="true"></i>导入订单</button>
+            <button class="cw-action cw-action-primary cursor-interaction" type="button" data-toast="建立订单后进入具体订单详情页"><i data-lucide="plus" aria-hidden="true"></i>新建订单</button>
+          </div>
+        </div>
+
+        <div class="cw-workspace">
+          <section class="cw-center" aria-label="聊单工作台待办">
+            <div class="cw-stats">
+              <button class="cw-stat cursor-interaction" type="button" data-filter="reply" aria-pressed="false"><span class="cw-stat-label">待回复</span><span class="cw-stat-value">12</span><span class="cw-stat-note">新消息需要处理</span></button>
+              <button class="cw-stat cursor-interaction" type="button" data-filter="info" aria-pressed="false"><span class="cw-stat-label">待补资料</span><span class="cw-stat-value">7</span><span class="cw-stat-note">客户资料尚未完整</span></button>
+              <button class="cw-stat cursor-interaction" type="button" data-filter="confirm" aria-pressed="false"><span class="cw-stat-label">待确认</span><span class="cw-stat-value">5</span><span class="cw-stat-note">商品、价格或配送待确认</span></button>
+            </div>
+
+            <section class="cw-panel" aria-labelledby="cw-queue-title">
+              <div class="cw-queue-head">
+                <div class="cw-section-title"><div class="cw-section-heading"><h2 id="cw-queue-title">需要处理</h2></div><span class="cw-result-count" id="cw-result-count">6 项</span></div>
+                <div class="cw-tabs" role="tablist" aria-label="筛选待处理事项">
+                  <button class="cw-tab cursor-interaction" type="button" role="tab" data-filter="all" aria-selected="true">全部</button>
+                  <button class="cw-tab cursor-interaction" type="button" role="tab" data-filter="follow" aria-selected="false">待回访</button>
+                  <button class="cw-tab cursor-interaction" type="button" role="tab" data-filter="attention" aria-selected="false">需注意 3</button>
+                </div>
+              </div>
+              <div class="cw-task-list" id="cw-task-list" aria-live="polite"></div>
+            </section>
+          </section>
+
+          <aside class="cw-phone-column" aria-label="所选客户聊天">
+            <div class="cw-phone-controls">
+              <div class="cw-phone-title">
+                <h2>客户聊天</h2>
+                <div class="cw-phone-title-actions"><button class="cw-expand cursor-interaction" type="button" data-toast="进入当前客户的完整订单详情页"><i data-lucide="file-text" aria-hidden="true"></i>订单详情</button></div>
+              </div>
+              <div class="cw-mode-switch" aria-label="回复方式">
+                <button class="cw-mode cursor-interaction" type="button" data-mode="manual" aria-pressed="true"><i data-lucide="user" aria-hidden="true"></i>人工</button>
+                <button class="cw-mode cursor-interaction" type="button" data-mode="assist" aria-pressed="false"><i data-lucide="sparkles" aria-hidden="true"></i>AI辅助</button>
+                <button class="cw-mode cursor-interaction" type="button" data-mode="auto" aria-pressed="false"><i data-lucide="bot" aria-hidden="true"></i>AI自动</button>
+              </div>
+              <div class="cw-status-line"><div class="cw-mode-status"><i data-lucide="hand" aria-hidden="true"></i><span id="cw-mode-note">由你接待 · 自动回复已暂停</span></div><button class="cw-close-preview cursor-interaction" type="button" data-toast="收起聊天预览并恢复完整工作台">关闭 ×</button></div>
+            </div>
+
+            <section class="cw-phone" aria-label="手机样式聊天窗口">
+              <header class="cw-phone-top">
+                <div class="cw-notch" aria-hidden="true"></div>
+                <div class="cw-phone-meta"><span>14:32</span><span class="cw-signal"><i data-lucide="wifi" aria-hidden="true"></i><i data-lucide="battery-medium" aria-hidden="true"></i></span></div>
+                <div class="cw-phone-head-main">
+                  <i class="cw-phone-back" data-lucide="arrow-left" aria-hidden="true"></i>
+                  <span class="cw-avatar cw-phone-avatar" id="cw-phone-avatar">A</span>
+                  <span class="cw-phone-contact"><span class="cw-contact-phone" id="cw-contact-phone">+971 50 000 0002</span><span class="cw-contact-order" id="cw-contact-order">Avery Example · 草稿 #1028</span></span>
+                  <i class="cw-phone-more" data-lucide="more-vertical" aria-hidden="true"></i>
+                </div>
+              </header>
+              <div class="cw-chat-toolbar">
+                <label class="cw-check"><input id="cw-show-translation" type="checkbox" checked>显示中文译文</label>
+                <button class="cw-translate cursor-interaction" type="button" data-toast="识别聊天中的外语并生成中文译文"><i data-lucide="languages" aria-hidden="true"></i>译</button>
+              </div>
+              <div class="cw-messages" id="cw-messages" aria-live="polite"></div>
+              <div class="cw-composer">
+                <div class="cw-reply-preview" id="cw-reply-preview">你好，可以的。KY02每件75迪拉姆，两件共150迪拉姆。确认后我再为你核对配送信息。</div>
+                <div class="cw-compose-row">
+                  <textarea class="cw-input" id="cw-input" rows="1" aria-label="回复内容" placeholder="输入中文，翻译后预览…"></textarea>
+                  <button class="cw-send cursor-interaction" type="button" aria-label="预览发送内容"><i data-lucide="send" aria-hidden="true"></i></button>
+                </div>
+                <div class="cw-home-line" aria-hidden="true"></div>
+              </div>
+            </section>
+          </aside>
+        </div>
+      </main>
+    </div>
+    <div class="cw-toast" id="cw-toast" role="status" aria-live="polite"></div>
+  </section>
+
+  <script>
+    (() => {
+      const root = document.getElementById('chat-workbench-aligned');
+      const list = root.querySelector('#cw-task-list');
+      const resultCount = root.querySelector('#cw-result-count');
+      const messages = root.querySelector('#cw-messages');
+      const showTranslation = root.querySelector('#cw-show-translation');
+      const modeNote = root.querySelector('#cw-mode-note');
+      const replyPreview = root.querySelector('#cw-reply-preview');
+      const input = root.querySelector('#cw-input');
+      const toast = root.querySelector('#cw-toast');
+      const prior = window.openai && window.openai.widgetState && window.openai.widgetState.privateContent;
+      const state = {
+        filter: prior && prior.filter ? prior.filter : 'all',
+        selected: prior && prior.selected ? prior.selected : 'draft-1028',
+        mode: prior && prior.mode ? prior.mode : 'manual',
+        previewOpen: prior && typeof prior.previewOpen === 'boolean' ? prior.previewOpen : true,
+        accent: '#7c3aed',
+        density: '舒适'
+      };
+      const customers = [
+        {
+          id: 'draft-1028', filter: 'reply', initial: 'A', phone: '+971 50 000 0002', name: 'Avery Example', ref: '草稿 #1028', source: '手动新建', sourceIcon: 'square-pen',
+          title: 'Avery Example · 新消息', preview: 'Okay, please deliver them to Dubai.', status: '待回复', statusClass: 'cw-reply', statusIcon: 'message-circle-reply', time: '2 分钟前', unread: 2,
+          chat: [
+            { side: 'in', text: 'Hi, I would like two pieces of KY02. How much are they?', zh: '你好，我想买两件KY02。多少钱？', time: '14:26' },
+            { side: 'out', text: 'KY02 is AED 75 each. Two pieces would be AED 150.', zh: 'KY02每件75迪拉姆，两件共150迪拉姆。', time: '14:28' },
+            { side: 'in', text: 'Okay, please deliver them to Dubai.', zh: '好的，请送到迪拜。', time: '14:31' }
+          ]
+        },
+        {
+          id: 'api-024', filter: 'info', initial: 'N', phone: '+971 50 000 0104', name: 'Noor Ali', ref: 'M202609180024', source: 'API 读取', sourceIcon: 'cloud-download',
+          title: 'Noor Ali · 资料不完整', preview: 'Can I pay when it arrives?', status: '待补收货资料', statusClass: 'cw-info', statusIcon: 'map-pin-house', time: '12 分钟前', attention: true,
+          chat: [
+            { side: 'in', text: 'Can I pay when it arrives?', zh: '货到以后可以付款吗？', time: '14:02' },
+            { side: 'out', text: 'Yes. Please send your complete delivery address.', zh: '可以。请发送完整的收货地址。', time: '14:05' },
+            { side: 'in', text: 'Dubai, near the metro station.', zh: '迪拜，地铁站附近。', time: '14:08' }
+          ]
+        },
+        {
+          id: 'import-2046', filter: 'confirm', initial: 'S', phone: '+971 50 000 0285', name: 'Samuel K', ref: 'IMP-2046', source: '文件导入', sourceIcon: 'file-spreadsheet',
+          title: 'Samuel K · 等待客户确认', preview: 'Please confirm the final price.', status: '待确认商品与价格', statusClass: 'cw-confirm', statusIcon: 'badge-check', time: '36 分钟前', attention: true,
+          chat: [
+            { side: 'in', text: 'Please confirm the final price.', zh: '请确认最终价格。', time: '13:21' },
+            { side: 'out', text: 'I am checking the product and delivery fee for you.', zh: '我正在为你核对商品和配送费用。', time: '13:24' }
+          ]
+        },
+        {
+          id: 'api-031', filter: 'reply', initial: 'M', phone: '+971 50 000 0538', name: 'Mohammed', ref: 'M202609180031', source: 'API 读取', sourceIcon: 'cloud-download',
+          title: 'Mohammed · 新消息', preview: 'Do you have another color?', status: '待回复', statusClass: 'cw-reply', statusIcon: 'message-circle-reply', time: '1 小时前', unread: 1,
+          chat: [
+            { side: 'in', text: 'Do you have another color?', zh: '还有其他颜色吗？', time: '12:52' }
+          ]
+        },
+        {
+          id: 'draft-1033', filter: 'info', initial: 'R', phone: '+971 50 000 0671', name: 'Rashid', ref: '草稿 #1033', source: '从聊天建立', sourceIcon: 'message-square-plus',
+          title: 'Rashid · 缺少联系电话', preview: 'The villa number is 18.', status: '待补联系电话', statusClass: 'cw-info', statusIcon: 'phone-alert', time: '2 小时前', attention: true,
+          chat: [
+            { side: 'in', text: 'The villa number is 18.', zh: '别墅号码是18号。', time: '11:47' }
+          ]
+        },
+        {
+          id: 'draft-1025', filter: 'follow', initial: 'F', phone: '+971 50 000 0422', name: 'Fatima', ref: '草稿 #1025', source: '手动新建', sourceIcon: 'square-pen',
+          title: 'Fatima · 今日回访', preview: '客户暂未决定配送时间。', status: '待回访', statusClass: 'cw-follow', statusIcon: 'calendar-clock', time: '今天 16:00',
+          chat: [
+            { side: 'out', text: 'Would you like me to reserve the items for you?', zh: '需要我先为你保留商品吗？', time: '昨天 18:20' }
+          ]
+        }
+      ];
+
+      function esc(value) {
+        return String(value).replace(/[&<>'"]/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
+      }
+
+      function currentCustomer() {
+        return customers.find(customer => customer.id === state.selected) || customers[0];
+      }
+
+      function persist() {
+        if (window.openai && window.openai.setWidgetState) {
+          window.openai.setWidgetState({
+            modelContent: { selectedQueue: state.filter, selectedOrder: currentCustomer().ref, replyMode: state.mode },
+            privateContent: { filter: state.filter, selected: state.selected, mode: state.mode, previewOpen: state.previewOpen }
+          }).catch(() => {});
+        }
+      }
+
+      function renderList() {
+        root.style.setProperty('--cw-accent', state.accent);
+        root.style.setProperty('--cw-row-pad', state.density === '紧凑' ? '9px' : '13px');
+        const visible = state.filter === 'all' ? customers : state.filter === 'attention' ? customers.filter(customer => customer.attention) : customers.filter(customer => customer.filter === state.filter);
+        resultCount.textContent = `${visible.length} 项`;
+        list.innerHTML = visible.length ? visible.map(customer => `
+          <article class="cw-task-row" data-selected="${customer.id === state.selected}">
+            <button class="cw-row-main cursor-interaction" type="button" data-customer="${esc(customer.id)}" aria-label="打开${esc(customer.name)}的聊天">
+              <span class="cw-row-person"><span class="cw-avatar">${esc(customer.initial)}</span><span class="cw-person-copy"><span class="cw-phone-line"><span class="cw-phone-number">${esc(customer.phone)}</span>${customer.unread ? `<span class="cw-unread" aria-label="${customer.unread}条未读消息">${customer.unread}</span>` : ''}</span><span class="cw-order-ref">${esc(customer.ref)}</span></span></span>
+              <span class="cw-row-message"><span class="cw-message-title">${esc(customer.title)}</span><span class="cw-message-preview">${esc(customer.preview)}</span><span class="cw-source"><i data-lucide="${customer.sourceIcon}" aria-hidden="true"></i>${esc(customer.source)}</span></span>
+              <span class="cw-row-status"><span class="cw-status-pill ${customer.statusClass}"><i data-lucide="${customer.statusIcon}" aria-hidden="true"></i>${esc(customer.status)}</span><span class="cw-status-time">${esc(customer.time)}</span></span>
+            </button>
+            <span class="cw-row-actions"><button class="cw-open cw-detail cursor-interaction" type="button" data-customer="${esc(customer.id)}" data-action="detail">订单详情</button></span>
+          </article>`).join('') : '<div class="cw-empty">当前没有这类待处理事项</div>';
+        root.querySelectorAll('.cw-tab').forEach(tab => tab.setAttribute('aria-selected', String(tab.dataset.filter === state.filter)));
+        root.querySelectorAll('.cw-stat').forEach(stat => stat.setAttribute('aria-pressed', String(stat.dataset.filter === state.filter)));
+        if (globalThis.lucide) lucide.createIcons({ attrs: { width: 16, height: 16 } });
+      }
+
+      function renderPhone() {
+        const customer = currentCustomer();
+        root.querySelector('#cw-phone-avatar').textContent = customer.initial;
+        root.querySelector('#cw-contact-phone').textContent = customer.phone;
+        root.querySelector('#cw-contact-order').textContent = `${customer.name} · ${customer.ref}`;
+        messages.innerHTML = `<span class="cw-day">今天 · 当前订单</span>` + customer.chat.map(message => `
+          <article class="cw-bubble cw-bubble-${message.side}">
+            <p class="cw-original">${esc(message.text)}</p>
+            <p class="cw-translation"${showTranslation.checked ? '' : ' hidden'}>${esc(message.zh)}</p>
+            <span class="cw-bubble-time">${esc(message.time)}</span>
+          </article>`).join('');
+        messages.scrollTop = messages.scrollHeight;
+      }
+
+      function renderMode() {
+        root.querySelectorAll('.cw-mode').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.mode === state.mode)));
+        const settings = {
+          manual: { note: '由你接待 · 自动回复已暂停', preview: '你好，可以的。KY02每件75迪拉姆，两件共150迪拉姆。确认后我再为你核对配送信息。', placeholder: '输入中文，翻译后预览…' },
+          assist: { note: 'AI辅助 · 生成后由你确认发送', preview: 'AI会根据聊天和订单资料生成英文草稿，发送前仍由你确认。', placeholder: '用中文写下想回复的意思…' },
+          auto: { note: 'AI自动 · 当前仅展示规划状态', preview: '自动回复开启前，需要先设置允许范围、置信度和人工接管规则。', placeholder: '自动模式下可随时人工接管…' }
+        };
+        const active = settings[state.mode];
+        modeNote.textContent = active.note;
+        replyPreview.textContent = active.preview;
+        input.placeholder = active.placeholder;
+      }
+
+      function renderAll() {
+        root.classList.toggle('cw-preview-collapsed', !state.previewOpen);
+        renderList();
+        renderPhone();
+        renderMode();
+      }
+
+      let toastTimer;
+      function showToast(text) {
+        toast.textContent = text;
+        toast.classList.add('is-visible');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => toast.classList.remove('is-visible'), 2200);
+      }
+
+      root.addEventListener('click', event => {
+        const filter = event.target.closest('[data-filter]');
+        if (filter) { state.filter = filter.dataset.filter; renderList(); persist(); }
+        const customer = event.target.closest('[data-customer]');
+        if (customer) {
+          state.selected = customer.dataset.customer;
+          if (customer.dataset.action !== 'detail') state.previewOpen = true;
+          renderAll();
+          persist();
+          if (customer.dataset.action === 'detail') showToast(`进入 ${currentCustomer().ref} 的订单详情页`);
+        }
+        const mode = event.target.closest('[data-mode]');
+        if (mode) { state.mode = mode.dataset.mode; renderMode(); persist(); }
+        const notice = event.target.closest('[data-toast]');
+        if (notice) showToast(notice.dataset.toast);
+        if (event.target.closest('.cw-close-preview')) {
+          state.previewOpen = false;
+          renderAll();
+          persist();
+        }
+      });
+      showTranslation.addEventListener('change', renderPhone);
+      root.querySelector('.cw-send').addEventListener('click', () => {
+        if (!input.value.trim()) { showToast(state.mode === 'assist' ? '先用中文写下你想回复的意思' : '先输入回复内容'); return; }
+        showToast('先生成英文预览，确认后再发送');
+      });
+      window.addEventListener('openai:set_globals', event => {
+        const next = event.detail && event.detail.globals && event.detail.globals.widgetState && event.detail.globals.widgetState.privateContent;
+        if (next) {
+          if (next.filter) state.filter = next.filter;
+          if (next.selected) state.selected = next.selected;
+          if (next.mode) state.mode = next.mode;
+          if (typeof next.previewOpen === 'boolean') state.previewOpen = next.previewOpen;
+          renderAll();
+        }
+      });
+      renderAll();
+      if (globalThis.Tweak) {
+        const tweak = new Tweak({ container: root, onChange: renderAll });
+        tweak.addColorPicker(state, 'accent', { label: '强调色', reference: '--cw-accent' });
+        tweak.addSelect(state, 'density', { label: '列表密度', reference: 'queue.density', options: ['舒适', '紧凑'] });
+      }
+    })();
+  </script>
+</div>

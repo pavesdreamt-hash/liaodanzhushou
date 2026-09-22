@@ -1,0 +1,8 @@
+import {chromium} from 'playwright-core';
+import {LocalWebServer} from '../src/local-web-server.mjs';
+import path from 'node:path';import {mkdir,writeFile} from 'node:fs/promises';
+const output='artifacts/pages-manual-1.0.7';await mkdir(output,{recursive:true});
+const server=new LocalWebServer({rendererDirectory:path.resolve('renderer'),sourceDirectory:path.resolve('src'),dispatch:async()=>({ok:true,data:{}})});let browser;const result=[];
+try{const url=new URL(await server.start());browser=await chromium.launch({headless:true});const page=await browser.newPage();page.on('pageerror',e=>console.log('ERROR',e.message));
+for(const name of ['order','workbench','orders','inventory','product','profit','profit-detail','assistant','settings']){url.searchParams.set('page',name);await page.setViewportSize({width:1440,height:1000});await page.goto(url.href);await page.waitForTimeout(250);const f=page.frameLocator('iframe');result.push({name,metrics:await f.locator('body').evaluate(()=>{const root=document.querySelector('[data-layout-ready]'),app=document.querySelector('.od-app,.up-app');const phone=document.querySelector('.od-phone');return {ready:root?.getAttribute('data-layout-ready'),body:[document.documentElement.scrollWidth,document.documentElement.scrollHeight],app:app?.getBoundingClientRect().toJSON(),phone:phone?.getBoundingClientRect().toJSON(),font:getComputedStyle(document.querySelector('.od-nav-item,.up-nav')).fontSize};})});await page.screenshot({path:`${output}/first-${name}.png`});}
+console.log(JSON.stringify(result,null,2));await writeFile(`${output}/probe.json`,JSON.stringify(result,null,2));}finally{await browser?.close();server.close();}

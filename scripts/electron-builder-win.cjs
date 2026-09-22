@@ -1,0 +1,3 @@
+const pkg=require('../package.json');
+const {electronDist,mac,dmg,...common}=pkg.build;
+module.exports={...common,productName:'聊单助手',directories:{output:'dist/windows'},toolsets:{wine:'1.0.1'},win:{target:[{target:'nsis',arch:['x64']}],icon:'assets/app-icon.ico',artifactName:'聊单助手-${version}-windows-x64-Setup.${ext}',signExecutable:false},nsis:{oneClick:false,perMachine:false,allowElevation:false,allowToChangeInstallationDirectory:true,createDesktopShortcut:true,createStartMenuShortcut:true,runAfterFinish:true,deleteAppDataOnUninstall:false,installerLanguages:['zh_CN'],displayLanguageSelector:false}};

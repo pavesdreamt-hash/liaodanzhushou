@@ -1,0 +1,14 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import ExcelJS from 'exceljs';
+import {mkdtemp,writeFile,rm} from 'node:fs/promises';
+import path from 'node:path';
+import os from 'node:os';
+import {buildProfitWorkbookBuffer} from '../src/orders/profit-export.mjs';
+
+const base={sequence:1,date:'2026-09-02',orderNo:'FICTIONAL-ORDER',phoneMasked:'+00******02',businessCode:'KY02',productName:'A Very Long Fictional Product Name For Spreadsheet Layout Verification',quantity:1,costFils:2000,actualPriceFils:10000,discountFils:0,allocatedShippingFils:500,packageId:'pkg-1',seriesCode:'KY',packageResult:'signed',profitStatus:'final',itemProfitFils:7500,orderConfirmedAt:'2026-09-02T08:00:00.000Z',statusUpdatedAt:'2026-09-02T09:00:00.000Z'};
+const report={rows:[base,{...base,orderNo:'FEE-PENDING',packageId:'pkg-2',businessCode:'Z01',productName:'Pending Fictional Product',packageResult:'signed',profitStatus:'waiting_fee',allocatedShippingFils:null,itemProfitFils:null},{...base,orderNo:'COST-MISSING',packageId:'pkg-3',businessCode:'YB17',productName:'Incomplete Fictional Product',profitStatus:'incomplete_cost',costFils:null,itemProfitFils:null}],summary:{}};
+
+test('利润Excel保留固定序号、金额为数值、缺失值为空且汇总不混入待确认利润',async()=>{const generated=await buildProfitWorkbookBuffer({report,includePending:true}),workbook=new ExcelJS.Workbook();await workbook.xlsx.load(generated.buffer);const detail=workbook.getWorksheet('利润明细'),summary=workbook.getWorksheet('汇总');assert.equal(detail.getCell('A2').value,1);assert.equal(typeof detail.getCell('H2').value,'number');assert.equal(detail.getCell('H2').value,20);assert.equal(detail.getCell('K3').value,null);assert.equal(detail.getCell('H4').value,null);assert.equal(detail.getCell('O3').value,null);assert.equal(detail.getCell('O4').value,null);assert.equal(summary.getCell('B6').value,75);assert.equal(generated.summary.finalProfitFils,7500);assert.ok(detail.autoFilter);assert.equal(detail.views[0].state,'frozen');assert.ok(detail.getColumn(6).width>=40);assert.equal(detail.getRow(1).values.includes('客户姓名'),false);assert.equal(detail.getRow(1).values.includes('邮箱'),false);assert.equal(detail.getRow(1).values.includes('地址'),false);});
+
+test('默认仅导出最终利润且文件可被ExcelJS重新读取',async()=>{const directory=await mkdtemp(path.join(os.tmpdir(),'profit-export-')),file=path.join(directory,'report.xlsx');try{const generated=await buildProfitWorkbookBuffer({report,includePending:false});await writeFile(file,generated.buffer);const workbook=new ExcelJS.Workbook();await workbook.xlsx.readFile(file);assert.equal(workbook.getWorksheet('利润明细').rowCount,2);assert.equal(workbook.getWorksheet('汇总').getCell('B10').value,1);assert.equal(generated.summary.waitingFee,0);assert.equal(generated.summary.incompleteCost,0);}finally{await rm(directory,{recursive:true,force:true});}});

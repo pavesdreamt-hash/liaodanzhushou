@@ -1,0 +1,63 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {_electron as electron} from 'playwright-core';
+import {DatabaseSync} from 'node:sqlite';
+import {mkdtemp,mkdir,writeFile,readFile,readdir,rm} from 'node:fs/promises';
+import path from 'node:path';
+import os from 'node:os';
+import {migrateOrderDatabase,orderDatabasePath} from '../src/orders/database.mjs';
+import {ORDER_MIGRATIONS,CURRENT_ORDER_SCHEMA_VERSION} from '../src/orders/migrations/index.mjs';
+import {OrderAppService} from '../src/orders/order-app-service.mjs';
+import {automaticBackupDirectory,validateOrderDatabaseFile} from '../src/orders/order-data-protection.mjs';
+
+test('final ZIP migrates populated schema 17 and restores draft, messages, evidence and confirmation',async()=>{
+  assert.ok(process.env.KDOCS_TEST_EXECUTABLE);
+  const dir=await mkdtemp(path.join(os.tmpdir(),'packaged-assistant-backup-')),data=path.join(dir,'data'),fixtureFile=path.join(dir,'fictional.json'),backup=path.join(dir,'orders-backup-test.sqlite');
+  const fields={fullName:'Backup Example 原文',phone:'+000 123 456',email:'backup@example.invalid',country:'Example Country',province:'Example Province',city:'Example City',street:'Example Street 42',residence:'Unit 7'};
+  const fixture={fictional:true,ai:{},accountId:'fictional-account',chatId:'fictional-chat',messages:[{id:'profile',direction:'customer',sentAt:'2026-09-12T08:00:00Z',text:Object.entries(fields).map(([k,v])=>`${k}: ${v}`).join('\n'),metadata:{source:'fictional',timePrecision:'minute'}},{id:'purchase',direction:'customer',sentAt:'2026-09-12T08:01:00Z',text:'I confirm KY02 x 2 at AED 25 each'}],extraction:{fields:Object.fromEntries(Object.entries(fields).map(([k,value])=>[k,{value,messageIds:['profile']}])),items:[{sku:'KY02',quantity:2,price:'25',messageIds:['purchase']}]}};
+  let app,page,db,originalOrderId;
+  const call=(method,payload)=>page.evaluate(async({method,payload})=>{const r=await window.inventoryApp.orders[method](payload);if(!r.ok)throw new Error(r.error.message);return r.data;},{method,payload});
+  const launch=async()=>{app=await electron.launch({executablePath:process.env.KDOCS_TEST_EXECUTABLE,args:[`--orders-test-user-data=${data}`,`--orders-test-assistant=${fixtureFile}`,`--orders-test-data-directory=${dir}`,`--orders-test-restore-file=${backup}`],env:{...process.env,NODE_ENV:'test'}});page=await app.firstWindow();page.setDefaultTimeout(20000);await page.getByRole('button',{name:'订单管理',exact:true}).click();};
+  const onlineRecord=id=>{const checked=new DatabaseSync(path.join(data,'orders/orders.sqlite'),{readOnly:true});try{return checked.prepare('SELECT * FROM assistant_online_sync WHERE order_id=?').get(id)||null;}finally{checked.close();}};
+  const snapshot=async id=>({detail:await call('detail',id),assistant:await call('assistantStatus',{orderId:id}),workspace:await call('assistantWorkspace',{orderId:id}),messages:await call('assistantMessages',{orderId:id}),conversation:await call('assistantMessages',{orderId:id,includeHistory:true}),policy:await call('assistantPolicy'),onlineRecord:onlineRecord(id),online:await call('assistantOnlineSync',{orderId:id}),stage:await call('assistantWorkflow',{orderId:id}),history:id===originalOrderId?await call('assistantHistory',{orderId:id}):null,translations:await call('assistantTranslations',{orderId:id,messageIds:id===originalOrderId?['profile','purchase']:[]})});
+  try{
+    await mkdir(path.dirname(orderDatabasePath(data)),{recursive:true});
+    db=new DatabaseSync(orderDatabasePath(data));migrateOrderDatabase(db,ORDER_MIGRATIONS.slice(0,17));
+    const service=new OrderAppService({database:db,userDataPath:data});
+    const old=service.drafts.create({requestId:'fictional-before-migration'});originalOrderId=old.id;
+    await service.drafts.save({orderId:old.id,fields:{fullName:'Before Migration Example'}});db.close();db=null;
+    await mkdir(path.join(data,'state'));await writeFile(path.join(data,'state/baseline.json'),JSON.stringify({versionAt:'fictional-only',products:[['商品编号','来源商品名称','成本'],['KY02','Fictional Product','10']]}));
+    await writeFile(fixtureFile,JSON.stringify(fixture));await launch();
+    assert.equal((await call('dataStatus')).schemaVersion,CURRENT_ORDER_SCHEMA_VERSION);assert.equal((await call('detail',old.id)).customer.fullName,'Before Migration Example');
+    const auto=await readdir(automaticBackupDirectory(data));assert.ok(auto.some(f=>validateOrderDatabaseFile(path.join(automaticBackupDirectory(data),f)).schemaVersion===17));
+    await call('bindChat',{orderId:old.id,accountId:fixture.accountId,chatId:fixture.chatId,scopeStart:'2026-09-12T00:00:00Z',scopeEnd:'2026-09-13T00:00:00Z',confirmed:true});
+    await call('readChat',{orderId:old.id});await call('extractChat',{orderId:old.id});
+    const detail=await call('detail',old.id);assert.equal(detail.customer.fullName,'Before Migration Example');assert.equal(detail.draft.items[0].cost_fils,1000);
+    await call('resolveAssistant',{orderId:old.id,field:'fullName',useProposed:true,revision:detail.draftRevision});
+    await call('confirmOrder',{orderId:old.id,note:'Fictional customer confirmed complete purchase'});
+    const second=await call('createDraft',{requestId:'fictional-empty-backup'});
+    for(const id of [old.id,second.id]){const workspace=await call('assistantWorkspace',{orderId:id});await call('saveAssistantWorkspace',{...workspace,patch:{intent:'虚构独立意图 '+id,draft:'Fictional reply '+id,draftChinese:'虚构回复 '+id,draftChineseSource:'Fictional reply '+id,chatHeight:500,mode:'proactive',tone:'brief',tab:'review',...(id===old.id?{replyMessageId:'profile'}:{})}});}
+    const policy=await call('assistantPolicy');await call('saveAssistantPolicy',{revision:policy.revision,patch:{retentionDays:90,businessRules:'Fictional saved business rules',examples:[{intent:'虚构意图',english:'Fictional approved reply',chinese:'虚构批准回复'}]}});
+    const stage=await call('assistantWorkflow',{orderId:old.id});await call('saveAssistantStage',{orderId:old.id,revision:stage.stageState.revision,action:'focus',stageId:'settlement',note:'Fictional persistent stage inspection'});
+    await call('importAssistantHistory',{orderId:old.id,text:'11/09/2026, 08:00 - Merchant: Fictional previous order context\n12/09/2026, 08:00 - Customer: Fictional current order context',ownSender:'Merchant',dateOrder:'dmy',timeZone:'UTC'});
+    const archive=await call('assistantHistory',{orderId:old.id});const historyAnchor=archive.messages.find(m=>m.text==='Fictional previous order context').id;
+    await call('saveAssistantWorkspace',{...await call('assistantWorkspace',{orderId:old.id}),patch:{scrollMessageId:historyAnchor,scrollTop:120,scrollOffset:5}});
+    db=new DatabaseSync(path.join(data,'orders/orders.sqlite'));const bound=db.prepare('SELECT * FROM order_assistant WHERE order_id=?').get(old.id);db.prepare('INSERT INTO assistant_online_sync VALUES(?,?,?,?,1,3,?,?)').run(old.id,bound.binding_revision,bound.account_id,bound.chat_id,JSON.stringify({status:'waiting',message:'Fictional persisted online approval'}),new Date().toISOString());db.prepare("UPDATE assistant_chat_progress SET payload=json_set(payload,'$.historyConsent',json('true'),'$.status','paused','$.earliestId',?),revision=revision+1 WHERE account_id=? AND chat_id=?").run(historyAnchor,fixture.accountId,fixture.chatId);const png='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Zl1sAAAAASUVORK5CYII=';
+    for(const [kind,body,media] of [['ciphertext','[等待 WhatsApp 解密此消息]',[]],['image','[图片]',[{type:'image',status:'cached',source:'attachment',dataUrl:png,note:'已缓存聊天图片'}]]])db.prepare('INSERT INTO assistant_chat_archive VALUES(?,?,?,?,?,?,?)').run(fixture.accountId,fixture.chatId,'false_971500000001@c.us_backup_'+kind,'customer','2026-09-11T08:02:09.000Z',body,JSON.stringify({source:'whatsapp-structured',timePrecision:'second',messageType:kind,incomplete:true,note:'Fictional incomplete attachment or waiting message',mediaCachedAt:new Date().toISOString(),media}));
+    db.prepare('INSERT INTO assistant_chat_archive VALUES(?,?,?,?,?,?,?)').run(fixture.accountId,fixture.chatId,'false_971500000001@c.us_wwebjs_backup_image','customer','2026-09-11T08:03:09.000Z','[图片]',JSON.stringify({source:'whatsapp-wwebjs',timePrecision:'second',messageType:'image',incomplete:true,mediaCachedAt:new Date().toISOString(),media:[{type:'image',status:'cached',source:'attachment',dataUrl:png}]}));
+    db.close();db=null;
+    const credentialDirectory=path.join(data,'whatsapp-live-auth');await mkdir(credentialDirectory,{recursive:true,mode:0o700});const credentialSentinel='FICTIONAL-LOCAL-LOGIN-NOT-IN-ORDER-BACKUP';await writeFile(path.join(credentialDirectory,'fictional-sentinel'),credentialSentinel,{mode:0o600});
+    await call('assistantTranslations',{orderId:old.id,messageIds:['profile','purchase'],generate:true});const before=await snapshot(old.id),blank=await snapshot(second.id);assert.equal(Object.keys(before.translations.translations).length,2);
+    assert.equal(before.conversation.messages.find(m=>m.id===historyAnchor).inOrder,false);assert.equal(before.workspace.values.scrollMessageId,historyAnchor);assert.equal(before.history.progress.historyConsent,true);assert.equal(before.history.progress.status,'paused');
+    assert.equal(before.history.messages.find(m=>m.id.endsWith('backup_image')).media[0].source,'attachment');assert.equal(before.history.messages.find(m=>m.id.endsWith('backup_ciphertext')).text,'[等待 WhatsApp 解密此消息]');
+    assert.equal(before.detail.confirmed,true);assert.equal(before.assistant.messageCount,2);assert.equal(before.onlineRecord.enabled,1);assert.equal(before.onlineRecord.revision,3);assert.equal(before.online.enabled,false);
+    await page.getByRole('button',{name:'数据管理',exact:true}).click();await page.getByRole('button',{name:'创建订单备份',exact:true}).click();await page.getByText('订单备份已创建：orders-backup-test.sqlite',{exact:true}).waitFor();
+    assert.equal(validateOrderDatabaseFile(backup).schemaVersion,CURRENT_ORDER_SCHEMA_VERSION);assert.equal((await readFile(backup)).includes(Buffer.from(credentialSentinel)),false);assert.equal(before.history.messages.find(m=>m.id==='false_971500000001@c.us_wwebjs_backup_image').media[0].status,'cached');
+    await call('saveDraft',{orderId:second.id,fields:{fullName:'Later Manual Edit'}});await call('createDraft',{requestId:'fictional-remove-on-restore'});
+    await page.getByRole('button',{name:'选择备份并恢复',exact:true}).click();await page.getByRole('checkbox',{name:/我已理解/}).check();await page.getByRole('button',{name:'确认恢复',exact:true}).click();await page.getByText('恢复完成：2 个订单，1 条商品明细',{exact:true}).waitFor();
+    assert.deepEqual(await snapshot(old.id),before);assert.deepEqual(await snapshot(second.id),blank);assert.equal((await call('list',{})).length,2);assert.equal(await readFile(path.join(credentialDirectory,'fictional-sentinel'),'utf8'),credentialSentinel);
+    await app.close();app=null;await launch();assert.deepEqual(await snapshot(old.id),before);assert.deepEqual(await snapshot(second.id),blank);
+    const report={result:'PASS',packaged:true,schema17ToCurrent:CURRENT_ORDER_SCHEMA_VERSION,preMigrationBackup:true,draftAndConfirmedOrderRestored:true,replyWorkspaceAndMessagesRestored:true,migration20:true,migration21:true,migration22:true,migration23:true,migration24:true,onlineApprovalRestored:true,stageRecordsAndRevisionsRestored:true,conversationContextAndArchiveScrollRestored:true,historyRefreshProgressRestored:true,policyHistoryBilingualRestored:true,translationCacheRestored:true,structuredPlaceholdersAndAttachmentsRestored:true,wwebjsImageCacheRestored:true,loginCredentialsExcludedFromOrderBackup:true,localLoginUnaffectedByRestore:true,aiGateway:'fictional simulation',messageEvidenceAndCostSnapshotPreserved:true,restart:true,formalDataAccess:false,realAPIRequests:0};
+    await writeFile(path.join(process.env.KDOCS_TEST_ARTIFACT_DIRECTORY||'artifacts/assistant-integration-8.7','packaged-assistant-backup.json'),JSON.stringify(report,null,2)+'\n');
+  }finally{db?.close();await app?.close();await rm(dir,{recursive:true,force:true});}
+});

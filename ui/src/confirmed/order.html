@@ -1,0 +1,806 @@
+<div id="ui008-order-detail" aria-label="聊单助手订单详情界面预览">
+  <style>
+    #ui008-order-detail {
+      --od-accent: #7c3aed;
+      --od-accent-soft: color-mix(in srgb, var(--od-accent) 11%, transparent);
+      --od-accent-mid: color-mix(in srgb, var(--od-accent) 22%, transparent);
+      --od-bg: light-dark(#f7f6fb, #15141a);
+      --od-surface: light-dark(#ffffff, #211f28);
+      --od-surface-2: light-dark(#faf9fd, #2a2832);
+      --od-text: light-dark(#24202e, #f5f1f8);
+      --od-muted: light-dark(#746f7d, #aaa4b3);
+      --od-line: light-dark(#e7e3ec, #3a3742);
+      --od-success: light-dark(#168b68, #68d2ae);
+      --od-success-soft: light-dark(#e8f7f1, #193a31);
+      --od-warning: light-dark(#bd6817, #f1a859);
+      --od-warning-soft: light-dark(#fff4e7, #3f2d1b);
+      --od-danger: light-dark(#d14343, #f37d7d);
+      --od-phone-head: light-dark(#087c6b, #075c50);
+      --od-phone-bg: light-dark(#eee9e1, #1d2926);
+      --od-bubble-in: light-dark(#ffffff, #30403b);
+      --od-bubble-out: light-dark(#d9f8c9, #255143);
+      width: 100%;
+      color: var(--od-text);
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      font-size: 13px;
+      line-height: 1.45;
+      isolation: isolate;
+    }
+    #ui008-order-detail * { box-sizing: border-box; }
+    #ui008-order-detail [hidden] { display: none !important; }
+    #ui008-order-detail button, #ui008-order-detail input, #ui008-order-detail textarea { font: inherit; color: inherit; }
+    #ui008-order-detail button { border: 0; }
+    #ui008-order-detail svg { width: 16px; height: 16px; stroke-width: 1.8; }
+    #ui008-order-detail .od-app { overflow: hidden; background: var(--od-bg); border: 1px solid var(--od-line); border-radius: 18px; }
+    #ui008-order-detail .od-topbar { min-height: 60px; padding: 0 20px; display: flex; align-items: center; justify-content: space-between; gap: 14px; background: var(--od-surface); border-bottom: 1px solid var(--od-line); }
+    #ui008-order-detail .od-brand, #ui008-order-detail .od-top-actions, #ui008-order-detail .od-row, #ui008-order-detail .od-inline { display: flex; align-items: center; }
+    #ui008-order-detail .od-brand { gap: 9px; }
+    #ui008-order-detail .od-logo { width: 34px; height: 34px; display: grid; place-items: center; color: light-dark(#ffffff, #ffffff); background: var(--od-accent); border-radius: 10px; }
+    #ui008-order-detail .od-logo svg { width: 18px; height: 18px; }
+    #ui008-order-detail .od-brand-name { font-size: 16px; font-weight: 500; }
+    #ui008-order-detail .od-version { margin-left: 3px; padding: 2px 5px; color: var(--od-muted); border: 1px solid var(--od-line); border-radius: 5px; font-size: 10px; }
+    #ui008-order-detail .od-top-actions { gap: 10px; color: var(--od-muted); }
+    #ui008-order-detail .od-preview-label { font-size: 11px; }
+    #ui008-order-detail .od-icon-button { width: 32px; height: 32px; display: grid; place-items: center; background: var(--od-surface-2); border: 1px solid var(--od-line); border-radius: 9px; }
+    #ui008-order-detail .od-user { width: 30px; height: 30px; display: grid; place-items: center; color: var(--od-accent); background: var(--od-accent-soft); border-radius: 50%; font-size: 11px; font-weight: 500; }
+    #ui008-order-detail .od-shell { display: grid; grid-template-columns: 145px minmax(0, 1fr); }
+    #ui008-order-detail .od-sidebar { min-height: 912px; padding: 24px 11px 14px; display: flex; flex-direction: column; gap: 5px; background: var(--od-surface); border-right: 1px solid var(--od-line); }
+    #ui008-order-detail .od-nav-group + .od-nav-group { margin-top: 20px; }
+    #ui008-order-detail .od-nav-label { margin: 0 9px 9px; color: var(--od-muted); font-size: 10px; }
+    #ui008-order-detail .od-nav-item { width: 100%; min-height: 41px; padding: 0 9px; display: flex; align-items: center; gap: 9px; text-align: left; background: transparent; border-radius: 9px; white-space: nowrap; }
+    #ui008-order-detail .od-nav-item svg { color: var(--od-muted); }
+    #ui008-order-detail .od-nav-item:hover, #ui008-order-detail .od-nav-item[aria-current="page"] { color: var(--od-accent); background: var(--od-accent-soft); }
+    #ui008-order-detail .od-nav-item[aria-current="page"] svg { color: var(--od-accent); }
+    #ui008-order-detail .od-connection { margin-top: auto; padding: 15px 8px 2px; color: var(--od-muted); border-top: 1px solid var(--od-line); font-size: 10px; }
+    #ui008-order-detail .od-connection strong { display: flex; align-items: center; gap: 6px; color: var(--od-success); font-weight: 500; }
+    #ui008-order-detail .od-online { width: 7px; height: 7px; background: var(--od-success); border-radius: 50%; box-shadow: 0 0 0 4px var(--od-success-soft); }
+    #ui008-order-detail .od-main { min-width: 0; padding: 18px 20px 24px; }
+    #ui008-order-detail .od-page-head { margin-bottom: 14px; display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+    #ui008-order-detail .od-order-heading { min-width: 0; display: flex; align-items: center; gap: 11px; }
+    #ui008-order-detail .od-back { min-height: 34px; padding: 0 9px; display: inline-flex; align-items: center; gap: 4px; background: var(--od-surface); border: 1px solid var(--od-line); border-radius: 8px; font-size: 11px; white-space: nowrap; }
+    #ui008-order-detail .od-heading-copy { min-width: 0; }
+    #ui008-order-detail .od-eyebrow { color: var(--od-muted); font-size: 10px; }
+    #ui008-order-detail h1 { margin: 2px 0 0; font-size: 19px; line-height: 1.2; font-weight: 500; overflow-wrap: anywhere; }
+    #ui008-order-detail .od-status-actions { display: flex; align-items: center; justify-content: flex-end; gap: 5px; flex-wrap: wrap; }
+    #ui008-order-detail .od-status-button { min-height: 32px; padding: 0 9px; color: var(--od-muted); background: var(--od-surface); border: 1px solid var(--od-line); border-radius: 8px; font-size: 10px; white-space: nowrap; }
+    #ui008-order-detail .od-status-button[aria-pressed="true"] { color: light-dark(#ffffff, #ffffff); background: var(--od-accent); border-color: var(--od-accent); }
+    #ui008-order-detail .od-layout { display: grid; grid-template-columns: minmax(0, 1fr) 292px; gap: 14px; align-items: start; }
+    #ui008-order-detail .od-content { min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+    #ui008-order-detail .od-card { min-width: 0; padding: 15px; background: var(--od-surface); border: 1px solid var(--od-line); border-radius: 13px; }
+    #ui008-order-detail .od-card-head { margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    #ui008-order-detail .od-card-title { margin: 0; display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 500; }
+    #ui008-order-detail .od-card-title svg { color: var(--od-accent); }
+    #ui008-order-detail .od-text-button { min-height: 28px; padding: 0 4px; display: inline-flex; align-items: center; gap: 4px; color: var(--od-accent); background: transparent; font-size: 10px; white-space: nowrap; }
+    #ui008-order-detail .od-stage-card { padding-top: 12px; border-top: 3px solid var(--od-accent); }
+    #ui008-order-detail .od-stage-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    #ui008-order-detail .od-current-order { display: flex; align-items: center; gap: 9px; }
+    #ui008-order-detail .od-order-label { color: var(--od-muted); font-size: 10px; }
+    #ui008-order-detail .od-order-name { font-weight: 500; }
+    #ui008-order-detail .od-badge { padding: 4px 7px; color: var(--od-accent); background: var(--od-accent-soft); border-radius: 6px; font-size: 10px; white-space: nowrap; }
+    #ui008-order-detail .od-stages { margin-top: 15px; display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr); gap: 7px; align-items: center; }
+    #ui008-order-detail .od-stage { min-width: 0; padding: 0; display: flex; align-items: center; gap: 6px; text-align: left; color: var(--od-muted); background: transparent; }
+    #ui008-order-detail .od-stage-number { width: 23px; height: 23px; flex: 0 0 auto; display: grid; place-items: center; border: 1px solid var(--od-line); border-radius: 50%; font-size: 10px; }
+    #ui008-order-detail .od-stage span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; }
+    #ui008-order-detail .od-stage.is-done { color: var(--od-success); }
+    #ui008-order-detail .od-stage.is-done .od-stage-number { color: var(--od-success); background: var(--od-success-soft); border-color: transparent; }
+    #ui008-order-detail .od-stage.is-current { color: var(--od-accent); font-weight: 500; }
+    #ui008-order-detail .od-stage.is-current .od-stage-number { color: light-dark(#ffffff, #ffffff); background: var(--od-accent); border-color: var(--od-accent); }
+    #ui008-order-detail .od-stage-arrow { color: var(--od-muted); }
+    #ui008-order-detail .od-objective { margin-top: 13px; padding-top: 11px; color: var(--od-muted); border-top: 1px solid var(--od-line); font-size: 10px; }
+    #ui008-order-detail .od-objective strong { color: var(--od-text); font-weight: 500; }
+    #ui008-order-detail .od-two-cards { display: grid; grid-template-columns: 1.08fr .92fr; gap: 12px; }
+    #ui008-order-detail .od-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; }
+    #ui008-order-detail .od-field { min-width: 0; }
+    #ui008-order-detail .od-field-wide { grid-column: 1 / -1; }
+    #ui008-order-detail .od-field-label { display: block; margin-bottom: 4px; color: var(--od-muted); font-size: 10px; }
+    #ui008-order-detail .od-field-value { min-width: 0; overflow-wrap: anywhere; font-size: 11px; }
+    #ui008-order-detail .od-phone-value { display: flex; align-items: center; gap: 5px; }
+    #ui008-order-detail .od-warning-icon { width: 17px; height: 17px; display: grid; place-items: center; color: var(--od-danger); border: 1px solid var(--od-danger); border-radius: 50%; font-size: 10px; }
+    #ui008-order-detail .od-product { display: grid; grid-template-columns: 42px minmax(0, 1fr) auto auto; gap: 10px; align-items: center; }
+    #ui008-order-detail .od-product-image { width: 42px; height: 45px; display: grid; place-items: center; color: var(--od-muted); background: var(--od-surface-2); border: 1px solid var(--od-line); border-radius: 9px; }
+    #ui008-order-detail .od-product-name { font-weight: 500; }
+    #ui008-order-detail .od-product-meta { margin-top: 3px; color: var(--od-muted); font-size: 10px; }
+    #ui008-order-detail .od-qty { color: var(--od-muted); font-size: 11px; white-space: nowrap; }
+    #ui008-order-detail .od-price { font-weight: 500; white-space: nowrap; }
+    #ui008-order-detail .od-total { margin-top: 11px; padding-top: 10px; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--od-line); }
+    #ui008-order-detail .od-total span:first-child { color: var(--od-muted); font-size: 10px; }
+    #ui008-order-detail .od-total strong { font-size: 15px; font-weight: 500; }
+    #ui008-order-detail .od-delivery { display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 11px; }
+    #ui008-order-detail .od-map { height: 76px; display: grid; place-items: center; color: var(--od-accent); background-color: var(--od-surface-2); background-image: linear-gradient(90deg, var(--od-line) 1px, transparent 1px), linear-gradient(var(--od-line) 1px, transparent 1px); background-size: 19px 19px; border: 1px solid var(--od-line); border-radius: 9px; }
+    #ui008-order-detail .od-map span { width: 31px; height: 31px; display: grid; place-items: center; background: var(--od-surface); border-radius: 50%; }
+    #ui008-order-detail .od-delivery strong { font-weight: 500; }
+    #ui008-order-detail .od-delivery p { margin: 4px 0 6px; color: var(--od-muted); font-size: 10px; }
+    #ui008-order-detail .od-delivery-state { display: inline-flex; align-items: center; gap: 5px; color: var(--od-warning); font-size: 10px; }
+    #ui008-order-detail .od-bottom-actions { display: flex; justify-content: flex-end; gap: 7px; }
+    #ui008-order-detail .od-button { min-height: 34px; padding: 0 11px; display: inline-flex; align-items: center; justify-content: center; gap: 5px; background: var(--od-surface); border: 1px solid var(--od-line); border-radius: 8px; font-size: 11px; }
+    #ui008-order-detail .od-button-primary { color: light-dark(#ffffff, #ffffff); background: var(--od-accent); border-color: var(--od-accent); }
+    #ui008-order-detail .od-chat-column { min-width: 0; }
+    #ui008-order-detail .od-chat-title { min-height: 30px; margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    #ui008-order-detail .od-chat-title h2 { margin: 0; font-size: 14px; font-weight: 500; }
+    #ui008-order-detail .od-mode-switch { margin-bottom: 8px; padding: 4px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 3px; background: var(--od-surface-2); border-radius: 10px; }
+    #ui008-order-detail .od-mode { min-height: 31px; display: flex; align-items: center; justify-content: center; gap: 4px; color: var(--od-muted); background: transparent; border-radius: 7px; font-size: 10px; white-space: nowrap; }
+    #ui008-order-detail .od-mode svg { width: 13px; height: 13px; }
+    #ui008-order-detail .od-mode[aria-pressed="true"] { color: light-dark(#ffffff, #ffffff); background: var(--od-accent); }
+    #ui008-order-detail .od-chat-status { min-height: 26px; margin-bottom: 7px; display: flex; align-items: center; justify-content: space-between; gap: 7px; color: var(--od-accent); font-size: 10px; }
+    #ui008-order-detail .od-chat-status span { display: flex; align-items: center; gap: 5px; }
+    #ui008-order-detail .od-close { padding: 0 2px; color: var(--od-muted); background: transparent; }
+    #ui008-order-detail .od-phone { overflow: hidden; display: flex; flex-direction: column; background: var(--od-phone-bg); border: 8px solid light-dark(#242232, #09080c); border-radius: 34px; box-shadow: 0 12px 28px light-dark(rgba(43,31,62,.14), rgba(0,0,0,.3)); }
+    #ui008-order-detail .od-phone-top { position: relative; min-height: 92px; padding: 24px 11px 11px; color: light-dark(#ffffff, #ffffff); background: var(--od-phone-head); }
+    #ui008-order-detail .od-notch { position: absolute; top: 0; left: 50%; width: 104px; height: 19px; transform: translateX(-50%); background: light-dark(#242232, #09080c); border-radius: 0 0 13px 13px; }
+    #ui008-order-detail .od-phone-meta { margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; font-size: 9px; }
+    #ui008-order-detail .od-phone-person { display: flex; align-items: center; gap: 7px; }
+    #ui008-order-detail .od-phone-person > svg { width: 14px; height: 14px; }
+    #ui008-order-detail .od-avatar { width: 31px; height: 31px; display: grid; place-items: center; background: rgba(255,255,255,.16); border-radius: 50%; }
+    #ui008-order-detail .od-contact { min-width: 0; flex: 1; }
+    #ui008-order-detail .od-contact strong { display: block; font-size: 11px; font-weight: 500; }
+    #ui008-order-detail .od-contact small { display: block; margin-top: 2px; color: rgba(255,255,255,.73); font-size: 9px; }
+    #ui008-order-detail .od-phone-toolbar { min-height: 38px; padding: 0 10px; display: flex; align-items: center; justify-content: space-between; color: var(--od-muted); background: var(--od-surface); border-bottom: 1px solid var(--od-line); font-size: 9px; }
+    #ui008-order-detail .od-phone-toolbar label { display: flex; align-items: center; gap: 4px; }
+    #ui008-order-detail .od-phone-toolbar input { accent-color: var(--od-accent); }
+    #ui008-order-detail .od-translate { min-height: 26px; padding: 0 5px; display: inline-flex; align-items: center; gap: 3px; background: transparent; border-radius: 6px; }
+    #ui008-order-detail .od-messages { height: 305px; padding: 11px 9px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; background-image: radial-gradient(circle at 8px 8px, light-dark(rgba(121,105,85,.06), rgba(255,255,255,.025)) 1.1px, transparent 1.2px); background-size: 23px 23px; scrollbar-width: thin; }
+    #ui008-order-detail .od-day { align-self: center; padding: 4px 8px; color: var(--od-muted); background: var(--od-surface); border-radius: 7px; font-size: 9px; }
+    #ui008-order-detail .od-bubble { max-width: 89%; padding: 8px 9px 6px; border-radius: 9px; font-size: 10px; line-height: 1.45; box-shadow: 0 1px 1px light-dark(rgba(45,35,28,.09), rgba(0,0,0,.2)); }
+    #ui008-order-detail .od-bubble-in { align-self: flex-start; background: var(--od-bubble-in); border-top-left-radius: 3px; }
+    #ui008-order-detail .od-bubble-out { align-self: flex-end; background: var(--od-bubble-out); border-top-right-radius: 3px; }
+    #ui008-order-detail .od-translation { margin-top: 6px; padding-top: 6px; color: var(--od-muted); border-top: 1px solid color-mix(in srgb, var(--od-muted) 18%, transparent); }
+    #ui008-order-detail .od-time { display: block; margin-top: 4px; color: var(--od-muted); font-size: 8px; text-align: right; }
+    #ui008-order-detail .od-composer { padding: 8px; background: var(--od-surface); border-top: 1px solid var(--od-line); }
+    #ui008-order-detail .od-preview { height: 48px; margin-bottom: 6px; padding: 6px 7px; overflow-y: auto; color: var(--od-muted); background: var(--od-surface-2); border-left: 3px solid var(--od-accent); border-radius: 6px; font-size: 9px; line-height: 1.4; }
+    #ui008-order-detail .od-compose-row { display: grid; grid-template-columns: minmax(0, 1fr) 32px; gap: 6px; align-items: end; }
+    #ui008-order-detail .od-input { min-height: 35px; max-height: 70px; padding: 8px; resize: vertical; color: var(--od-text); background: var(--od-surface); border: 1px solid var(--od-line); border-radius: 18px; font-size: 10px; }
+    #ui008-order-detail .od-send { width: 32px; height: 32px; display: grid; place-items: center; color: light-dark(#ffffff, #ffffff); background: var(--od-accent); border-radius: 50%; }
+    #ui008-order-detail .od-home-line { width: 78px; height: 3px; margin: 9px auto 1px; background: var(--od-muted); border-radius: 3px; opacity: .55; }
+    #ui008-order-detail .od-toast { position: absolute; left: 50%; bottom: 18px; z-index: 5; max-width: 80%; padding: 9px 13px; transform: translateX(-50%); color: var(--od-surface); background: var(--od-text); border-radius: 9px; font-size: 11px; box-shadow: 0 8px 24px rgba(0,0,0,.16); }
+    #ui008-order-detail .od-app { position: relative; }
+    @media (max-width: 900px) {
+      #ui008-order-detail .od-shell { grid-template-columns: 60px minmax(0, 1fr); }
+      #ui008-order-detail .od-sidebar { padding-inline: 8px; }
+      #ui008-order-detail .od-nav-label, #ui008-order-detail .od-nav-item span, #ui008-order-detail .od-connection { display: none; }
+      #ui008-order-detail .od-nav-item { justify-content: center; padding: 0; }
+      #ui008-order-detail .od-layout { grid-template-columns: minmax(0, 1fr) 272px; }
+      #ui008-order-detail .od-status-button:nth-last-child(-n+2) { display: none; }
+      #ui008-order-detail .od-two-cards { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 720px) {
+      #ui008-order-detail .od-shell { display: block; }
+      #ui008-order-detail .od-sidebar { min-height: 0; padding: 7px 10px; flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--od-line); }
+      #ui008-order-detail .od-nav-group { display: contents; }
+      #ui008-order-detail .od-nav-group + .od-nav-group { margin: 0; }
+      #ui008-order-detail .od-nav-item { width: 42px; flex: 0 0 42px; }
+      #ui008-order-detail .od-main { padding: 15px 12px 20px; }
+      #ui008-order-detail .od-page-head { align-items: flex-start; flex-direction: column; }
+      #ui008-order-detail .od-status-actions { justify-content: flex-start; }
+      #ui008-order-detail .od-layout { grid-template-columns: 1fr; }
+      #ui008-order-detail .od-chat-column { width: min(320px, 100%); margin: 2px auto 0; }
+      #ui008-order-detail .od-stages { grid-template-columns: 1fr; align-items: stretch; }
+      #ui008-order-detail .od-stage-arrow { display: none; }
+      #ui008-order-detail .od-stage span:last-child { white-space: normal; }
+    }
+    @media (max-width: 420px) {
+      #ui008-order-detail .od-topbar { padding-inline: 12px; }
+      #ui008-order-detail .od-preview-label, #ui008-order-detail .od-version, #ui008-order-detail .od-user { display: none; }
+      #ui008-order-detail .od-order-heading { align-items: flex-start; }
+      #ui008-order-detail h1 { font-size: 16px; }
+      #ui008-order-detail .od-fields { grid-template-columns: 1fr; }
+      #ui008-order-detail .od-field-wide { grid-column: auto; }
+      #ui008-order-detail .od-product { grid-template-columns: 38px minmax(0, 1fr); }
+      #ui008-order-detail .od-qty, #ui008-order-detail .od-price { grid-column: 2; }
+    }
+  </style>
+
+  <section class="od-app">
+    <header class="od-topbar">
+      <div class="od-brand"><span class="od-logo"><i data-lucide="messages-square" aria-hidden="true"></i></span><span class="od-brand-name">聊单助手</span><span class="od-version">1.0</span></div>
+      <div class="od-top-actions"><span class="od-preview-label">UI-028 · 订单详情 · 固定聊天与自动折叠稿</span><button class="od-icon-button cursor-interaction" type="button" aria-label="帮助" data-tooltip="查看订单详情使用说明"><i data-lucide="circle-help" aria-hidden="true"></i></button><span class="od-user">我</span></div>
+    </header>
+    <div class="od-shell">
+      <aside class="od-sidebar" aria-label="主导航">
+        <nav class="od-nav-group" aria-label="我的工作台"><div class="od-nav-label">我的工作台</div><button class="od-nav-item cursor-interaction" type="button"><i data-lucide="layout-dashboard" aria-hidden="true"></i><span>聊单工作台</span></button><button class="od-nav-item cursor-interaction" type="button" aria-current="page"><i data-lucide="users" aria-hidden="true"></i><span>订单与客户</span></button><button class="od-nav-item cursor-interaction" type="button"><i data-lucide="package" aria-hidden="true"></i><span>商品库存</span></button></nav>
+        <nav class="od-nav-group" aria-label="助手管理"><div class="od-nav-label">助手管理</div><button class="od-nav-item cursor-interaction" type="button"><i data-lucide="bot" aria-hidden="true"></i><span>助手配置</span></button><button class="od-nav-item cursor-interaction" type="button"><i data-lucide="sliders-horizontal" aria-hidden="true"></i><span>连接与设置</span></button></nav>
+        <div class="od-connection"><strong><span class="od-online"></span>WhatsApp 已连接</strong><span>本地同步在线</span></div>
+      </aside>
+
+      <main class="od-main">
+        <div class="od-page-head">
+          <div class="od-order-heading"><button class="od-back cursor-interaction" type="button" data-toast="返回聊单工作台"><i data-lucide="arrow-left" aria-hidden="true"></i>返回</button><div class="od-heading-copy"><div class="od-eyebrow">订单详情</div><h1>M202609180024</h1></div></div>
+          <div class="od-status-actions" aria-label="订单状态"><button class="od-status-button cursor-interaction" type="button" aria-pressed="true">待确认</button><button class="od-status-button cursor-interaction" type="button" aria-pressed="false">待报单</button><button class="od-status-button cursor-interaction" type="button" aria-pressed="false">待收货</button><button class="od-status-button cursor-interaction" type="button" aria-pressed="false">拒单</button><button class="od-status-button cursor-interaction" type="button" aria-pressed="false">联系不上</button></div>
+        </div>
+
+        <div class="od-layout">
+          <div class="od-content">
+            <section class="od-card od-stage-card" aria-labelledby="od-stage-title">
+              <div class="od-stage-top"><div class="od-current-order"><span class="od-order-label" id="od-stage-title">当前订单</span><span class="od-order-name">草稿 #1028</span></div><span class="od-badge">待客户确认</span></div>
+              <div class="od-stages" aria-label="订单推进步骤">
+                <button class="od-stage is-done cursor-interaction" type="button" data-stage="1"><span class="od-stage-number"><i data-lucide="check" aria-hidden="true"></i></span><span>明确商品与数量</span></button><i class="od-stage-arrow" data-lucide="arrow-right" aria-hidden="true"></i>
+                <button class="od-stage is-done cursor-interaction" type="button" data-stage="2"><span class="od-stage-number"><i data-lucide="check" aria-hidden="true"></i></span><span>收齐收货资料</span></button><i class="od-stage-arrow" data-lucide="arrow-right" aria-hidden="true"></i>
+                <button class="od-stage is-current cursor-interaction" type="button" data-stage="3"><span class="od-stage-number">3</span><span>核对配送范围</span></button><i class="od-stage-arrow" data-lucide="arrow-right" aria-hidden="true"></i>
+                <button class="od-stage cursor-interaction" type="button" data-stage="4"><span class="od-stage-number">4</span><span>客户确认订单</span></button>
+              </div>
+              <div class="od-objective">当前目标：<strong id="od-objective">核对地址是否可配送，再让客户确认商品、价格和收货信息。</strong></div>
+            </section>
+
+            <div class="od-two-cards">
+              <section class="od-card" aria-labelledby="od-customer-title"><div class="od-card-head"><h2 class="od-card-title" id="od-customer-title"><i data-lucide="user-round" aria-hidden="true"></i>客户信息</h2><button class="od-text-button cursor-interaction" type="button" id="od-edit"><i data-lucide="pencil" aria-hidden="true"></i><span>编辑资料</span></button></div><div class="od-fields"><div class="od-field"><span class="od-field-label">客户姓名</span><span class="od-field-value">Avery Example</span></div><div class="od-field"><span class="od-field-label">联系电话</span><span class="od-field-value od-phone-value">+971 50 000 0002 <span class="od-warning-icon" data-tooltip="客户电话与当前聊天号码存在差异，请人工核对" hidden>!</span></span></div><div class="od-field"><span class="od-field-label">国家 / 地区</span><span class="od-field-value">United Arab Emirates</span></div><div class="od-field"><span class="od-field-label">城市</span><span class="od-field-value">Dubai</span></div><div class="od-field od-field-wide"><span class="od-field-label">详细收货地址</span><span class="od-field-value">Example District, Villa 12, Dubai</span></div></div></section>
+              <section class="od-card" aria-labelledby="od-product-title"><div class="od-card-head"><h2 class="od-card-title" id="od-product-title"><i data-lucide="package" aria-hidden="true"></i>商品与金额</h2><button class="od-text-button cursor-interaction" type="button"><i data-lucide="pencil" aria-hidden="true"></i>编辑</button></div><div class="od-product"><span class="od-product-image"><i data-lucide="box" aria-hidden="true"></i></span><div><div class="od-product-name">KY02</div><div class="od-product-meta">标准款 · AED 75 / 件</div></div><span class="od-qty">× 2</span><span class="od-price">AED 150</span></div><div class="od-total"><span>订单商品合计</span><strong>AED 150.00</strong></div></section>
+            </div>
+
+            <section class="od-card" aria-labelledby="od-delivery-title"><div class="od-card-head"><h2 class="od-card-title" id="od-delivery-title"><i data-lucide="map-pinned" aria-hidden="true"></i>配送核对</h2><button class="od-text-button cursor-interaction" type="button" data-toast="正式功能将在 Google 地图中搜索客户完整地址"><i data-lucide="external-link" aria-hidden="true"></i>在地图中查看</button></div><div class="od-delivery"><div class="od-map"><span><i data-lucide="map-pin" aria-hidden="true"></i></span></div><div><strong>Dubai · Example District</strong><p>Villa 12 · 客户已提供详细地址，等待人工核对配送范围。</p><span class="od-delivery-state"><i data-lucide="clock-3" aria-hidden="true"></i>尚未完成配送确认</span></div></div></section>
+            <div class="od-bottom-actions"><button class="od-button cursor-interaction" type="button" data-toast="订单草稿已保存">保存草稿</button><button class="od-button od-button-primary cursor-interaction" type="button" data-toast="核对完成后进入客户确认环节"><i data-lucide="check" aria-hidden="true"></i>完成配送核对</button></div>
+          </div>
+
+          <aside class="od-chat-column" aria-label="当前订单客户聊天">
+            <div class="od-chat-title"><h2>客户聊天</h2><button class="od-text-button cursor-interaction" type="button" data-toast="聊天已与当前订单关联"><i data-lucide="link-2" aria-hidden="true"></i>聊天关联</button></div>
+            <div class="od-mode-switch" aria-label="回复方式"><button class="od-mode cursor-interaction" type="button" data-mode="manual" aria-pressed="true"><i data-lucide="user" aria-hidden="true"></i>人工</button><button class="od-mode cursor-interaction" type="button" data-mode="assist" aria-pressed="false"><i data-lucide="sparkles" aria-hidden="true"></i>AI辅助</button><button class="od-mode cursor-interaction" type="button" data-mode="auto" aria-pressed="false"><i data-lucide="bot" aria-hidden="true"></i>AI自动</button></div>
+            <div class="od-chat-status"><span><i data-lucide="hand" aria-hidden="true"></i><span id="od-mode-note">由你接待 · 自动回复已暂停</span></span><button class="od-close cursor-interaction" type="button" data-toast="在正式界面中收起聊天窗口">关闭 ×</button></div>
+            <section class="od-phone" aria-label="手机样式聊天窗口"><header class="od-phone-top"><span class="od-notch" aria-hidden="true"></span><div class="od-phone-meta"><span>14:32</span><span><i data-lucide="wifi" aria-hidden="true"></i> <i data-lucide="battery-medium" aria-hidden="true"></i></span></div><div class="od-phone-person"><i data-lucide="arrow-left" aria-hidden="true"></i><span class="od-avatar">A</span><span class="od-contact"><strong>+971 50 000 0002</strong><small>Avery Example · 草稿 #1028</small></span><i data-lucide="more-vertical" aria-hidden="true"></i></div></header><div class="od-phone-toolbar"><label><input id="od-show-translation" type="checkbox" checked>显示中文译文</label><button class="od-translate cursor-interaction" type="button"><i data-lucide="languages" aria-hidden="true"></i>译</button></div><div class="od-messages"><span class="od-day">今天 · 当前订单</span><div class="od-bubble od-bubble-in">Hi, I would like two pieces of KY02. How much are they?<div class="od-translation">你好，我想买两件 KY02。多少钱？</div><span class="od-time">14:26</span></div><div class="od-bubble od-bubble-out">KY02 is AED 75 each. Two pieces would be AED 150.<div class="od-translation">KY02 每件75迪拉姆，两件共150迪拉姆。</div><span class="od-time">14:28 ✓✓</span></div><div class="od-bubble od-bubble-in">Okay, please deliver them to Dubai.<div class="od-translation">好的，请送到迪拜。</div><span class="od-time">14:31</span></div></div><div class="od-composer"><div class="od-preview">你好，可以的。确认配送范围后，我会把商品、价格和收货信息发给你再次确认。</div><div class="od-compose-row"><textarea class="od-input" rows="1" aria-label="回复内容" placeholder="输入中文，翻译后预览…"></textarea><button class="od-send cursor-interaction" type="button" aria-label="预览发送内容" data-toast="先预览翻译，再由你确认发送"><i data-lucide="send" aria-hidden="true"></i></button></div><div class="od-home-line" aria-hidden="true"></div></div></section>
+          </aside>
+        </div>
+      </main>
+    </div>
+    <div class="od-toast" role="status" aria-live="polite" hidden></div>
+  </section>
+
+  <script>
+    (() => {
+      const root = document.getElementById('ui008-order-detail');
+      const toast = root.querySelector('.od-toast');
+      let timer;
+      const state = { accent: '#7c3aed', chatWidth: 292, compactCards: false };
+      function showToast(text) { toast.textContent = text; toast.hidden = false; clearTimeout(timer); timer = setTimeout(() => toast.hidden = true, 2200); }
+      root.querySelectorAll('[data-toast]').forEach(button => button.addEventListener('click', () => showToast(button.dataset.toast)));
+      root.querySelectorAll('.od-status-button').forEach(button => button.addEventListener('click', () => { root.querySelectorAll('.od-status-button').forEach(item => item.setAttribute('aria-pressed', String(item === button))); showToast(`订单状态已切换为“${button.textContent}”预览`); }));
+      const objectives = { 1: '确认客户想要的商品、规格与数量。', 2: '收齐姓名、联系电话和详细收货地址。', 3: '核对地址是否可配送，再让客户确认商品、价格和收货信息。', 4: '让客户确认完整订单内容，再进入报单流程。' };
+      root.querySelectorAll('[data-stage]').forEach(button => button.addEventListener('click', () => { const stage = Number(button.dataset.stage); root.querySelectorAll('[data-stage]').forEach(item => { const number = Number(item.dataset.stage); item.classList.toggle('is-current', number === stage); item.classList.toggle('is-done', number < stage); }); root.querySelector('#od-objective').textContent = objectives[stage]; }));
+      const modeNotes = { manual: '由你接待 · 自动回复已暂停', assist: 'AI辅助 · 生成后由你确认发送', auto: 'AI自动 · 按规则处理新消息' };
+      root.querySelectorAll('[data-mode]').forEach(button => button.addEventListener('click', () => { root.querySelectorAll('[data-mode]').forEach(item => item.setAttribute('aria-pressed', String(item === button))); root.querySelector('#od-mode-note').textContent = modeNotes[button.dataset.mode]; }));
+      root.querySelector('#od-show-translation').addEventListener('change', event => root.querySelectorAll('.od-translation').forEach(item => item.hidden = !event.target.checked));
+      root.querySelector('.od-translate').addEventListener('click', () => { root.querySelector('#od-show-translation').checked = true; root.querySelectorAll('.od-translation').forEach(item => item.hidden = false); showToast('已显示当前聊天中的中文译文'); });
+      function applyDesign() { root.style.setProperty('--od-accent', state.accent); root.querySelector('.od-layout').style.gridTemplateColumns = root.clientWidth > 720 ? `minmax(0, 1fr) ${state.chatWidth}px` : '1fr'; root.querySelectorAll('.od-card').forEach(card => card.style.padding = state.compactCards ? '12px' : '15px'); }
+    })();
+  </script>
+<style>
+#ui008-order-detail .od-two-cards {grid-template-columns:1fr;gap:16px}
+#ui008-order-detail .od-content {gap:16px}
+#ui008-order-detail .od-card {padding:17px}
+#ui008-order-detail .od-card-footer {display:flex;justify-content:flex-end;margin-top:16px;gap:8px}
+#ui008-order-detail .od-confirm[aria-pressed="true"] {background:var(--od-success-soft);color:var(--od-success);border-color:transparent}
+#ui008-order-detail button:disabled {background:var(--od-line);color:var(--od-muted);border-color:var(--od-line);cursor:not-allowed}
+#ui008-order-detail .od-stage-top {flex-wrap:wrap}
+#ui008-order-detail .od-stage-tools {display:flex;align-items:center;gap:12px}
+#ui008-order-detail .od-messages {height:335px;display:block}
+#ui008-order-detail .od-message {margin-bottom:13px}
+#ui008-order-detail .od-message.out {margin-left:24px}
+#ui008-order-detail .od-message.in {margin-right:24px}
+#ui008-order-detail .od-bubble {max-width:100%;font-size:11px;padding:10px 11px 8px}
+#ui008-order-detail .od-translation {border:0;margin-top:5px;padding:0 2px;font-size:10px;line-height:1.5;color:var(--od-muted)}
+#ui008-order-detail .od-message-meta {display:flex;justify-content:space-between;align-items:center;margin-top:8px;color:var(--od-success);font-size:10px}
+#ui008-order-detail .od-message-meta span {display:flex;align-items:center;gap:4px}
+#ui008-order-detail .od-message-meta svg {width:13px;height:13px}
+#ui008-order-detail .od-time {margin:0;color:var(--od-muted);font-size:9px}
+#ui008-order-detail .od-composer {padding:12px}
+#ui008-order-detail .od-compose-label {display:flex;align-items:center;gap:5px;color:var(--od-muted);font-size:11px;margin-bottom:7px}
+#ui008-order-detail .od-write {display:block;width:100%;height:70px;min-height:50px;resize:vertical;border:1px solid var(--od-line);border-radius:10px;padding:10px 11px;background:var(--od-surface);color:var(--od-text);font-size:11px;line-height:1.65}
+#ui008-order-detail .od-english {height:79px;background:var(--od-surface-2);border-color:var(--od-accent-mid)}
+#ui008-order-detail .od-compose-tools {display:flex;align-items:center;justify-content:space-between;gap:8px;margin:9px 0;color:var(--od-muted);font-size:10px}
+#ui008-order-detail select {font:inherit;color:var(--od-text);border:1px solid var(--od-line);background:var(--od-surface);border-radius:5px;padding:4px 7px}
+#ui008-order-detail .od-soft-button {background:var(--od-accent-soft);color:var(--od-accent);padding:6px 8px;border-radius:7px;display:flex;align-items:center;gap:4px;font-size:10px}
+#ui008-order-detail .od-preview-state {color:var(--od-accent)}
+#ui008-order-detail .od-retranslation {font-size:10px;color:var(--od-muted);margin:7px 0;line-height:1.6}
+#ui008-order-detail .od-phone-actions {display:flex;align-items:center;justify-content:space-between;margin-top:8px}
+#ui008-order-detail .od-phone-actions .od-text-button {color:var(--od-muted)}
+#ui008-order-detail .od-home-line {width:100px;margin-top:16px}
+#ui008-order-detail .od-txt-help {font-size:11px;line-height:1.6;color:var(--od-muted);margin:0}
+#ui008-order-detail .od-txt-preview {white-space:pre-wrap;font:inherit;font-size:11px;padding:12px;background:var(--od-surface-2);border-radius:8px}
+#ui008-order-detail [contenteditable="true"] {display:block;outline:1px solid var(--od-accent-mid);border-radius:4px;padding:4px;background:var(--od-surface-2)}
+#ui008-order-detail .od-toast {position:sticky;bottom:16px;left:auto;transform:none;margin:0 auto;width:fit-content}
+#ui008-order-detail .od-layout {grid-template-columns:minmax(0,1fr) 320px}
+@media(max-width:900px){#ui008-order-detail .od-layout {grid-template-columns:minmax(0,1fr) 306px}}
+@media(max-width:720px){#ui008-order-detail .od-layout {grid-template-columns:1fr}#ui008-order-detail .od-chat-column {width:min(390px,100%)}#ui008-order-detail .od-sidebar{min-height:0}}
+</style>
+<template id="ui008-composer">
+<div class="od-composer">
+  <label class="od-compose-label" for="od-chinese"><i data-lucide="pencil"></i>用中文写回复</label>
+  <textarea id="od-chinese" class="od-write" rows="3">好的，两件共150迪拉姆。请提供收货姓名、联系电话和详细地址。</textarea>
+  <div class="od-compose-tools"><label>发送语言 <select aria-label="发送语言"><option>英语</option></select></label><button class="od-soft-button cursor-interaction" id="od-convert"><i data-lucide="languages"></i>转为英文</button></div>
+  <div class="od-compose-tools"><label for="od-english">英文发送预览</label><span class="od-preview-state">待你确认</span></div>
+  <textarea id="od-english" class="od-write od-english" rows="3">Okay, two pieces are AED 150. Please share your full name, phone number and detailed delivery address.</textarea>
+  <p class="od-retranslation">译：两件共150迪拉姆，请提供姓名、电话和详细收货地址。</p>
+  <div class="od-phone-actions"><span><button class="od-text-button cursor-interaction" aria-label="表情" data-demo="表情选择仅为界面演示"><i data-lucide="smile"></i></button><button class="od-text-button cursor-interaction" aria-label="附件" data-demo="附件入口仅为界面演示"><i data-lucide="paperclip"></i></button></span><button id="od-send-preview" class="od-button od-button-primary cursor-interaction"><i data-lucide="send"></i>确认发送英文</button></div>
+  <div class="od-home-line"></div>
+</div>
+</template>
+<template id="ui008-txt">
+<section class="od-card" aria-label="订单 TXT">
+ <div class="od-card-head"><h2 class="od-card-title"><i data-lucide="file-text"></i>订单 TXT</h2><span class="od-badge" id="od-txt-state">尚不可生成</span></div>
+ <p class="od-txt-help" id="od-txt-help">还需完成：客户资料确认、商品金额确认、配送核对。</p>
+ <pre class="od-txt-preview" hidden></pre>
+ <div class="od-card-footer"><button class="od-button cursor-interaction" data-demo="演示：草稿已保存，不写入正式订单">保存草稿</button><button id="od-generate" class="od-button od-button-primary cursor-interaction" disabled><i data-lucide="file-text"></i>生成订单 TXT</button></div>
+</section>
+</template>
+<style>
+#ui008-order-detail .od-stage-card {border-top:1px solid var(--od-line)}
+#ui008-order-detail .od-stage-summary {display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:16px;font-size:12px}
+#ui008-order-detail .od-stage-summary strong {font-weight:500}
+#ui008-order-detail .od-stage-summary .od-text-button {font-size:11px}
+#ui008-order-detail .od-fields {gap:15px 18px}
+#ui008-order-detail .od-field-label {font-size:12px;margin-bottom:5px}
+#ui008-order-detail .od-field-value {font-size:13px;line-height:1.65}
+#ui008-order-detail .od-card-head {flex-wrap:wrap;gap:10px;margin-bottom:16px}
+#ui008-order-detail .od-head-actions {display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:10px;margin-left:auto}
+#ui008-order-detail .od-head-actions .od-button {min-height:30px;padding:0 9px;font-size:10px}
+#ui008-order-detail .od-money-row {display:flex;justify-content:space-between;gap:12px;margin-top:10px;font-size:12px;color:var(--od-muted)}
+#ui008-order-detail .od-money-row strong {color:var(--od-text);font-weight:500}
+#ui008-order-detail .od-money-row.od-payable {padding-top:10px;border-top:1px solid var(--od-line);color:var(--od-text)}
+#ui008-order-detail .od-payable strong {font-size:16px}
+#ui008-order-detail .od-product-editor {margin-top:14px;padding-top:14px;border-top:1px solid var(--od-line);display:grid;grid-template-columns:1fr 1fr;gap:12px}
+#ui008-order-detail .od-product-editor label {font-size:11px;color:var(--od-muted)}
+#ui008-order-detail .od-product-editor input {width:100%;margin-top:5px;border:1px solid var(--od-line);border-radius:7px;background:var(--od-surface);padding:7px 8px;font-size:12px;color:var(--od-text)}
+#ui008-order-detail .od-editor-error {grid-column:1/-1;color:var(--od-danger);font-size:11px;margin:0}
+#ui008-order-detail .od-txt-actions {display:flex;align-items:center;justify-content:flex-end;gap:8px}
+#ui008-order-detail .od-txt-help-wrap {position:relative;display:flex}
+#ui008-order-detail .od-question {width:26px;height:26px;border:1px solid var(--od-line);border-radius:50%;background:var(--od-surface);color:var(--od-muted);font-size:13px}
+#ui008-order-detail .od-requirements {position:absolute;right:0;bottom:35px;width:260px;max-width:75vw;background:var(--od-surface);border:1px solid var(--od-line);border-radius:10px;padding:12px;box-shadow:0 6px 20px light-dark(#24202e16,#00000040);z-index:6;font-size:11px;color:var(--od-muted);line-height:1.7}
+#ui008-order-detail .od-txt-preview {margin-top:12px}
+#ui008-order-detail .od-txt-state-hidden {display:none}
+</style>
+<template id="ui008-money-template">
+ <div class="od-money-row"><span>商品合计</span><strong id="od-subtotal">AED 150.00</strong></div>
+ <div class="od-money-row" id="od-discount-row" hidden><span>优惠减免</span><strong id="od-discount-value">− AED 0.00</strong></div>
+ <div class="od-money-row od-payable"><span>订单总金额</span><strong id="od-payable">AED 150.00</strong></div>
+ <div class="od-product-editor" hidden>
+  <div class="od-product-edit-list"></div>
+  <button class="od-add-product cursor-interaction" type="button"><i data-lucide="plus" aria-hidden="true"></i>添加商品</button>
+  <label class="od-discount-field">优惠金额（AED）<input id="od-discount-input" type="number" min="0" step="0.01" value="0"></label>
+  <p class="od-editor-error" role="alert" hidden></p>
+ </div>
+</template>
+<script>
+(() => {
+const root=document.getElementById('ui008-order-detail');
+const $=s=>root.querySelector(s), $$=s=>[...root.querySelectorAll(s)];
+let timer;
+const toast=text=>{const el=$('.od-toast');el.textContent=text;el.hidden=false;clearTimeout(timer);timer=setTimeout(()=>el.hidden=true,2800)};
+const template=id=>document.getElementById(id).content.cloneNode(true);
+$('.od-composer').replaceWith(template('ui008-composer'));
+$('.od-bottom-actions').replaceWith(template('ui008-txt'));
+const stage=$('.od-stages');stage.hidden=true;
+const tools=document.createElement('div');tools.className='od-stage-tools';
+tools.append($('.od-stage-top .od-badge'));
+const toggle=document.createElement('button');toggle.className='od-text-button cursor-interaction';toggle.textContent='展开⌄';toggle.setAttribute('aria-expanded','false');
+toggle.onclick=()=>{stage.hidden=!stage.hidden;toggle.textContent=stage.hidden?'展开⌄':'收起⌃';toggle.setAttribute('aria-expanded',String(!stage.hidden))};
+tools.append(toggle);$('.od-stage-top').append(tools);
+const checks={customer:false,product:false,delivery:false};
+const labels={customer:'确认客户资料',product:'确认商品与金额',delivery:'完成配送核对'};
+function refresh(){
+ Object.entries(checks).forEach(([key,done])=>{const b=$('[data-confirm="'+key+'"]');b.textContent=done?(key==='delivery'?'✓ 已核对':'✓ 已确认'):'✓ '+labels[key];b.setAttribute('aria-pressed',String(done))});
+ const missing=Object.keys(checks).filter(k=>!checks[k]);
+ $('#od-generate').disabled=missing.length>0;$('#od-txt-state').textContent=missing.length?'尚不可生成':'可以生成';
+ $('#od-txt-help').textContent=missing.length?'还需完成：'+missing.map(k=>labels[k]).join('、')+'。':'资料核对已完成，可预览订单 TXT。';
+ $('.od-delivery-state').textContent=checks.delivery?'✓ 已完成配送核对':'◷ 尚未完成配送确认';
+}
+Object.keys(checks).forEach(key=>{
+ const card=$('#od-'+key+'-title').closest('section');
+ const footer=document.createElement('div');footer.className='od-card-footer';
+ const button=document.createElement('button');button.className='od-button od-button-primary od-confirm cursor-interaction';button.dataset.confirm=key;
+ button.onclick=()=>{if(key==='customer'&&$$('.od-field-value').some(el=>!el.textContent.trim())){toast('请先填写完整客户资料');return}checks[key]=!checks[key];refresh();$('.od-txt-preview').hidden=true};footer.append(button);card.append(footer);
+});
+let editing=false;
+$('#od-edit').onclick=()=>{editing=!editing;$('#od-edit span').textContent=editing?'保存资料':'编辑资料';$$('.od-field-value').forEach(el=>el.contentEditable=String(editing));checks.customer=false;checks.delivery=false;refresh();$('#od-generate').disabled=true;if(!editing)refresh()};
+$$('.od-field-value').forEach(el=>el.addEventListener('input',()=>{checks.customer=false;checks.delivery=false;refresh();$('#od-generate').disabled=true}));
+const editProduct=$('#od-product-title').closest('section').querySelector('.od-text-button');
+editProduct.removeAttribute('data-toast');editProduct.onclick=()=>{checks.product=false;refresh();toast('商品与金额已恢复待确认；此稿只演示确认流程')};
+$('#od-generate').onclick=()=>{const pre=$('.od-txt-preview');pre.textContent='订单：M202609180024\n客户：'+$$('.od-field-value').map(e=>e.textContent.trim()).join('\n')+'\n商品：KY02 × 2\n合计：AED 150.00\n配送：已核对';pre.hidden=false;toast('已生成示例 TXT 预览')};
+const messages=$('.od-messages');messages.replaceChildren();
+function message(en,zh,out,sender,time){
+ const wrap=document.createElement('div');wrap.className='od-message '+(out?'out':'in');
+ const bubble=document.createElement('div');bubble.className='od-bubble '+(out?'od-bubble-out':'od-bubble-in');bubble.textContent=en;
+ const meta=document.createElement('div');meta.className='od-message-meta';const who=document.createElement('span');const icon=document.createElement('i');icon.dataset.lucide=sender==='AI自动发送'?'bot':'user-round';icon.setAttribute('aria-hidden','true');who.append(icon,document.createTextNode(sender));const t=document.createElement('span');t.className='od-time';t.textContent=time;meta.append(who,t);bubble.append(meta);
+ const translation=document.createElement('div');translation.className='od-translation';translation.textContent=zh;translation.hidden=!$('#od-show-translation').checked;wrap.append(bubble,translation);messages.append(wrap);
+ if(globalThis.lucide) globalThis.lucide.createIcons({attrs:{width:13,height:13}});
+ return wrap;
+}
+message('Hi, I would like two pieces of KY02. How much are they?','你好，我想要两件 KY02。价格是多少？',false,'客户','14:26');
+message('KY02 is AED 75 each. Two pieces would be AED 150.','KY02 每件 75 迪拉姆，两件共 150 迪拉姆。',true,'人工发送','14:28 ✓✓');
+message('Okay, please deliver them to Dubai.','好的，请送到迪拜。',false,'客户','14:30');
+message('Sure, Avery. Could you share your full name, phone number and detailed delivery address?','好的，Avery。方便提供收货姓名、联系电话和详细地址吗？',true,'AI自动发送','14:31 ✓✓');
+const sourceMessage=message('Please change the delivery address to Abu Dhabi, Example Street, Villa 8. Also add one more KY02.','请把收货地址改为阿布扎比 Example Street 8号别墅。另外再加一件 KY02。',false,'客户','14:34');
+messages.scrollTop=messages.scrollHeight;
+$('#od-chinese').oninput=()=>{$('.od-preview-state').textContent='内容已修改';$('#od-send-preview').disabled=true};
+$('#od-convert').onclick=()=>{toast('当前为界面演示：使用示例英文，不连接翻译服务');$('.od-preview-state').textContent='示例 · 待你确认';$('#od-send-preview').disabled=false};
+$('#od-send-preview').onclick=()=>{if(!$('#od-english').value.trim())return;message($('#od-english').value,$('#od-chinese').value,true,'人工发送','刚刚 ✓');messages.scrollTop=messages.scrollHeight;toast('演示消息已加入预览，未实际发送')};
+$$('[data-demo]').forEach(b=>b.onclick=()=>toast(b.dataset.demo));
+$('.od-close').removeAttribute('data-toast');$('.od-close').onclick=()=>{const phone=$('.od-phone');phone.hidden=!phone.hidden;$('.od-close').textContent=phone.hidden?'打开聊天':'关闭 ×'};
+// UI-008 presentation-only refinements inside the mockup's existing scope.
+const summary=document.createElement('div');summary.className='od-stage-summary';
+const summaryText=document.createElement('strong');summaryText.textContent='阶段 3/4 · 核对配送范围';
+summary.append(summaryText,toggle);$('.od-stage-top').after(summary);
+toggle.textContent='展开阶段 ⌄';
+toggle.onclick=()=>{stage.hidden=!stage.hidden;toggle.textContent=stage.hidden?'展开阶段 ⌄':'收起阶段 ⌃';toggle.setAttribute('aria-expanded',String(!stage.hidden))};
+$$('[data-stage]').forEach(b=>b.addEventListener('click',()=>{summaryText.textContent='阶段 '+b.dataset.stage+'/4 · '+b.lastElementChild.textContent}));
+['customer','product'].forEach(key=>{
+ const card=$('#od-'+key+'-title').closest('section');
+ const actions=document.createElement('div');actions.className='od-head-actions';
+ actions.append(card.querySelector('.od-text-button'),card.querySelector('[data-confirm]'));
+ card.querySelector('.od-card-head').append(actions);card.querySelector('.od-card-footer').remove();
+});
+const txtSection=$('#od-generate').closest('section');
+txtSection.className='od-txt-area';
+txtSection.querySelector('.od-card-head').hidden=true;
+const generate=$('#od-generate');
+const actionRow=document.createElement('div');actionRow.className='od-txt-actions';
+const helpWrap=document.createElement('div');helpWrap.className='od-txt-help-wrap';
+const question=document.createElement('button');question.className='od-question cursor-interaction';question.textContent='?';question.setAttribute('aria-label','查看订单 TXT 生成条件');question.setAttribute('aria-expanded','false');question.setAttribute('aria-controls','od-txt-help');
+const help=$('#od-txt-help');help.className='od-requirements';help.hidden=true;help.setAttribute('role','status');
+helpWrap.append(question,help);actionRow.append(generate,helpWrap);
+txtSection.querySelector('.od-card-footer').remove();txtSection.prepend(actionRow);
+let pinnedHelp=false;
+function showHelp(open){help.hidden=!open;question.setAttribute('aria-expanded',String(open))}
+question.onclick=()=>{pinnedHelp=!pinnedHelp;showHelp(pinnedHelp)};
+helpWrap.onmouseenter=()=>showHelp(true);helpWrap.onmouseleave=()=>{if(!pinnedHelp)showHelp(false)};
+question.onfocus=()=>showHelp(true);question.onblur=()=>{if(!pinnedHelp)showHelp(false)};
+question.onkeydown=e=>{if(e.key==='Escape'){pinnedHelp=false;showHelp(false)}};
+const productCard=$('#od-product-title').closest('section');
+productCard.querySelector('.od-total').replaceWith(document.getElementById('ui008-money-template').content.cloneNode(true));
+let productEditing=false;
+let products=[{name:'KY02',qty:2,price:75}];
+let discount=0;
+const money=n=>'AED '+n.toFixed(2);
+function productRow(product,index){
+ const row=document.createElement('div');row.className='od-product-edit-row';row.dataset.index=index;
+ row.innerHTML='<label>商品<input class="od-edit-name" aria-label="商品名称"></label><label>数量<input class="od-edit-qty" type="number" min="1" step="1"></label><label>单价（AED）<input class="od-edit-price" type="number" min="0" step="0.01"></label><button class="od-remove-product cursor-interaction" type="button" aria-label="移除商品"><i data-lucide="trash-2" aria-hidden="true"></i></button>';
+ row.querySelector('.od-edit-name').value=product.name;row.querySelector('.od-edit-qty').value=product.qty;row.querySelector('.od-edit-price').value=product.price;
+ row.querySelector('.od-remove-product').onclick=()=>{if(products.length===1){toast('订单至少保留一件商品');return}products.splice(index,1);renderEditor()};
+ return row;
+}
+function renderEditor(){const list=$('.od-product-edit-list');list.replaceChildren(...products.map(productRow));if(globalThis.lucide)globalThis.lucide.createIcons({attrs:{width:14,height:14}})}
+function drawMoney(){
+ const subtotal=products.reduce((sum,item)=>sum+item.qty*item.price,0);
+ $('#od-subtotal').closest('.od-money-row').hidden=discount===0;
+ $('#od-subtotal').textContent=money(subtotal);$('#od-discount-value').textContent='− '+money(discount);
+ $('#od-discount-row').hidden=discount===0;$('#od-payable').textContent=money(subtotal-discount);
+ const list=productCard.querySelector('.od-product-list')||document.createElement('div');list.className='od-product-list';
+ list.replaceChildren(...products.map(item=>{const row=document.createElement('div');row.className='od-product';row.innerHTML='<span class="od-product-image"><i data-lucide="box" aria-hidden="true"></i></span><div><div class="od-product-name"></div><div class="od-product-meta"></div></div><span class="od-qty"></span><span class="od-price"></span>';row.querySelector('.od-product-name').textContent=item.name;row.querySelector('.od-product-meta').textContent='标准款 · '+money(item.price)+' / 件';row.querySelector('.od-qty').textContent='× '+item.qty;row.querySelector('.od-price').textContent=money(item.qty*item.price);return row}));
+ const original=productCard.querySelector(':scope > .od-product');if(original)original.replaceWith(list);else if(!list.isConnected)productCard.querySelector('.od-card-head').after(list);
+ if(globalThis.lucide)globalThis.lucide.createIcons({attrs:{width:16,height:16}});
+}
+editProduct.onclick=()=>{
+ if(!productEditing){productEditing=true;checks.product=false;refresh();$('.od-txt-preview').hidden=true;$('.od-product-editor').hidden=false;editProduct.textContent='保存';$('[data-confirm="product"]').disabled=true;renderEditor();$('#od-discount-input').value=discount;return}
+ const next=$$('.od-product-edit-row').map(row=>({name:row.querySelector('.od-edit-name').value.trim(),qty:Number(row.querySelector('.od-edit-qty').value),price:Number(row.querySelector('.od-edit-price').value)}));
+ const nextDiscount=Number($('#od-discount-input').value);const subtotal=next.reduce((sum,item)=>sum+item.qty*item.price,0);
+ const valid=next.length&&next.every(item=>item.name&&Number.isInteger(item.qty)&&item.qty>0&&Number.isFinite(item.price)&&item.price>=0)&&Number.isFinite(nextDiscount)&&nextDiscount>=0&&nextDiscount<=subtotal;
+ const error=$('.od-editor-error');error.hidden=!!valid;
+ if(!valid){error.textContent='请填写商品、有效数量与金额；优惠不能超过商品合计。';return}
+ products=next;discount=nextDiscount;productEditing=false;$('.od-product-editor').hidden=true;editProduct.textContent='编辑';$('[data-confirm="product"]').disabled=false;checks.product=false;refresh();drawMoney();
+};
+$('.od-add-product').onclick=()=>{products.push({name:'',qty:1,price:0});renderEditor();const input=$$('.od-edit-name').at(-1);input&&input.focus()};
+const customerEdit=$('#od-edit').onclick;
+$('#od-edit').onclick=()=>{customerEdit();$('[data-confirm="customer"]').disabled=editing;$('.od-txt-preview').hidden=true};
+$('#od-generate').onclick=()=>{
+ const subtotal=products.reduce((sum,item)=>sum+item.qty*item.price,0);const pre=$('.od-txt-preview');pre.textContent='订单：M202609180024\n客户：'+$$('.od-field-value').map(e=>e.textContent.trim()).join('\n')+'\n商品：'+products.map(item=>item.name+' × '+item.qty).join('、')+'\n商品合计：'+money(subtotal)+(discount?'\n优惠：− '+money(discount):'')+'\n订单总金额：'+money(subtotal-discount)+'\n配送：已核对';pre.hidden=false;toast('已生成示例 TXT 预览');
+};
+drawMoney();
+
+function suggestionCard(kind,title,oldValue,newValue){
+ const box=document.createElement('section');box.className='od-chat-suggestion';box.dataset.suggestion=kind;
+ box.innerHTML='<div class="od-suggestion-head"><span><i data-lucide="message-circle-more" aria-hidden="true"></i>聊天发现更新</span><button class="od-source-link cursor-interaction" type="button">来自 14:34 客户消息</button></div><strong class="od-suggestion-title"></strong><div class="od-suggestion-change"><span class="od-suggestion-old"></span><i data-lucide="arrow-right" aria-hidden="true"></i><span class="od-suggestion-new"></span></div><div class="od-suggestion-actions"><button class="od-button od-ignore cursor-interaction" type="button">忽略</button><button class="od-button od-button-primary od-accept cursor-interaction" type="button"><i data-lucide="check" aria-hidden="true"></i>采纳更新</button></div>';
+ box.querySelector('.od-suggestion-title').textContent=title;box.querySelector('.od-suggestion-old').textContent=oldValue;box.querySelector('.od-suggestion-new').textContent=newValue;
+ box.querySelector('.od-source-link').onclick=()=>{messages.scrollTo({top:Math.max(0,sourceMessage.offsetTop-12),behavior:'smooth'});sourceMessage.classList.add('is-source');setTimeout(()=>sourceMessage.classList.remove('is-source'),1600)};
+ box.querySelector('.od-ignore').onclick=()=>{box.hidden=true;toast('已忽略这条聊天更新')};
+ return box;
+}
+const customerSuggestion=suggestionCard('address','详细收货地址','Dubai · Example District, Villa 12','Abu Dhabi · Example Street, Villa 8');
+const productSuggestion=suggestionCard('product','KY02 数量','× 2','× 3');
+const customerCard=$('#od-customer-title').closest('section');customerCard.querySelector('.od-card-head').after(customerSuggestion);
+productCard.querySelector('.od-card-head').after(productSuggestion);
+customerSuggestion.querySelector('.od-accept').onclick=()=>{
+ const fields=$$('.od-field-value');fields[3].textContent='Abu Dhabi';fields[4].textContent='Example Street, Villa 8, Abu Dhabi';
+ const delivery=$('.od-delivery');delivery.querySelector('strong').textContent='Abu Dhabi · Example Street';delivery.querySelector('p').textContent='Villa 8 · 地址已从聊天更新，等待重新核对配送范围。';
+ const chinese=$('.od-address-chinese');if(chinese)chinese.textContent='地址：阿联酋 · 阿布扎比';
+ checks.customer=false;checks.delivery=false;refresh();customerSuggestion.hidden=true;toast('已更新收货地址，客户资料与配送需要重新确认');
+};
+productSuggestion.querySelector('.od-accept').onclick=()=>{
+ products[0].qty=3;drawMoney();checks.product=false;refresh();productSuggestion.hidden=true;toast('KY02 已更新为 3 件，请重新确认商品与金额');
+};
+if(globalThis.lucide)globalThis.lucide.createIcons({attrs:{width:14,height:14}});
+
+refresh();
+})();
+</script>
+
+<style>
+#ui008-order-detail .od-page-head {display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px 16px;align-items:center}
+#ui008-order-detail .od-status-actions {grid-column:1/-1;justify-content:flex-start;flex-wrap:wrap}
+#ui008-order-detail .od-status-button:nth-last-child(-n+2) {display:inline-flex;align-items:center}
+#ui008-order-detail .od-requirements {bottom:auto;top:35px}
+#ui008-order-detail .od-sidebar {min-height:0}
+#ui008-order-detail .od-phone {height:640px;min-height:640px;max-height:640px;display:flex;flex-direction:column}
+#ui008-order-detail .od-phone-top {flex:0 0 96px;min-height:96px;padding:25px 11px 10px}
+#ui008-order-detail .od-phone-meta {margin-bottom:9px}
+#ui008-order-detail .od-phone-meta > span:last-child {display:flex;align-items:center;gap:4px}
+#ui008-order-detail .od-phone-toolbar {flex:0 0 34px;min-height:34px}
+#ui008-order-detail .od-messages {height:auto;min-height:0;flex:1 1 0;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin}
+#ui008-order-detail .od-composer {padding:0;flex:0 0 282px;height:282px;min-height:0;display:flex;flex-direction:column;border-top:1px solid var(--od-line);overflow:hidden}
+#ui008-order-detail .od-editor-scroll {min-height:0;flex:1 1 0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;padding:10px 11px 6px;scrollbar-width:thin;scrollbar-color:var(--od-line) transparent}
+#ui008-order-detail .od-write {height:64px;min-height:50px;max-height:240px;resize:vertical}
+#ui008-order-detail .od-english {height:79px;min-height:60px}
+#ui008-order-detail .od-compose-label {margin-bottom:6px}
+#ui008-order-detail .od-compose-tools {margin:7px 0}
+#ui008-order-detail .od-retranslation {margin:6px 0 2px}
+#ui008-order-detail .od-phone-actions {flex:0 0 46px;margin:0;padding:6px 11px;background:var(--od-surface)}
+#ui008-order-detail .od-composer > .od-home-line {flex:0 0 3px;margin:5px auto 8px}
+#ui008-order-detail .od-txt-area:has(.od-txt-preview[hidden]) {display:none}
+@media(max-width:420px){
+ #ui008-order-detail .od-page-head {grid-template-columns:1fr}
+ #ui008-order-detail .od-page-head > .od-txt-actions {justify-content:flex-start}
+ #ui008-order-detail .od-requirements {right:auto;left:0;transform:translateX(-80%)}
+}
+</style>
+<script>
+(() => {
+ const root=document.getElementById('ui008-order-detail');
+ const composer=root.querySelector('.od-composer');
+ const editor=document.createElement('div');
+ editor.className='od-editor-scroll';
+ editor.setAttribute('role','region');editor.setAttribute('aria-label','回复编辑区，可上下滚动');
+ const actions=composer.querySelector('.od-phone-actions');
+ while(composer.firstElementChild!==actions) editor.append(composer.firstElementChild);
+ composer.prepend(editor);
+ const head=root.querySelector('.od-page-head');
+ const txtActions=root.querySelector('.od-txt-actions');
+ head.insertBefore(txtActions,root.querySelector('.od-status-actions'));
+ const messages=root.querySelector('.od-messages');
+ messages.setAttribute('role','region');messages.setAttribute('aria-label','客户聊天记录，可上下滚动');
+ messages.scrollTop=messages.scrollHeight;
+})();
+</script>
+
+<style>
+#ui008-order-detail .od-page-head {display:flex;flex-direction:row;flex-wrap:wrap;align-items:center;gap:10px 12px}
+#ui008-order-detail .od-order-heading {flex:1 0 235px}
+#ui008-order-detail .od-status-actions {flex:0 1 auto;grid-column:auto;justify-content:flex-end;gap:5px}
+#ui008-order-detail .od-page-head > .od-txt-actions {flex:0 0 auto;justify-content:flex-end}
+#ui008-order-detail .od-composer {flex-basis:230px;height:230px}
+#ui008-order-detail .od-editor-scroll {padding:8px 11px 5px}
+#ui008-order-detail #od-chinese {height:54px;min-height:48px;padding:7px 10px}
+#ui008-order-detail .od-english {height:75px;padding:8px 10px}
+#ui008-order-detail .od-compose-label {margin-bottom:4px}
+#ui008-order-detail .od-compose-tools {margin:5px 0}
+#ui008-order-detail .od-retranslation {margin:5px 0 2px}
+#ui008-order-detail .od-phone-actions {flex-basis:44px;padding:5px 11px}
+#ui008-order-detail .od-composer > .od-home-line {margin:4px auto 7px}
+@media(max-width:420px){
+ #ui008-order-detail .od-order-heading {flex-basis:100%}
+ #ui008-order-detail .od-status-actions {justify-content:flex-start;flex-wrap:wrap}
+ #ui008-order-detail .od-page-head > .od-txt-actions {margin-left:auto}
+}
+</style>
+<script>
+(() => {
+ const root=document.getElementById('ui008-order-detail');
+ root.querySelector('.od-page-head').append(root.querySelector('.od-txt-actions'));
+ const card=root.querySelector('#od-delivery-title').closest('section');
+ const actions=document.createElement('div');actions.className='od-head-actions';
+ actions.append(card.querySelector('.od-text-button'),card.querySelector('[data-confirm="delivery"]'));
+ card.querySelector('.od-card-head').append(actions);
+ card.querySelector('.od-card-footer').remove();
+ root.querySelector('#od-chinese').rows=2;
+ const messages=root.querySelector('.od-messages');
+ messages.scrollTop=messages.scrollHeight;
+})();
+</script>
+
+<style>
+#ui008-order-detail .od-phone {height:690px;min-height:690px;max-height:690px}
+#ui008-order-detail .od-composer {flex-basis:210px;height:210px}
+#ui008-order-detail .od-editor-scroll {padding:7px 11px 4px}
+#ui008-order-detail .od-compose-label {margin-bottom:3px}
+#ui008-order-detail .od-compose-tools {margin:4px 0}
+#ui008-order-detail .od-retranslation {margin:4px 0 2px}
+#ui008-order-detail .od-delivery .od-address-chinese {font-size:12px;line-height:1.6;color:var(--od-text);margin:7px 0 9px;overflow-wrap:anywhere}
+</style>
+<script>
+(() => {
+ const root=document.getElementById('ui008-order-detail');
+ const address=document.createElement('p');
+ address.className='od-address-chinese';address.textContent='地址：阿联酋 · 迪拜';
+ root.querySelector('.od-delivery-state').before(address);
+ const fields=[...root.querySelectorAll('.od-field-value')];
+ const knownCountries={'united arab emirates':'阿联酋','uae':'阿联酋','阿联酋':'阿联酋'};
+ const knownCities={'dubai':'迪拜','迪拜':'迪拜'};
+ const updateAddress=()=>{
+  const country=knownCountries[fields[2].textContent.trim().toLowerCase()];
+  const city=knownCities[fields[3].textContent.trim().toLowerCase()];
+  address.textContent='地址：'+([country,city].filter(Boolean).join(' · ')||'暂无中文地址');
+ };
+ fields.slice(2,4).forEach(field=>field.addEventListener('input',updateAddress));
+ const messages=root.querySelector('.od-messages');messages.scrollTop=messages.scrollHeight;
+})();
+</script>
+
+<style>
+#ui008-order-detail .od-mode-switch {gap:7px;background:transparent;padding:0}
+#ui008-order-detail .od-mode {min-height:34px;background:var(--od-surface);border:1px solid var(--od-line);border-radius:8px;color:var(--od-muted)}
+#ui008-order-detail .od-mode[aria-pressed="true"] {border-color:var(--od-accent);background:var(--od-accent);color:light-dark(#ffffff,#ffffff)}
+#ui008-order-detail .od-message-meta span:first-child {display:inline-flex;align-items:center;gap:5px}
+#ui008-order-detail .od-message-meta span:first-child svg {width:13px;height:13px}
+#ui008-order-detail .od-product-list {display:flex;flex-direction:column}
+#ui008-order-detail .od-product-list .od-product + .od-product {margin-top:10px;padding-top:10px;border-top:1px solid var(--od-line)}
+#ui008-order-detail .od-product-editor {display:block}
+#ui008-order-detail .od-product-edit-list {display:flex;flex-direction:column;gap:10px}
+#ui008-order-detail .od-product-edit-row {display:grid;grid-template-columns:minmax(0,1.5fr) 72px 104px 30px;gap:8px;align-items:end;padding:10px;background:var(--od-surface-2);border-radius:9px}
+#ui008-order-detail .od-product-edit-row label,#ui008-order-detail .od-discount-field {display:block;font-size:11px;color:var(--od-muted)}
+#ui008-order-detail .od-product-edit-row input,#ui008-order-detail .od-discount-field input {width:100%;margin-top:5px;border:1px solid var(--od-line);border-radius:7px;background:var(--od-surface);padding:7px 8px;font-size:12px;color:var(--od-text)}
+#ui008-order-detail .od-remove-product {width:30px;height:32px;display:grid;place-items:center;background:transparent;color:var(--od-muted);border-radius:7px}
+#ui008-order-detail .od-add-product {min-height:32px;margin:10px 0;display:inline-flex;align-items:center;gap:5px;padding:0 9px;color:var(--od-accent);background:var(--od-accent-soft);border-radius:8px;font-size:11px}
+#ui008-order-detail .od-discount-field {max-width:210px}
+#ui008-order-detail .od-editor-error {margin-top:8px}
+@media(max-width:520px){#ui008-order-detail .od-product-edit-row{grid-template-columns:1fr 1fr}#ui008-order-detail .od-remove-product{justify-self:end}}
+</style>
+<script>
+(() => {
+ const root=document.getElementById('ui008-order-detail');
+ const phone=root.querySelector('.od-phone-value');
+ const chatNumber=root.querySelector('.od-contact strong').textContent;
+ const normalize=value=>{
+  let digits=value.replace(/\D/g,'');
+  if(digits.startsWith('00'))digits=digits.slice(2);
+  if(digits.startsWith('0'))digits='971'+digits.slice(1);
+  return digits;
+ };
+ const updateWarning=()=>{
+  let warning=phone.querySelector('.od-warning-icon');
+  if(!warning){warning=document.createElement('span');warning.className='od-warning-icon';warning.textContent='!';warning.dataset.tooltip='客户电话与当前聊天号码存在差异，请人工核对';phone.append(warning)}
+  const entered=phone.textContent.replace('!','');
+  warning.hidden=normalize(entered)===normalize(chatNumber);
+ };
+ phone.addEventListener('input',updateWarning);
+ root.querySelector('#od-edit').addEventListener('click',()=>setTimeout(updateWarning,0));
+ updateWarning();
+})();
+</script>
+
+<style>
+#ui008-order-detail .od-chat-suggestion {margin:-3px 0 16px;padding:12px;background:var(--od-accent-soft);border:1px solid var(--od-accent-mid);border-radius:10px}
+#ui008-order-detail .od-suggestion-head {display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:9px;color:var(--od-accent);font-size:10px}
+#ui008-order-detail .od-suggestion-head > span {display:inline-flex;align-items:center;gap:5px;font-weight:500}
+#ui008-order-detail .od-source-link {padding:0;background:transparent;color:var(--od-accent);font-size:10px}
+#ui008-order-detail .od-suggestion-title {display:block;margin-bottom:7px;font-size:12px;font-weight:500}
+#ui008-order-detail .od-suggestion-change {display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:8px;color:var(--od-muted);font-size:11px;line-height:1.5}
+#ui008-order-detail .od-suggestion-change svg {color:var(--od-accent)}
+#ui008-order-detail .od-suggestion-new {color:var(--od-text);font-weight:500}
+#ui008-order-detail .od-suggestion-actions {display:flex;justify-content:flex-end;gap:7px;margin-top:10px}
+#ui008-order-detail .od-suggestion-actions .od-button {min-height:30px;padding:0 9px;font-size:10px}
+#ui008-order-detail .od-message.is-source .od-bubble {box-shadow:0 0 0 3px var(--od-accent-mid)}
+@media(max-width:520px){#ui008-order-detail .od-suggestion-head{align-items:flex-start;flex-direction:column}#ui008-order-detail .od-suggestion-change{grid-template-columns:1fr}#ui008-order-detail .od-suggestion-change svg{transform:rotate(90deg)}}
+</style>
+
+<style>
+#ui008-order-detail .od-fulfillment .od-card-head{margin-bottom:13px}
+#ui008-order-detail .od-fulfill-status{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-bottom:13px}
+#ui008-order-detail .od-fulfill-step{min-height:34px;padding:0 7px;color:var(--od-muted);background:var(--od-surface-2);border:1px solid var(--od-line);border-radius:8px;font-size:10px}
+#ui008-order-detail .od-fulfill-step[aria-pressed="true"]{color:#fff;background:var(--od-accent);border-color:var(--od-accent)}
+#ui008-order-detail .od-fulfill-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+#ui008-order-detail .od-fulfill-panel{padding:12px;background:var(--od-surface-2);border-radius:10px}
+#ui008-order-detail .od-fulfill-panel h3{margin:0 0 10px;display:flex;align-items:center;gap:6px;font-size:12px;font-weight:500}
+#ui008-order-detail .od-fulfill-panel h3 svg{color:var(--od-accent)}
+#ui008-order-detail .od-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+#ui008-order-detail .od-form-field label{display:block;margin-bottom:4px;color:var(--od-muted);font-size:9px}
+#ui008-order-detail .od-form-field input{width:100%;height:34px;padding:0 8px;background:var(--od-surface);border:1px solid var(--od-line);border-radius:7px;font-size:10px}
+#ui008-order-detail .od-form-field.wide{grid-column:1/-1}
+#ui008-order-detail .od-pay-switch{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:9px}
+#ui008-order-detail .od-pay-button{min-height:32px;color:var(--od-muted);background:var(--od-surface);border:1px solid var(--od-line);border-radius:7px;font-size:10px}
+#ui008-order-detail .od-pay-button[aria-pressed="true"]{color:var(--od-accent);background:var(--od-accent-soft);border-color:var(--od-accent-mid)}
+#ui008-order-detail .od-profit-link{margin-top:12px;padding:10px 11px;display:flex;align-items:flex-start;gap:8px;color:var(--od-success);background:var(--od-success-soft);border-radius:9px;font-size:10px}
+#ui008-order-detail .od-profit-link p{margin:2px 0 0;color:var(--od-muted);font-size:9px}
+#ui008-order-detail .od-profit-link.is-waiting{color:var(--od-warning);background:var(--od-warning-soft)}
+#ui008-order-detail .od-profit-link.is-refused{color:var(--od-danger);background:var(--od-danger-soft)}
+#ui008-order-detail .od-fulfill-log{margin-top:11px;padding-top:10px;border-top:1px solid var(--od-line);color:var(--od-muted);font-size:9px}
+@media(max-width:620px){#ui008-order-detail .od-fulfill-grid{grid-template-columns:1fr}#ui008-order-detail .od-fulfill-status{grid-template-columns:1fr 1fr}}
+</style>
+<script>
+(()=>{
+ const root=document.getElementById('ui008-order-detail');
+ const navGroup=root.querySelector('.od-nav-group');
+ const inventory=[...navGroup.querySelectorAll('.od-nav-item')].find(b=>b.textContent.includes('商品库存'));
+ const profit=document.createElement('button');profit.className='od-nav-item cursor-interaction';profit.type='button';profit.innerHTML='<i data-lucide="chart-no-axes-combined" aria-hidden="true"></i><span>利润</span>';inventory.after(profit);
+ const payableRow=root.querySelector('.od-money-row.od-payable');
+ const customerDeliveryRow=document.createElement('div');customerDeliveryRow.className='od-money-row';customerDeliveryRow.innerHTML='<span>向客户收取配送费</span><strong id="od-customer-delivery-display">AED 0.00</strong>';payableRow.before(customerDeliveryRow);
+ const productEditor=root.querySelector('.od-product-editor');
+ const deliveryFeeLabel=document.createElement('label');deliveryFeeLabel.className='od-discount-field';deliveryFeeLabel.innerHTML='向客户收取配送费（AED）<input id="od-customer-delivery-fee" type="number" min="0" step="0.01" value="0">';productEditor.append(deliveryFeeLabel);
+ const updateCustomerDelivery=()=>{const fee=Number(root.querySelector('#od-customer-delivery-fee').value)||0,subtotal=Number(root.querySelector('#od-subtotal').textContent.replace(/[^0-9.]/g,''))||0,discount=Number(root.querySelector('#od-discount-value').textContent.replace(/[^0-9.]/g,''))||0;root.querySelector('#od-customer-delivery-display').textContent='AED '+fee.toFixed(2);root.querySelector('#od-payable').textContent='AED '+(subtotal-discount+fee).toFixed(2)};
+ root.querySelector('#od-customer-delivery-fee').addEventListener('input',updateCustomerDelivery);
+ const delivery=root.querySelector('#od-delivery-title').closest('section');
+ const card=document.createElement('section');card.className='od-card od-fulfillment';card.setAttribute('aria-label','履约与回款');
+ card.innerHTML=`<div class="od-card-head"><h2 class="od-card-title"><i data-lucide="truck" aria-hidden="true"></i>履约与回款</h2><span class="od-badge" id="od-fulfill-badge">已签收 · 待回款</span></div>
+ <div class="od-fulfill-status" aria-label="配送结果"><button class="od-fulfill-step" data-fulfill="waiting" aria-pressed="false">待发货</button><button class="od-fulfill-step" data-fulfill="shipping" aria-pressed="false">运输中</button><button class="od-fulfill-step" data-fulfill="signed" aria-pressed="true">已签收</button><button class="od-fulfill-step" data-fulfill="refused" aria-pressed="false">已拒收</button></div>
+ <div class="od-fulfill-grid"><div class="od-fulfill-panel"><h3><i data-lucide="route"></i>配送结果与运输费用</h3><div class="od-form-grid"><div class="od-form-field"><label>结果日期</label><input id="od-result-date" type="date" value="2026-09-22"></div><div class="od-form-field"><label id="od-transport-label">实际运输支出（AED）</label><input id="od-transport-cost" type="number" min="0" step="0.01" value="12"></div><div class="od-form-field wide"><label>配送备注</label><input id="od-delivery-note" value="客户已签收，等待物流结算回款。"></div></div><div class="od-fulfill-log">09-21 已发货　→　09-22 已签收</div></div>
+ <div class="od-fulfill-panel"><h3><i data-lucide="badge-dollar-sign"></i>回款确认</h3><div class="od-pay-switch"><button class="od-pay-button" data-pay="waiting" aria-pressed="true">待回款</button><button class="od-pay-button" data-pay="received" aria-pressed="false">已回款</button></div><div class="od-form-grid" id="od-payment-fields" hidden><div class="od-form-field"><label>回款日期</label><input id="od-payment-date" type="date" value="2026-09-24"></div><div class="od-form-field"><label>实际回款金额（AED）</label><input id="od-payment-amount" type="number" min="0" step="0.01" value="150"></div></div><div class="od-form-grid" id="od-payment-wait"><div class="od-form-field wide"><label>当前状态</label><input value="已签收，尚未收到结算款" readonly></div></div></div></div>
+ <div class="od-profit-link is-waiting" id="od-profit-link"><i data-lucide="clock-3"></i><div><strong>暂不计入实际回款</strong><p>已记录实际运输支出 AED 12.00；收到结算款后，系统按回款日期计入利润核算。</p></div></div>`;
+ delivery.after(card);
+ const toast=text=>{const el=root.querySelector('.od-toast');el.textContent=text;el.hidden=false;clearTimeout(root.__fulfillTimer);root.__fulfillTimer=setTimeout(()=>el.hidden=true,2200)};
+ let fulfill='signed',pay='waiting';
+ const badge=card.querySelector('#od-fulfill-badge'),label=card.querySelector('#od-transport-label'),cost=card.querySelector('#od-transport-cost'),note=card.querySelector('#od-delivery-note'),link=card.querySelector('#od-profit-link');
+ function render(){
+  card.querySelectorAll('[data-fulfill]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.fulfill===fulfill)));
+  const final=fulfill==='signed'||fulfill==='refused';card.querySelector('.od-fulfill-grid').style.opacity=final?'1':'.68';
+  if(fulfill==='refused'){pay='waiting';label.textContent='拒收运费损失（AED）';cost.value='20';note.value='客户拒收，记录本单全部运输损失。';badge.textContent='已拒收 · 无回款';card.querySelector('.od-pay-switch').hidden=true;card.querySelector('#od-payment-fields').hidden=true;card.querySelector('#od-payment-wait').hidden=false;card.querySelector('#od-payment-wait input').value='拒收订单无需回款，实际回款为 AED 0';link.className='od-profit-link is-refused';link.innerHTML='<i data-lucide="circle-x"></i><div><strong>回款 AED 0 · 记录拒收运费损失</strong><p>本订单只扣除拒收运费损失 AED 20.00，不再重复扣除签收运输支出。</p></div>'}
+  else if(fulfill==='signed'){label.textContent='实际运输支出（AED）';if(cost.value==='20')cost.value='12';note.value='客户已签收，等待物流结算回款。';card.querySelector('.od-pay-switch').hidden=false;card.querySelectorAll('[data-pay]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.pay===pay)));card.querySelector('#od-payment-fields').hidden=pay!=='received';card.querySelector('#od-payment-wait').hidden=pay==='received';badge.textContent=pay==='received'?'已签收 · 已回款':'已签收 · 待回款';link.className='od-profit-link '+(pay==='received'?'':'is-waiting');link.innerHTML=pay==='received'?'<i data-lucide="circle-check"></i><div><strong>已计入实际回款 AED 150.00</strong><p>按回款日期 2026-09-24 计入每日利润核算，同时记录运输支出 AED 12.00。</p></div>':'<i data-lucide="clock-3"></i><div><strong>暂不计入实际回款</strong><p>已记录实际运输支出 AED 12.00；收到结算款后按回款日期计入利润核算。</p></div>'}
+  else{badge.textContent=fulfill==='shipping'?'运输中':'待发货';label.textContent='预计运输费用（AED）';cost.value='12';note.value=fulfill==='shipping'?'包裹运输中，等待最终签收结果。':'尚未发货。';card.querySelector('.od-pay-switch').hidden=true;card.querySelector('#od-payment-fields').hidden=true;card.querySelector('#od-payment-wait').hidden=false;card.querySelector('#od-payment-wait input').value='订单完成签收后再确认回款';link.className='od-profit-link is-waiting';link.innerHTML='<i data-lucide="clock-3"></i><div><strong>尚未形成实际运输与回款数据</strong><p>当前只显示预计费用，不计入实际利润核算。</p></div>'}
+  if(globalThis.lucide)globalThis.lucide.createIcons({attrs:{width:14,height:14}});
+ }
+ card.querySelectorAll('[data-fulfill]').forEach(b=>b.onclick=()=>{fulfill=b.dataset.fulfill;render();toast('配送状态已切换为“'+b.textContent+'”')});
+ card.querySelectorAll('[data-pay]').forEach(b=>b.onclick=()=>{pay=b.dataset.pay;render();toast(pay==='received'?'已显示回款确认资料':'已恢复为待回款')});
+ [...root.querySelectorAll('.od-status-button')].forEach(b=>b.setAttribute('aria-pressed',String(b.textContent==='待收货')));
+ if(globalThis.lucide)globalThis.lucide.createIcons({attrs:{width:14,height:14}});render();
+})();
+</script>
+<style>
+#ui008-order-detail .od-layout{height:805px;overflow:hidden}
+#ui008-order-detail .od-content{height:805px;padding-right:6px;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:var(--od-accent-mid) transparent}
+#ui008-order-detail .od-chat-column{position:sticky;top:14px;align-self:start;height:805px;max-height:805px;overflow:hidden}
+#ui008-order-detail .od-phone{height:690px;min-height:690px;max-height:690px}
+#ui008-order-detail .od-two-cards{align-items:start}
+#ui008-order-detail .od-card.od-is-collapsed{padding-bottom:12px}
+#ui008-order-detail .od-card.od-is-collapsed>.od-card-head{margin-bottom:0}
+#ui008-order-detail .od-card.od-is-collapsed>:not(.od-card-head){display:none!important}
+#ui008-order-detail .od-card.od-is-collapsed .od-card-head>.od-text-button,#ui008-order-detail .od-card.od-is-collapsed .od-head-actions{display:none}
+#ui008-order-detail .od-card.od-is-collapsed .od-fulfill-confirm{display:none}
+#ui008-order-detail .od-fold-summary{margin-left:auto;color:var(--od-success);font-size:10px;white-space:nowrap}
+#ui008-order-detail .od-fold-toggle{min-height:28px;padding:0 5px;display:inline-flex;align-items:center;gap:3px;color:var(--od-accent);background:transparent;font-size:10px;white-space:nowrap}
+#ui008-order-detail .od-fulfill-head-actions{display:flex;align-items:center;gap:7px}
+#ui008-order-detail .od-fulfill-confirm{min-height:28px;padding:0 8px;color:#fff;background:var(--od-accent);border-radius:7px;font-size:10px;white-space:nowrap}
+#ui008-order-detail .od-fulfill-help{position:relative;display:inline-flex}
+#ui008-order-detail .od-help-question{width:26px;height:26px;display:grid;place-items:center;color:var(--od-muted);background:var(--od-surface);border:1px solid var(--od-line);border-radius:50%;font-size:11px}
+#ui008-order-detail .od-fulfill-help .od-profit-link{display:none;position:absolute;top:33px;right:0;z-index:10;width:360px;max-width:min(360px,75vw);margin:0;padding:11px;background:var(--od-surface);border:1px solid var(--od-line);box-shadow:0 8px 24px light-dark(rgba(42,34,54,.16),rgba(0,0,0,.34))}
+#ui008-order-detail .od-fulfill-help.is-open .od-profit-link{display:flex}
+@media(max-width:720px){#ui008-order-detail .od-layout{height:auto;overflow:visible}#ui008-order-detail .od-content{height:auto;padding-right:0;overflow:visible}#ui008-order-detail .od-chat-column{height:auto;max-height:none;overflow:visible}#ui008-order-detail .od-phone{height:690px;min-height:690px;max-height:690px}}
+</style>
+
+<script>
+(()=>{
+ const root=document.getElementById('ui008-order-detail');
+ const toast=text=>{const el=root.querySelector('.od-toast');el.textContent=text;el.hidden=false;clearTimeout(root.__foldTimer);root.__foldTimer=setTimeout(()=>el.hidden=true,2200)};
+ const configs=[
+  {key:'customer',title:'#od-customer-title',summary:'客户资料已确认'},
+  {key:'product',title:'#od-product-title',summary:'商品与订单金额已确认'},
+  {key:'delivery',title:'#od-delivery-title',summary:'配送范围已核对'}
+ ];
+ function installFold(card,summaryText){
+  const head=card.querySelector('.od-card-head');
+  const summary=document.createElement('span');summary.className='od-fold-summary';summary.textContent='✓ '+summaryText;summary.hidden=true;
+  const toggle=document.createElement('button');toggle.type='button';toggle.className='od-fold-toggle cursor-interaction';toggle.textContent='收起 ⌃';toggle.setAttribute('aria-expanded','true');
+  const setCollapsed=collapsed=>{card.classList.toggle('od-is-collapsed',collapsed);summary.hidden=!collapsed;toggle.textContent=collapsed?'展开 ⌄':'收起 ⌃';toggle.setAttribute('aria-expanded',String(!collapsed))};
+  toggle.onclick=()=>setCollapsed(!card.classList.contains('od-is-collapsed'));
+  head.append(summary,toggle);
+  return setCollapsed;
+ }
+ configs.forEach(({key,title,summary})=>{
+  const card=root.querySelector(title).closest('section');
+  const setCollapsed=installFold(card,summary);
+  const confirm=root.querySelector('[data-confirm="'+key+'"]');
+  confirm.addEventListener('click',()=>setTimeout(()=>{if(confirm.getAttribute('aria-pressed')==='true'){setCollapsed(true);toast(summary+'，卡片已自动折叠')}},0));
+  card.querySelectorAll('input,[contenteditable="true"]').forEach(el=>el.addEventListener('input',()=>setCollapsed(false)));
+ });
+ const fulfillment=root.querySelector('.od-fulfillment');
+ const fulfillmentHead=fulfillment.querySelector('.od-card-head');
+ const badge=fulfillment.querySelector('#od-fulfill-badge');
+ const headActions=document.createElement('div');headActions.className='od-fulfill-head-actions';
+ const help=document.createElement('span');help.className='od-fulfill-help';
+ const question=document.createElement('button');question.type='button';question.className='od-help-question cursor-interaction';question.textContent='?';question.setAttribute('aria-label','查看履约与回款核算说明');question.setAttribute('aria-expanded','false');
+ const note=fulfillment.querySelector('#od-profit-link');help.append(question,note);
+ const confirm=document.createElement('button');confirm.type='button';confirm.className='od-fulfill-confirm cursor-interaction';confirm.textContent='✓ 确认';confirm.setAttribute('aria-pressed','false');
+ headActions.append(badge,help,confirm);fulfillmentHead.append(headActions);
+ const setFulfillmentCollapsed=installFold(fulfillment,'履约与回款已确认');
+ confirm.onclick=()=>{const done=confirm.getAttribute('aria-pressed')!=='true';confirm.setAttribute('aria-pressed',String(done));confirm.textContent=done?'✓ 已确认':'✓ 确认';if(done){setFulfillmentCollapsed(true);toast('履约与回款已确认，卡片已自动折叠')}};
+ const setHelp=open=>{help.classList.toggle('is-open',open);question.setAttribute('aria-expanded',String(open))};
+ question.onclick=()=>setHelp(!help.classList.contains('is-open'));
+ help.onmouseenter=()=>setHelp(true);help.onmouseleave=()=>setHelp(false);question.onfocus=()=>setHelp(true);question.onblur=()=>setHelp(false);
+ root.querySelectorAll('.od-fulfillment input,.od-fulfillment [data-fulfill],.od-fulfillment [data-pay]').forEach(el=>el.addEventListener(el.tagName==='INPUT'?'input':'click',()=>{confirm.setAttribute('aria-pressed','false');confirm.textContent='✓ 确认';setFulfillmentCollapsed(false)}));
+ if(globalThis.lucide)globalThis.lucide.createIcons({attrs:{width:14,height:14}});
+})();
+</script>
+
+
+
+</div>

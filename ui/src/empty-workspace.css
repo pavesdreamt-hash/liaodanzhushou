@@ -1,0 +1,4 @@
+.live-empty-state{margin:24px;min-height:180px;padding:36px;border:1px solid #e7e1f1;border-radius:14px;background:#fff;color:#28213a}
+.live-empty-state h1{margin:0 0 12px;font-size:20px;font-weight:600}
+.live-empty-state p{margin:0;color:#665e73;font-size:14px;line-height:1.65}
+.cw-page-actions button:disabled{opacity:.45;cursor:not-allowed}

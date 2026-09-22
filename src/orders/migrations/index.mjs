@@ -1,0 +1,28 @@
+import {migration024} from './024-assistant-online-sync.mjs';
+import {migration025} from './025-business-dashboard.mjs';
+import {migration023} from './023-assistant-stages.mjs';
+import {migration022} from './022-assistant-policy-history.mjs';
+import {migration021} from './021-assistant-ai-cache.mjs';
+import {migration020} from './020-assistant-workspace.mjs';
+import {migration019} from './019-assistant-range-mode.mjs';
+import {migration018} from './018-assistant-read-integrity.mjs';
+import {migration017} from './017-chat-drafts.mjs';
+import {migration001} from './001-initial.mjs';
+import {migration002} from './002-shipping-and-profit-rules.mjs';
+import {migration003} from './003-variable-courier-fees.mjs';
+import {migration004} from './004-shopplus-excel-import.mjs';
+import {migration005} from './005-annotated-inventory-costs.mjs';
+import {migration006} from './006-order-fulfillment-reports.mjs';
+import {migration007} from './007-order-data-protection.mjs';
+import {migration008} from './008-recipient-data-completion.mjs';
+import {migration009} from './009-package-contact-outcome.mjs';
+import {migration010} from './010-manual-item-discounts.mjs';
+import {migration011} from './011-address-verification.mjs';
+import {migration012} from './012-fixed-order-sequence.mjs';
+import {migration013} from './013-delivery-address-verification.mjs';
+import {migration014} from './014-order-settlement-and-discount-inputs.mjs';
+import {migration015} from './015-package-report-workflow.mjs';
+import {migration016} from './016-order-level-reports.mjs';
+
+export const ORDER_MIGRATIONS=Object.freeze([migration001,migration002,migration003,migration004,migration005,migration006,migration007,migration008,migration009,migration010,migration011,migration012,migration013,migration014,migration015,migration016,migration017,migration018,migration019,migration020,migration021,migration022,migration023,migration024,migration025]);
+export const CURRENT_ORDER_SCHEMA_VERSION=ORDER_MIGRATIONS.at(-1).version;

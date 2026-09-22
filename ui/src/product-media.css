@@ -1,0 +1,2 @@
+/* Only the inventory and product pages install the local image library button. */
+:is(#ui011-inventory,#ui032) .product-images-button{margin-top:10px;border:1px solid #d8c8f0;background:#f3edfc;color:#7c3aed;padding:9px 14px;border-radius:9px;cursor:pointer;font-size:13px}

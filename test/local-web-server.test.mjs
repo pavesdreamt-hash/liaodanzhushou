@@ -1,0 +1,21 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import path from 'node:path';
+import os from 'node:os';
+import {mkdtemp,readFile,rm} from 'node:fs/promises';
+import {LocalWebServer} from '../src/local-web-server.mjs';
+
+test('本地浏览器工作区只绑定回环地址并使用随机令牌保护操作',async()=>{const root=path.resolve('.'),calls=[],server=new LocalWebServer({rendererDirectory:path.join(root,'renderer'),sourceDirectory:path.join(root,'src'),dispatch:async(channel,payload)=>{calls.push({channel,payload});return {ok:true,data:{accepted:true}};}});try{const url=await server.start(),parsed=new URL(url);assert.equal(parsed.hostname,'127.0.0.1');assert.ok(parsed.searchParams.get('token')?.length>=64);let response=await fetch(url);assert.equal(response.status,200);assert.match(await response.text(),/browser-bridge\.js/);const policy=response.headers.get('content-security-policy');assert.match(policy,/frame-ancestors 'none'/);assert.match(policy,/script-src 'self' 'unsafe-inline'/);assert.match(policy,/style-src 'self' 'unsafe-inline'/);response=await fetch(`${parsed.origin}/api/orders%3Asummary`,{method:'POST',headers:{origin:parsed.origin,'content-type':'application/json'},body:'{}'});assert.equal(response.status,403);response=await fetch(`${parsed.origin}/api/orders%3Asummary`,{method:'POST',headers:{origin:parsed.origin,'content-type':'application/json','x-app-token':parsed.searchParams.get('token')},body:JSON.stringify({fictional:true})});assert.equal(response.status,200);assert.deepEqual(await response.json(),{ok:true,data:{accepted:true}});assert.deepEqual(calls,[{channel:'orders:summary',payload:{fictional:true}}]);assert.equal((await fetch(`${parsed.origin}/../../package.json`)).status,404);}finally{server.close();}});
+
+test('本地工作区令牌可安全复用，App重启后旧页面仍能重新连接',async()=>{const directory=await mkdtemp(path.join(os.tmpdir(),'local-web-token-')),tokenFile=path.join(directory,'token'),root=path.resolve('.'),make=()=>new LocalWebServer({rendererDirectory:path.join(root,'renderer'),sourceDirectory:path.join(root,'src'),dispatch:async()=>({ok:true}),tokenFile});let first,second;try{first=make();const firstUrl=new URL(await first.start()),saved=await readFile(tokenFile,'utf8');assert.equal(saved,firstUrl.searchParams.get('token'));assert.equal(saved.length,64);first.close();first=null;second=make();const secondUrl=new URL(await second.start());assert.equal(secondUrl.searchParams.get('token'),saved);}finally{first?.close();second?.close();await rm(directory,{recursive:true,force:true});}});
+
+test('浏览器Excel上传仅允许本机令牌请求并保留原文件名',async()=>{const root=path.resolve('.'),calls=[],server=new LocalWebServer({rendererDirectory:path.join(root,'renderer'),sourceDirectory:path.join(root,'src'),dispatch:async(channel,payload)=>{calls.push({channel,payload});return {ok:true,data:{filename:payload.filename,size:payload.content.length}};}});try{const url=new URL(await server.start()),content=Buffer.from([0x50,0x4b,0x03,0x04,0x00]),endpoint=`${url.origin}/api/orders%3Aupload-excel`,headers={origin:url.origin,'content-type':'application/octet-stream','x-app-token':url.searchParams.get('token'),'x-file-name':encodeURIComponent('虚构订单.xlsx')};let response=await fetch(endpoint,{method:'POST',headers:{...headers,'x-app-token':'invalid'},body:content});assert.equal(response.status,403);response=await fetch(endpoint,{method:'POST',headers,body:content});assert.equal(response.status,200);assert.deepEqual(await response.json(),{ok:true,data:{filename:'虚构订单.xlsx',size:5}});assert.equal(calls.length,1);assert.equal(calls[0].channel,'orders:upload-excel');assert.equal(calls[0].payload.filename,'虚构订单.xlsx');assert.deepEqual(calls[0].payload.content,content);}finally{server.close();}});
+
+
+test('退出服务等待每个已打开页面确认助手保存；失败拒绝退出',async()=>{
+ const server=new LocalWebServer({dispatch:async()=>({ok:true})});
+ const first={write(text){const {id}=JSON.parse(text.split('data: ')[1]);queueMicrotask(()=>server.flushWaiters.get(id)(true));}};
+ const second={write(text){const {id}=JSON.parse(text.split('data: ')[1]);queueMicrotask(()=>server.flushWaiters.get(id)(false));}};
+ server.clients.add(first);await server.flushAssistantWorkspaces();assert.equal(server.flushWaiters.size,0);
+ server.clients.add(second);await assert.rejects(server.flushAssistantWorkspaces(),/保存失败/);assert.equal(server.flushWaiters.size,0);
+});

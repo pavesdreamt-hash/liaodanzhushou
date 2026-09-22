@@ -1,0 +1,21 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {_electron as electron} from 'playwright-core';
+import electronPath from 'electron';
+import {mkdtemp,writeFile,rm,mkdir} from 'node:fs/promises';
+import path from 'node:path';import os from 'node:os';
+test('S1 gear invokes encrypted key change, simulated connection and key deletion',async()=>{
+ const dir=await mkdtemp(path.join(os.tmpdir(),'s1-gear-fictional-')),settingsFile=path.join(dir,'settings.json');let app,page;
+ try{await writeFile(settingsFile,JSON.stringify({key:'fictional-s1-key-only'}));const exe=process.env.KDOCS_TEST_EXECUTABLE;
+ app=await electron.launch({executablePath:exe||electronPath,args:[...(exe?[]:['.']),`--orders-test-user-data=${path.join(dir,'data')}`,`--orders-test-settings=${settingsFile}`],cwd:path.resolve('.'),env:{...process.env,NODE_ENV:'test'}});page=await app.firstWindow();page.setDefaultTimeout(25000);page.on('dialog',d=>d.accept());
+ await page.getByRole('button',{name:'订单管理',exact:true}).click();await page.getByRole('button',{name:'新建订单',exact:true}).click();await page.getByRole('button',{name:'订单助手',exact:true}).click();await page.getByLabel('英文草稿 · 可编辑').waitFor();
+  await page.locator('.order-assistant').getByRole('button',{name:'助手设置',exact:true}).click();await page.getByLabel('API 密钥',{exact:true}).waitFor();assert.equal((await page.evaluate(async()=>(await window.inventoryApp.assistantSettings.get()).data)).callsUsed,0);
+  await page.locator('.assistant-settings-popover').getByRole('button',{name:'更换',exact:true}).click();await page.locator('.assistant-settings-feedback').filter({hasText:'密钥已加密保存'}).waitFor();assert.equal(await page.getByRole('button',{name:'AI 拟回复',exact:true}).isDisabled(),false);await page.locator('.assistant-settings-popover').getByRole('button',{name:'测试连接',exact:true}).click();await page.locator('.assistant-settings-feedback').filter({hasText:'模拟接口样本通过'}).waitFor();
+  assert.equal((await page.evaluate(async()=>(await window.inventoryApp.assistantSettings.get()).data)).callsUsed,1);assert.doesNotMatch(await page.locator('.order-assistant').innerText(),/fictional-s1-key-only/);
+  await page.evaluate(async()=>{const api=window.inventoryApp.assistantSettings;for(let n=0;n<4;n++){const s=(await api.get()).data;const r=await api.test({provider:s.activeProvider,revision:s.revision});if(!r.ok)throw Error(r.error.message);}const s=(await api.get()).data;const r=await api.setUsageMode({provider:s.activeProvider,revision:s.revision,usageMode:'daily'});if(!r.ok)throw Error(r.error.message);});
+  await page.locator('.order-assistant').getByRole('button',{name:'助手设置',exact:true}).click();await page.locator('.order-assistant').getByRole('button',{name:'助手设置',exact:true}).click();await page.getByLabel('API 密钥',{exact:true}).waitFor();assert.equal(await page.locator('.assistant-settings-popover').getByRole('button',{name:'测试连接',exact:true}).isDisabled(),true);assert.equal((await page.evaluate(async()=>(await window.inventoryApp.assistantSettings.get()).data)).callsUsed,5);
+  await page.locator('.assistant-settings-popover').getByRole('button',{name:'删除',exact:true}).click();await page.locator('.assistant-settings-feedback').filter({hasText:'密钥已删除'}).waitFor();assert.equal(await page.getByRole('button',{name:'AI 拟回复',exact:true}).isDisabled(),true);await page.locator('.order-assistant').getByRole('button',{name:'助手设置',exact:true}).click();
+
+ }catch(error){if(page){const out=path.resolve(process.env.KDOCS_TEST_ARTIFACT_DIRECTORY||'artifacts/assistant-ui-s1');await mkdir(out,{recursive:true});await page.screenshot({path:path.join(out,'gear-availability.png')});const state=(await page.evaluate(async()=>(await window.inventoryApp.assistantSettings.get()).data));await writeFile(path.join(out,'gear-availability.json'),JSON.stringify({secureStorageAvailable:state.secureStorageAvailable,apiCalls:state.callsUsed,result:'BLOCKED',reason:await page.locator('.assistant-settings-feedback').textContent()},null,2));}throw error;
+ }finally{if(app){let timer;try{await Promise.race([app.close(),new Promise(resolve=>{timer=setTimeout(()=>{app.process().kill('SIGKILL');resolve();},5000);})]);}finally{clearTimeout(timer);}}await rm(dir,{recursive:true,force:true});}
+});
