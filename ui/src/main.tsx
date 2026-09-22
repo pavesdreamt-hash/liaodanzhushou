@@ -70,7 +70,7 @@ function ConfirmedApp(){
   useEffect(()=>{if(merged)void desktop?.setOrderChrome?.(true);},[page,merged,desktop]);
   const html=useMemo(()=>{
     const chat=chatPages.has(page),product=productPages.has(page);
-    return (restoredPages.has(page)?pages[page].replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi,''):pages[page]).replace(/>1\.0</g,`>${version}<`)
+    return (restoredPages.has(page)?pages[page].replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi,''):pages[page]).replaceAll('__APP_VERSION__',version).replace(/>1\.0</g,`>${version}<`)
       +moduleStyle('shared-layout',unifiedCss)
       +(chat?moduleStyle('chat-layout',orderLayoutCss.replaceAll('#ui008-order-detail',':is(#ui008-order-detail,#chat-workbench-aligned)')):'')
       +(chat||product?moduleStyle('media-dialog',mediaDialogCss):'')
