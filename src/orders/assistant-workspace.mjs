@@ -19,7 +19,7 @@ export class AssistantWorkspace{
     const latestCustomerMessage=this.db.prepare("SELECT message_id id,body text,direction,sent_at sentAt FROM order_chat_messages WHERE order_id=? AND binding_revision=? AND direction='customer' AND sent_at>=? AND sent_at<=? ORDER BY sent_at DESC,message_id DESC LIMIT 1").get(orderId,binding.binding_revision,binding.scope_start||'',binding.scope_end||'')||null;
     const aiAvailable=Boolean(this.assistant.ai.gateway&&(this.assistant.ai.gateway.isConfigured?.()??true));
     return {replyMessage,latestCustomerMessage,orderId,revision:row.revision,bindingRevision:binding.binding_revision,values,updatedAt:row.updated_at,
-      capabilities:{translation:aiAvailable,replyGeneration:aiAvailable},capabilityNote:aiAvailable?'AI 操作需模型、密钥及可用额度；点击才请求，结果请人工核对。':'AI 尚未配置，可手动编辑并复制英文草稿。'};
+      capabilities:{translation:aiAvailable,replyGeneration:aiAvailable},capabilityNote:aiAvailable?'AI 操作需模型和密钥；点击才请求，结果请人工核对。':'AI 尚未配置，可手动编辑并复制英文草稿。'};
   }
   message(orderId,binding,id){
     return this.db.prepare('SELECT message_id id,body text,direction,sent_at sentAt FROM order_chat_messages WHERE order_id=? AND binding_revision=? AND message_id=? AND sent_at>=? AND sent_at<=?')

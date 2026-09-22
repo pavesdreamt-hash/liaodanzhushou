@@ -55,10 +55,10 @@ test('provider-specific JSON request contracts and saved credentials are used',a
   await s.save(await payload(s,'openai',{model:'gpt-fictional'}));s.promptKey=async()=> 'fictional-openai-key-86';await s.changeKey(await payload(s,'openai'));await s.test(await payload(s,'openai'));
   assert.equal(requests[1].url,'https://api.openai.com/v1/chat/completions');assert.equal(requests[1].body.store,false);assert.equal(requests[1].body.max_completion_tokens,2500);assert.equal(requests[1].body.thinking,undefined);assert.notEqual(requests[0].headers.Authorization,requests[1].headers.Authorization);
 });
-test('successful sample test persists; five-call cap survives restart and provider changes',async t=>{
+test('successful sample tests remain available after restart and provider changes',async t=>{
   let calls=0;const {service:s,options}=await fixture(t,{fetchImpl:async()=>{calls++;return response();}});await s.changeKey(await payload(s));
   for(let i=0;i<5;i++)await s.test(await payload(s));assert.equal((await s.get()).providers.deepseek.test.status,'verified');
-  const restarted=new AssistantSettings(options);await assert.rejects(restarted.test(await payload(restarted)),/5 次/);assert.equal(calls,5);assert.equal((await restarted.get()).callsUsed,5);
+  const restarted=new AssistantSettings(options);await restarted.test(await payload(restarted));assert.equal(calls,6);assert.equal((await restarted.get()).callsUsed,6);
 });
 test('401 errors are sanitized, count once, and do not retry',async t=>{
   let calls=0;const {service:s}=await fixture(t,{fetchImpl:async()=>{calls++;return {ok:false,status:401,text:async()=> 'fictional secret echoed by remote server'};}});await s.changeKey(await payload(s));
@@ -100,14 +100,14 @@ test('fresh settings do not touch Keychain; asynchronous access has a bounded wa
   let ticked=false;const blocked=asyncSecretStorage({isAsyncEncryptionAvailable:()=>new Promise(()=>{})},{timeoutMs:30});
   setTimeout(()=>{ticked=true;},1);await assert.rejects(blocked.isEncryptionAvailable(),e=>e.code==='AI_SECURE_STORAGE_PENDING'&&e.message.includes('重新检查'));assert.equal(ticked,true);
 });
-test('daily mode is explicit, bounded and cannot reset or bypass development verification budget',async t=>{
+test('usage records do not impose an artificial API call cap',async t=>{
  let requests=0;let date=new Date('2026-09-13T00:00:00Z');const {service:s,options}=await fixture(t,{now:()=>date,fetchImpl:async()=>{requests++;return response();}});await s.changeKey(await payload(s));
  for(let i=0;i<5;i++)await s.test(await payload(s));assert.equal(requests,5);
  await s.setUsageMode(await payload(s,'deepseek',{usageMode:'daily'}));assert.equal((await s.get()).callsUsed,5);
- for(let i=0;i<20;i++)await s.extract({messages:[]});assert.equal((await s.get()).dailyCalls,20);await assert.rejects(()=>s.extract({messages:[]}),/20 次/);assert.equal(requests,25);
- const restarted=new AssistantSettings(options);assert.equal((await restarted.get()).dailyCalls,20);await assert.rejects(async()=>restarted.test(await payload(restarted)),/验证额度/);
- const development=new AssistantSettings({...options,verificationOnly:true});await assert.rejects(()=>development.extract({messages:[]}),/验证额度/);assert.equal(requests,25);
- date=new Date('2026-09-14T00:00:00Z');await restarted.extract({messages:[]});assert.equal((await restarted.get()).dailyCalls,1);assert.equal((await restarted.get()).callsUsed,5);
+ for(let i=0;i<21;i++)await s.extract({messages:[]});assert.equal((await s.get()).dailyCalls,21);assert.equal(requests,26);
+ const restarted=new AssistantSettings(options);assert.equal((await restarted.get()).dailyCalls,21);await restarted.test(await payload(restarted));
+ const development=new AssistantSettings({...options,verificationOnly:true});await development.extract({messages:[]});assert.equal(requests,28);
+ date=new Date('2026-09-14T00:00:00Z');await restarted.extract({messages:[]});assert.equal((await restarted.get()).dailyCalls,1);assert.equal((await restarted.get()).callsUsed,6);
 });
 
 test('explicit secure-storage recheck recovers first-save denial without extra key prompts or AI calls',async t=>{
@@ -118,23 +118,22 @@ test('explicit secure-storage recheck recovers first-save denial without extra k
   available=true;const checked=await s.recheck();assert.equal(checked.secureStorageAvailable,true);assert.equal(checked.providers.deepseek.hasApiKey,false);assert.equal(checked.callsUsed,0);assert.equal(calls,0);assert.equal(prompts,0);
   await s.changeKey(await payload(s));assert.equal(prompts,1);assert.equal((await s.get()).providers.deepseek.hasApiKey,true);
 });
-test('late unlock reloads encrypted settings, reconnects extractor and preserves exhausted verification budget',async t=>{
+test('late unlock reloads encrypted settings and preserves prior call records',async t=>{
   const {service:s,options}=await fixture(t);await s.changeKey(await payload(s));await s.persist({...s.state,callsUsed:5});const before=await readFile(s.file);let resolveDecrypt,changed=0,decryptCalls=0;
   const native=asyncSecretStorage({isAsyncEncryptionAvailable:async()=>true,decryptStringAsync:()=>{decryptCalls++;return new Promise(r=>resolveDecrypt=r);}},{timeoutMs:15});
   const restarted=new AssistantSettings({...options,safeStorage:native,onChanged:()=>changed++});
   await assert.rejects(restarted.get(),e=>e.code==='AI_SECURE_STORAGE_PENDING');await assert.rejects(restarted.recheck(),e=>e.code==='AI_SECURE_STORAGE_PENDING');assert.equal(decryptCalls,1);assert.equal(changed,0);
   resolveDecrypt({result:options.safeStorage.decryptString(before)});await Promise.resolve();
   const restored=await restarted.recheck();assert.equal(restored.providers.deepseek.hasApiKey,true);assert.equal(restored.callsUsed,5);assert.ok(changed>0);assert.ok(await restarted.connector());assert.equal(decryptCalls,1);assert.deepEqual(await readFile(s.file),before);
-  await assert.rejects(restarted.test(await payload(restarted)),e=>e.code==='AI_CALL_LIMIT');
 });
 
-test('all AI purposes share persisted budget and sanitized ledger; cached config does not change when requests consume it',async t=>{
+test('all AI purposes share persisted usage records and sanitized ledger; cached config does not change when requests consume it',async t=>{
  let network=0;const {service:s,options}=await fixture(t,{simulation:true,fetchImpl:async(_url,request)=>{network++;const input=JSON.parse(JSON.parse(request.body).messages[1].content);return response(input.language?{translations:input.messages.map(m=>({id:m.id,text:'模拟中文'}))}:input.mode?{text:'Fictional reply.'}:valid);}});
  await s.changeKey(await payload(s));const config=await s.configuration();
  await s.complete({purpose:'translation',input:{language:'zh',messages:[{id:'fictional-a',text:'Fictional original'}]},configuration:config});
  await s.complete({purpose:'reply',input:{mode:'proactive',intent:'虚构意图'},configuration:config});
  await s.complete({purpose:'translate-intent',input:{mode:'proactive',intent:'虚构意图'},configuration:config});
  await s.extract({messages:[]});await s.test(await payload(s));assert.equal(network,5);assert.equal((await s.get()).callsUsed,5);assert.deepEqual(await s.configuration(),config);
- const restarted=new AssistantSettings(options);await assert.rejects(restarted.complete({purpose:'reply',input:{mode:'proactive'},configuration:config}),e=>e.code==='AI_CALL_LIMIT');assert.equal(network,5);
- const state=await restarted.get();assert.deepEqual(state.ledger.map(e=>e.purpose),['translation','reply','translate-intent','extraction','connection-test']);assert.ok(state.ledger.every(e=>e.status==='responded'&&e.simulation&&e.elapsedMs>=0));assert.doesNotMatch(JSON.stringify(state.ledger),/fictional|虚构意图|key|original/);
+ const restarted=new AssistantSettings(options);await restarted.complete({purpose:'reply',input:{mode:'proactive'},configuration:config});assert.equal(network,6);
+ const state=await restarted.get();assert.equal(state.callsUsed,6);assert.deepEqual(state.ledger.map(e=>e.purpose),['translation','reply','translate-intent','extraction','connection-test','reply']);assert.ok(state.ledger.every(e=>e.status==='responded'&&e.simulation&&e.elapsedMs>=0));assert.doesNotMatch(JSON.stringify(state.ledger),/fictional|虚构意图|key|original/);
 });

@@ -13,7 +13,7 @@ const bounded=async(promise,ms)=>{let timer;try{return await Promise.race([promi
 // This adapter never exposes its Client, authentication data, or send methods to UI.
 export class WhatsAppWebClient {
  constructor({userDataPath,restriction=null,clientFactory=null,chromePath=null,clock=()=>Date.now(),reconnectDelays=[5000,15000,30000,60000]}={}){
-  this.mode='browser';this.live=true;this.userDataPath=userDataPath;this.authPath=path.join(userDataPath,'whatsapp-live-auth');this.marker=path.join(this.authPath,'connection.json');this.restriction=restriction;this.clientFactory=clientFactory;this.chromePath=chromePath;this.chromeOverride=chromePath;this.clock=clock;this.delays=reconnectDelays;this.events=new EventEmitter();this.candidates=new Map();this.targets=[];this.state={provider:'whatsapp-web.js',status:'disconnected',message:'自动消息连接尚未启动'};this.generation=0;this.closed=false;this.attempt=0;this.queue=Promise.resolve();this.mediaQueue=[];this.mediaActive=0;this.ownedClients=new Set();this.exitHook=()=>{for(const c of this.ownedClients){try{c.pupBrowser?.process()?.kill('SIGTERM');}catch{}}};
+  this.mode='browser';this.live=true;this.userDataPath=userDataPath;this.authPath=path.join(userDataPath,'whatsapp-live-auth');this.marker=path.join(this.authPath,'connection.json');this.restriction=restriction;this.clientFactory=clientFactory;this.chromePath=chromePath;this.chromeOverride=chromePath;this.clock=clock;this.delays=reconnectDelays;this.events=new EventEmitter();this.candidates=new Map();this.targets=[];this.inboxRemotes=new Map();this.state={provider:'whatsapp-web.js',status:'disconnected',message:'自动消息连接尚未启动'};this.generation=0;this.closed=false;this.attempt=0;this.queue=Promise.resolve();this.mediaQueue=[];this.mediaActive=0;this.ownedClients=new Set();this.exitHook=()=>{for(const c of this.ownedClients){try{c.pupBrowser?.process()?.kill('SIGTERM');}catch{}}};
  }
  status(){return {...this.state};}
  subscribe(fn){this.events.on('update',fn);return()=>this.events.off('update',fn);}
@@ -62,20 +62,24 @@ export class WhatsAppWebClient {
   if(this.state.status!=='online')throw error('请先在连接与设置完成 WhatsApp 登录');
   const start=Math.max(0,Number.isSafeInteger(offset)?offset:0),size=Math.max(1,Math.min(50,Number.isSafeInteger(limit)?limit:20));
   const chats=await bounded(this.client.getChats(),30000),items=[];
+  const remotes=chats.map(chat=>serialized(chat.id)||''),lids=remotes.filter(remote=>remote.endsWith('@lid'));
+  const phoneByLid=new Map();
+  if(lids.length){try{for(const pair of await bounded(this.client.getContactLidAndPhone(lids),30000)){const lid=serialized(pair?.lid)||'',pn=serialized(pair?.pn)||'',match=pn.match(/^([1-9]\d{6,14})@c\.us$/);if(lid&&match)phoneByLid.set(lid,match[1]);}}catch{/* Chats whose LID cannot be verified are omitted rather than assigned a guessed number. */}}
   for(const chat of chats){
-   const remote=serialized(chat.id)||'',match=remote.match(/^([1-9]\d{6,14})@c\.us$/);if(!match)continue;
+   const remote=serialized(chat.id)||'',direct=remote.match(/^([1-9]\d{6,14})@c\.us$/),phone=direct?.[1]||phoneByLid.get(remote);if(!phone)continue;
    const latest=chat.lastMessage||null,stamp=Number(latest?.timestamp||chat.timestamp||0);
    if(!Number.isFinite(stamp)||stamp<=0)continue;
    let preview='',name=typeof chat.name==='string'?chat.name:'',avatarUrl=null;
    if(latest)preview=typeof latest.body==='string'&&latest.body.trim()?latest.body:latest.type==='image'?'[图片]':latest.type==='ciphertext'?'[等待 WhatsApp 解密的消息]':'[非文字消息]';
-   try{const contact=await bounded(chat.getContact(),8000);name=contact.pushname||contact.name||name;const photo=typeof contact.getProfilePicUrl==='function'?await bounded(contact.getProfilePicUrl(),8000):null;if(typeof photo==='string'&&/^https:\/\//.test(photo))avatarUrl=photo;}catch{/* No profile photo is treated as absent, never substituted with a fictional image. */}
-   items.push({phone:match[1],chatId:'wa-phone:'+match[1],name,avatarUrl,updatedAt:new Date(stamp*1000).toISOString(),preview,direction:latest?.fromMe?'merchant':'customer',unreadCount:Number(chat.unreadCount||0),binding:{accountId:this.accountId,chatId:'wa-phone:'+match[1],accountPhone:number(this.accountId),targetPhone:match[1],nativeRemote:remote,aliases:[remote,match[1]+'@c.us']}});
+   items.push({phone,chatId:'wa-phone:'+phone,name,avatarUrl,updatedAt:new Date(stamp*1000).toISOString(),preview,direction:latest?.fromMe?'merchant':'customer',unreadCount:Number(chat.unreadCount||0),binding:{accountId:this.accountId,chatId:'wa-phone:'+phone,accountPhone:number(this.accountId),targetPhone:phone,nativeRemote:remote,aliases:[remote,phone+'@c.us']},chat,remote});
   }
-  items.sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt));return {accountId:this.accountId,total:items.length,offset:start,items:items.slice(start,start+size),hasMore:start+size<items.length};
+  items.sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt));const page=items.slice(start,start+size);
+  await Promise.all(page.map(async item=>{this.inboxRemotes.set(item.phone,item.remote);try{const contact=await bounded(item.chat.getContact(),8000);item.name=contact.pushname||contact.name||item.name;const photo=typeof contact.getProfilePicUrl==='function'?await bounded(contact.getProfilePicUrl(),8000):null;if(typeof photo==='string'&&/^https:\/\//.test(photo))item.avatarUrl=photo;}catch{/* No profile photo is treated as absent, never substituted with a fictional image. */}}));
+  return {accountId:this.accountId,total:items.length,offset:start,items:page.map(({chat,remote,...item})=>item),hasMore:start+size<items.length};
  }
  async openInbox({chatId}={}){
   if(this.state.status!=='online')throw error('请先在连接与设置完成 WhatsApp 登录');
-  const target=number(chatId),pn=target+'@c.us',chat=await bounded(this.client.getChatById(pn),10000),remote=serialized(chat.id);
+  const target=number(chatId),pn=target+'@c.us',preferred=this.inboxRemotes.get(target)||pn;let chat;try{chat=await bounded(this.client.getChatById(preferred),10000);}catch(error){if(preferred===pn)throw error;chat=await bounded(this.client.getChatById(pn),10000);}const remote=serialized(chat.id);
   if(!remote)throw error('未能核对当前 WhatsApp 会话');const aliases=new Set([pn,remote]);
   try{const pairs=await bounded(this.client.getContactLidAndPhone([pn]),8000);for(const pair of pairs||[])if(pair.pn===pn&&pair.lid)aliases.add(pair.lid);}catch{/* The verified phone remote remains sufficient. */}
   return {accountId:this.accountId,chatId:'wa-phone:'+target,binding:{accountId:this.accountId,chatId:'wa-phone:'+target,accountPhone:number(this.accountId),targetPhone:target,nativeRemote:remote,aliases:[...aliases]}};

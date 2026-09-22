@@ -1,4 +1,4 @@
-type Settings={revision:number;activeProvider:string;usageMode:string;providers:Record<string,{label:string;model:string;hasApiKey:boolean}>};
+type Settings={revision:number;activeProvider:string;providers:Record<string,{label:string;model:string;hasApiKey:boolean}>};
 type Bridge={request:(payload:unknown)=>Promise<{ok:boolean;data?:unknown;error?:string}>};
 const bridge=(window as Window&{manualReplyTranslation?:Bridge}).manualReplyTranslation;
 async function request(action:string,payload?:unknown){
@@ -7,18 +7,16 @@ async function request(action:string,payload?:unknown){
 }
 export function openTranslationSettings(doc:Document){
   const d=doc.createElement('dialog');d.className='shared-dialog reply-dialog translation-settings';
-  d.innerHTML='<h2>翻译服务设置</h2><p>沿用本机的 AI 服务配置，仅在点击“转为英文”时提交中文，不开启自动回复。</p><label>服务商<select data-provider></select></label><label>模型名称<input data-model maxlength="120"></label><label>手动调用额度<select data-usage><option value="verification">验证模式 · 共 5 次</option><option value="daily">日常使用 · 每日 20 次</option></select></label><p>翻译使用所选服务商的 API 额度，可能产生费用。密钥通过系统安全输入窗口保存。</p><output aria-live="polite"></output><footer><button data-save>保存服务设置</button><button data-key>设置 / 更换密钥</button><button data-close>关闭</button></footer>';
+  d.innerHTML='<h2>翻译服务设置</h2><p>沿用本机的 AI 服务配置，仅在点击“转为英文”时提交中文，不开启自动回复。</p><label>服务商<select data-provider></select></label><label>模型名称<input data-model maxlength="120"></label><p>翻译使用所选服务商的 API，可能产生费用。密钥通过系统安全输入窗口保存。</p><output aria-live="polite"></output><footer><button data-save>保存服务设置</button><button data-key>设置 / 更换密钥</button><button data-close>关闭</button></footer>';
   doc.body.append(d);d.showModal();d.onclose=()=>d.remove();d.querySelector<HTMLButtonElement>('[data-close]')!.onclick=()=>d.close();
-  const provider=d.querySelector<HTMLSelectElement>('[data-provider]')!,model=d.querySelector<HTMLInputElement>('[data-model]')!,usage=d.querySelector<HTMLSelectElement>('[data-usage]')!,status=d.querySelector('output')!;
+  const provider=d.querySelector<HTMLSelectElement>('[data-provider]')!,model=d.querySelector<HTMLInputElement>('[data-model]')!,status=d.querySelector('output')!;
   const buttons=Array.from(d.querySelectorAll<HTMLButtonElement>('[data-save],[data-key]'));let current:Settings|undefined;
-  const busy=(value:boolean)=>{buttons.forEach(b=>b.disabled=value);provider.disabled=model.disabled=usage.disabled=value;};
-  const paint=(state:Settings)=>{current=state;provider.replaceChildren();for(const [id,p] of Object.entries(state.providers)){const option=doc.createElement('option');option.value=id;option.textContent=p.label;provider.append(option);}provider.value=state.activeProvider;model.value=state.providers[state.activeProvider].model;usage.value=state.usageMode;status.textContent=state.providers[state.activeProvider].hasApiKey?'已保存本机密钥':'尚未设置此服务商的密钥';};
+  const busy=(value:boolean)=>{buttons.forEach(b=>b.disabled=value);provider.disabled=model.disabled=value;};
+  const paint=(state:Settings)=>{current=state;provider.replaceChildren();for(const [id,p] of Object.entries(state.providers)){const option=doc.createElement('option');option.value=id;option.textContent=p.label;provider.append(option);}provider.value=state.activeProvider;model.value=state.providers[state.activeProvider].model;status.textContent=state.providers[state.activeProvider].hasApiKey?'已保存本机密钥':'尚未设置此服务商的密钥';};
   provider.onchange=()=>{if(current){model.value=current.providers[provider.value].model;status.textContent=current.providers[provider.value].hasApiKey?'已保存本机密钥':'尚未设置此服务商的密钥';}};
   const save=async()=>{
     if(!current)throw new Error('设置尚未加载');
-    let next=await request('save',{provider:provider.value,revision:current.revision,model:model.value.trim()}) as Settings;
-    current=next;
-    if(usage.value!==next.usageMode)next=await request('usage',{provider:next.activeProvider,revision:next.revision,usageMode:usage.value}) as Settings;
+    const next=await request('save',{provider:provider.value,revision:current.revision,model:model.value.trim()}) as Settings;
     paint(next);
   };
   const action=async(key:boolean)=>{busy(true);try{await save();if(key){const result=await request('key',{provider:current!.activeProvider,revision:current!.revision}) as {state:Settings;canceled:boolean};paint(result.state);if(result.canceled)status.textContent='已取消密钥输入，原有密钥保留';}else status.textContent='服务设置已保存';}catch(e){status.textContent=(e as Error).message;}finally{busy(false);}};

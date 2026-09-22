@@ -34,13 +34,13 @@ export class AssistantSettings{
     await this.requireEncryption();
     try{
       const state=JSON.parse(await this.crypto.decryptString(bytes));
-      if(state.version!==1||!AI_PROVIDERS[state.activeProvider]||!Number.isSafeInteger(state.revision)||state.revision<0||!Number.isSafeInteger(state.callsUsed)||state.callsUsed<0||state.callsUsed>5)throw new Error();
+      if(state.version!==1||!AI_PROVIDERS[state.activeProvider]||!Number.isSafeInteger(state.revision)||state.revision<0||!Number.isSafeInteger(state.callsUsed)||state.callsUsed<0)throw new Error();
       for(const id of Object.keys(AI_PROVIDERS)){
         const p=state.providers?.[id];if(!p||typeof p.model!=='string'||(p.key!==null&&typeof p.key!=='string'))throw new Error();
         if(p.test?.status==='testing')p.test={status:'interrupted',message:'上次请求已中断，未自动重试'};
       }
       state.usageMode??='verification';state.dailyDate??=null;state.dailyCalls??=0;
-      if(!['verification','daily'].includes(state.usageMode)||!Number.isSafeInteger(state.dailyCalls)||state.dailyCalls<0||state.dailyCalls>20||state.dailyDate!==null&&!/^\d{4}-\d{2}-\d{2}$/.test(state.dailyDate))throw new Error();
+      if(!['verification','daily'].includes(state.usageMode)||!Number.isSafeInteger(state.dailyCalls)||state.dailyCalls<0||state.dailyDate!==null&&!/^\d{4}-\d{2}-\d{2}$/.test(state.dailyDate))throw new Error();
       for(const p of Object.values(state.providers)){p.configRevision??=0;if(!Number.isSafeInteger(p.configRevision)||p.configRevision<0)throw new Error();}state.ledger??=[];if(!Array.isArray(state.ledger)||state.ledger.length>100)throw new Error();for(const entry of state.ledger){if(!entry||!['extraction','translation','reply','compose','translate-intent','translate-draft','connection-test'].includes(entry.purpose)||!['started','interrupted','failed','responded'].includes(entry.status)||typeof entry.at!=='string'||!Number.isFinite(Date.parse(entry.at)))throw new Error();if(entry.status==='started')entry.status='interrupted';}this.state=state;this.saved=true;this.onChanged();
     }catch(error){if(error?.code==='AI_SECURE_STORAGE_PENDING')throw settingsError(error.message,error.code);throw settingsError('助手设置无法解密或格式损坏；请保留文件并检查本机安全存储','AI_SETTINGS_UNREADABLE');}
   }
@@ -65,7 +65,7 @@ export class AssistantSettings{
   today(){return this.now().toLocaleDateString('sv-SE');}
   publicState(){
     const s=this.state;
-    return {revision:s.revision,activeProvider:s.activeProvider,secureStorageAvailable:this.encryptionAvailable,callsUsed:s.callsUsed,callsLimit:5,usageMode:s.usageMode,dailyCalls:s.dailyDate===this.today()?s.dailyCalls:0,dailyLimit:20,ledger:(s.ledger||[]).map(({purpose,at,status,elapsedMs,simulation})=>({purpose,at,status,elapsedMs,simulation})),providers:Object.fromEntries(Object.entries(AI_PROVIDERS).map(([id,p])=>{
+    return {revision:s.revision,activeProvider:s.activeProvider,secureStorageAvailable:this.encryptionAvailable,callsUsed:s.callsUsed,usageMode:s.usageMode,dailyCalls:s.dailyDate===this.today()?s.dailyCalls:0,ledger:(s.ledger||[]).map(({purpose,at,status,elapsedMs,simulation})=>({purpose,at,status,elapsedMs,simulation})),providers:Object.fromEntries(Object.entries(AI_PROVIDERS).map(([id,p])=>{
       const current=s.providers[id],test=current.test?.status==='testing'&&!this.requestBusy?{status:'interrupted',message:'上次请求未完成，未自动重试'}:current.test;
       return [id,{label:p.label,baseUrl:p.baseUrl,model:current.model,hasApiKey:Boolean(current.key),test:test?{status:test.status,message:test.message,at:test.at,elapsedMs:test.elapsedMs}:null}];
     }))};
@@ -102,8 +102,6 @@ export class AssistantSettings{
       if(this.requestBusy)throw settingsError('已有 AI 请求正在进行，请稍候');
       const p=this.state.providers[provider];if(!p.model)throw settingsError('请先填写并保存模型名称');if(!p.key)throw settingsError('请先保存此服务商的 API 密钥');
       const verification=probe||this.verificationOnly||this.state.usageMode!=='daily',today=this.today();
-      if(verification&&this.state.callsUsed>=5)throw settingsError('5 次验证额度已用完；日常使用请在助手设置中自行开启。验证计数不会重置','AI_CALL_LIMIT');
-      if(!verification&&this.state.dailyDate===today&&this.state.dailyCalls>=20)throw settingsError('今天已达到 20 次手动 AI 操作上限，请明天继续；没有自动重试','AI_DAILY_LIMIT');
       config={...p};requestId=randomUUID();const next=structuredClone(this.state);if(verification)next.callsUsed++;else{next.dailyCalls=next.dailyDate===today?next.dailyCalls+1:1;next.dailyDate=today;}next.revision++;
       if(probe)next.providers[provider].test={status:'testing',requestId,message:'正在使用虚构资料测试连接'};
       next.ledger=[...(next.ledger||[]),{id:requestId,purpose:probe?'connection-test':purpose,at:this.now().toISOString(),status:'started',simulation:this.simulation}].slice(-100);

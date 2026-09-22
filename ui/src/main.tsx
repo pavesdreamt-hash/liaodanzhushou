@@ -31,6 +31,8 @@ import workbenchOrdersCss from './workbench-orders.css?raw';
 import emptyCss from './empty-workspace.css?raw';
 import desktopWorkbenchCss from './chat-workbench-desktop.css?raw';
 import restoredCss from './restored-pages.css?raw';
+import hoverHintsCss from './hover-hints.css?raw';
+import {installHoverHints} from './hover-hints';
 import {version} from '../../package.json';
 
 const UI_BUILD_MARKER='liaodan-assistant-next-ui';
@@ -80,7 +82,8 @@ function ConfirmedApp(){
       +(page==='workbench'?moduleStyle('workbench-orders',workbenchOrdersCss):'')
       +(page==='workbench'?moduleStyle('desktop-workbench',desktopWorkbenchCss):'')
       +moduleStyle('empty-workspace',emptyCss)
-      +(restoredPages.has(page)?moduleStyle('restored-pages',restoredCss):'');
+      +(restoredPages.has(page)?moduleStyle('restored-pages',restoredCss):'')
+      +moduleStyle('hover-hints',hoverHintsCss);
   },[page]);
   const setup=()=>{
     cleanup.current?.();cleanup.current=undefined;
@@ -144,6 +147,7 @@ function ConfirmedApp(){
     if(page==='workbench'){
       disposers.push(installDesktopChatWorkbench(doc));
     }
+    disposers.push(installHoverHints(doc));
     createIcons({nodes:[doc]});
     cleanup.current=()=>disposers.reverse().forEach(dispose=>dispose());
     doc.addEventListener('click',event=>{
