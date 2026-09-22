@@ -183,3 +183,31 @@
 #chat-workbench-desktop .cwb-top-connection>svg{width:16px;height:16px;flex:0 0 auto;color:#25d366}
 #chat-workbench-desktop .cwb-top-connection .cwb-connection-dot{width:10px;height:10px;margin:0;flex:0 0 auto;border-radius:50%;background:#a69ead}
 #chat-workbench-desktop .cwb-top-connection.is-online .cwb-connection-dot{background:#20a56a}
+
+/* D-060: make the adjustable boundary between customer list and chat content legible without moving either panel. */
+#chat-workbench-desktop .cwb-column-resizer{background:#f4f1f7;box-shadow:inset 1px 0 #ded7e8,inset -1px 0 #ded7e8}
+
+/* D-061: use the selected customer's existing avatar-and-phone treatment in the current-chat heading. */
+#chat-workbench-desktop .cwb-current-contact{display:flex;align-items:center;gap:9px;padding-top:0}
+#chat-workbench-desktop .cwb-current-avatar{width:42px;height:42px;flex:0 0 42px;display:grid;place-items:center;overflow:hidden;color:#756c82;background:#f2eef8;border:1px solid #ded6e8;border-radius:50%}
+#chat-workbench-desktop .cwb-current-avatar svg{width:19px;height:19px}
+#chat-workbench-desktop .cwb-current-avatar img{display:block;width:100%;height:100%;object-fit:cover}
+#chat-workbench-desktop .cwb-current-copy{min-width:0}
+
+/* D-062: incoming messages follow the contact-avatar treatment and use only the width their text needs. */
+#chat-workbench-desktop .cwb-message{width:fit-content;align-self:flex-start}
+#chat-workbench-desktop .cwb-message.outgoing{align-self:flex-end}
+#chat-workbench-desktop .cwb-message-row{display:flex;align-items:flex-start;gap:8px;max-width:100%}
+#chat-workbench-desktop .cwb-message-avatar{width:32px;height:32px;flex:0 0 32px;display:grid;place-items:center;overflow:hidden;color:#756c82;background:#f2eef8;border:1px solid #ded6e8;border-radius:50%}
+#chat-workbench-desktop .cwb-message-avatar svg{width:15px;height:15px}
+#chat-workbench-desktop .cwb-message-avatar img{display:block;width:100%;height:100%;object-fit:cover}
+#chat-workbench-desktop .cwb-message.incoming .cwb-bubble{max-width:calc(100% - 40px)}
+
+/* D-064: new content below the fold is a fully visible, moving three-dot cue. */
+#chat-workbench-desktop .cwb-new-message{min-width:68px;min-height:34px;padding:0 10px;display:inline-flex;align-items:center;justify-content:center;gap:10px;overflow:visible;color:transparent!important;background:transparent!important;border:0;box-shadow:none}
+#chat-workbench-desktop .cwb-new-message::before{content:'';position:absolute;right:8px;bottom:4px;left:8px;height:9px;border-top:1px solid #ddd8e2;border-radius:50% 50% 0 0/100% 100% 0 0}
+#chat-workbench-desktop .cwb-new-message span{position:relative;z-index:1;width:9px;height:9px;display:block;border-radius:50%;background:#ef4444;box-shadow:0 1px 2px #ef444433;animation:cwb-new-message-dot 1.2s ease-in-out infinite}
+#chat-workbench-desktop .cwb-new-message span:nth-child(2){animation-delay:.16s}
+#chat-workbench-desktop .cwb-new-message span:nth-child(3){animation-delay:.32s}
+@keyframes cwb-new-message-dot{0%,55%,100%{transform:translateY(0);opacity:.55}28%{transform:translateY(-6px);opacity:1}}
+@media(prefers-reduced-motion:reduce){#chat-workbench-desktop .cwb-new-message span{animation:none;opacity:1}}

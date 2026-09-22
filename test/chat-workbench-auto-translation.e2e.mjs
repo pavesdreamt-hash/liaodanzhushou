@@ -13,13 +13,14 @@ test('聊天工作台默认先读取当前页缓存，再自动翻译未译消�
   const page=await application.firstWindow();
   await application.evaluate(({ipcMain})=>{
    globalThis.__workbenchTranslationCalls=[];
-   ipcMain.removeHandler('manual-chat');ipcMain.handle('manual-chat',async(_event,{action})=>({ok:true,data:action==='status'?{status:'online'}:action==='inbox'?{items:[{phone:'10002',chatId:'wa-phone:10002',name:'',avatarUrl:'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==',updatedAt:'2026-09-22T08:01:00.000Z',preview:'New source',direction:'customer',unreadCount:0}],total:1,offset:0,hasMore:false}:action==='openInbox'?{token:'workbench-binding',accountId:'merchant',chatId:'customer-chat',phone:'10002',messages:globalThis.__workbenchRows,hasMore:true}:action==='recent'?{messages:globalThis.__workbenchRows,hasMore:false}:null}));
+   ipcMain.removeHandler('manual-chat');ipcMain.handle('manual-chat',async(_event,{action})=>({ok:true,data:action==='status'?{status:'online'}:action==='inbox'?{items:[{phone:'971509926999',chatId:'wa-phone:971509926999',name:'',avatarUrl:'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==',updatedAt:'2026-09-22T08:01:00.000Z',preview:'New source',direction:'customer',unreadCount:0}],total:1,offset:0,hasMore:false}:action==='openInbox'?{token:'workbench-binding',accountId:'merchant',chatId:'customer-chat',phone:'971509926999',messages:globalThis.__workbenchRows,hasMore:true}:action==='recent'?{messages:globalThis.__workbenchRows,hasMore:false}:null}));
    globalThis.__workbenchRows=[{id:'cached',direction:'customer',text:'Cached source',sentAt:'2026-09-22T08:00:00.000Z'},{id:'new',direction:'merchant',sender:'人工发送',text:'New source',sentAt:'2026-09-22T08:01:00.000Z'}];
    ipcMain.removeHandler('manual-reply-translation');ipcMain.handle('manual-reply-translation',async(_event,{action,payload})=>{if(action==='chat-cache')return {ok:true,data:{translations:payload.messages.filter(row=>row.id==='cached').map(row=>({id:row.id,text:'缓存译文'}))}};if(action==='chat-translate'){globalThis.__workbenchTranslationCalls.push(payload.messages.map(row=>row.id));return {ok:true,data:{translations:payload.messages.map(row=>({id:row.id,text:`自动译文 ${row.text}`}))}};}return {ok:false,error:'unexpected action'};});
   });
+  await page.evaluate(async()=>{const create=await window.inventoryApp.orders.createDraft({requestId:'workbench-phone-association'});if(!create.ok)throw Error(create.error?.message||'创建虚构订单失败');const save=await window.inventoryApp.orders.saveDraft({orderId:create.data.id,revision:create.data.draftRevision,fields:{fullName:'Fictional UAE Customer',phone:'0509926999',country:'United Arab Emirates'}});if(!save.ok)throw Error(save.error?.message||'保存虚构订单失败');});
   const frame=page.frameLocator('iframe.confirmed-frame');await frame.locator('.cwb-refresh').click();
   await frame.getByText('聊单助手',{exact:true}).waitFor();
-  assert.equal(await frame.locator('.cwb-top-version').textContent(),'1.4.5');
+  assert.equal(await frame.locator('.cwb-top-version').textContent(),'1.5.0');
   await frame.getByText('WhatsApp 已连接',{exact:true}).waitFor();
   assert.equal(await frame.locator('#cwb-connection-status').getAttribute('aria-label'),'WhatsApp 已连接');
   assert.match(await frame.locator('#cwb-connection-status svg').getAttribute('class')||'',/lucide-message-circle/);
@@ -56,20 +57,39 @@ test('聊天工作台默认先读取当前页缓存，再自动翻译未译消�
   assert.equal(await frame.locator('.cwb-conversations').evaluate(element=>getComputedStyle(element).borderRightWidth),'0px');
   assert.equal(await frame.locator('.cwb-chat').evaluate(element=>getComputedStyle(element).borderRightWidth),'0px');
   for(const selector of ['.cwb-column-resizer','.cwb-order-resizer']){
-    assert.equal(await frame.locator(selector).evaluate(element=>getComputedStyle(element).backgroundColor),'rgba(0, 0, 0, 0)');
+    assert.equal(await frame.locator(selector).evaluate(element=>getComputedStyle(element).backgroundColor),selector==='.cwb-column-resizer'?'rgb(244, 241, 247)':'rgba(0, 0, 0, 0)');
     assert.equal(await frame.locator(selector).evaluate(element=>getComputedStyle(element,'::after').width),'2px');
   }
+  assert.match(await frame.locator('.cwb-column-resizer').evaluate(element=>getComputedStyle(element).boxShadow),/rgb\(222, 215, 232\)/);
   assert.ok(shell&&order&&order.width>=shell.width*.2-1&&order.width<=shell.width/3+1,'订单信息列默认宽度位于窗口五分之一到三分之一之间');
   const handle=await orderResizer.boundingBox();assert.ok(handle&&order);
   await page.mouse.move(handle.x+handle.width/2,handle.y+handle.height/2);await page.mouse.down();await page.mouse.move(handle.x-48,handle.y+handle.height/2);await page.mouse.up();
   const widenedOrder=await frame.locator('.cwb-order').boundingBox();assert.ok(widenedOrder&&widenedOrder.width>order.width&&widenedOrder.width<=shell.width/3+1,'拖动分隔条可以调整订单信息列宽度');
-  await frame.locator('#cwb-phone').getByText('10002',{exact:true}).waitFor();
+  await frame.locator('#cwb-phone').getByText('971509926999',{exact:true}).waitFor();
+  await frame.locator('#cwb-order-body').getByText('0509926999',{exact:true}).waitFor();
+  assert.match(await frame.locator('#cwb-order-caption').textContent()||'',/草稿/);
   await frame.getByText('缓存译文',{exact:true}).waitFor();await frame.getByText('自动译文 New source',{exact:true}).waitFor();
   assert.equal(await frame.getByText('缓存译文',{exact:true}).evaluate(element=>getComputedStyle(element).color),'rgb(76, 29, 149)');
   assert.equal(await frame.locator('#cwb-auto-read-translation').isChecked(),true);
   assert.equal(await frame.locator('.cwb-translate-visible').count(),1);
   await frame.locator('.cwb-avatar img').waitFor();
   assert.equal(await frame.locator('.cwb-avatar img').evaluate(image=>getComputedStyle(image).objectFit),'cover');
+  await frame.locator('#cwb-current-avatar img').waitFor();
+  assert.equal(await frame.locator('#cwb-current-avatar').evaluate(element=>getComputedStyle(element).width),'42px');
+  assert.equal(await frame.locator('#cwb-current-avatar img').evaluate(image=>getComputedStyle(image).objectFit),'cover');
+  await frame.locator('.cwb-message.incoming .cwb-message-avatar img').waitFor();
+  assert.equal(await frame.locator('.cwb-message.incoming .cwb-message-avatar').evaluate(element=>getComputedStyle(element).width),'32px');
+  const incoming=await frame.locator('.cwb-message.incoming').boundingBox(),incomingBubble=await frame.locator('.cwb-message.incoming .cwb-bubble').boundingBox(),chatMessages=await frame.locator('#cwb-messages').boundingBox();
+  assert.ok(incoming&&incomingBubble&&chatMessages&&incoming.width<chatMessages.width*.75,'客户短消息按内容宽度显示');
+  const newMessage=frame.locator('#cwb-new-message');
+  await newMessage.evaluate(button=>{button.hidden=false;});
+  assert.equal(await newMessage.locator('span').count(),3);
+  assert.equal(await newMessage.locator('span').first().evaluate(element=>getComputedStyle(element).width),'9px');
+  assert.equal(await newMessage.evaluate(element=>getComputedStyle(element).backgroundColor),'rgba(0, 0, 0, 0)');
+  assert.equal(await newMessage.evaluate(element=>getComputedStyle(element,'::before').borderTopColor),'rgb(221, 216, 226)');
+  assert.match(await newMessage.locator('span').first().evaluate(element=>getComputedStyle(element).animationName),/cwb-new-message-dot/);
+  await newMessage.click();
+  assert.equal(await newMessage.isHidden(),true);
   assert.equal(await frame.locator('.cwb-conversation-state.is-customer').textContent(),'待接待');
   assert.match(await frame.locator('.cwb-conversation-state.is-customer').getAttribute('title')||'',/最后消息来自客户/);
   const chatBefore=await frame.locator('.cwb-chat').boundingBox();
