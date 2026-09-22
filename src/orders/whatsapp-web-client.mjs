@@ -2,18 +2,23 @@ import {EventEmitter} from 'node:events';
 import path from 'node:path';
 import {mkdir,chmod,writeFile,readFile} from 'node:fs/promises';
 import {randomUUID} from 'node:crypto';
+import {execFile as execFileCallback} from 'node:child_process';
+import {promisify} from 'node:util';
 import {findChrome} from '../core/chrome-path.mjs';
 
 const error=(message,code='WHATSAPP_CONNECTION')=>Object.assign(new Error(message),{code,stage:'WhatsApp 只读连接'});
 const number=value=>{const s=String(value||'').replace(/^wa-phone:/,'').replace(/[+ ()-]/g,'');if(!/^[1-9]\d{6,14}$/.test(s))throw error('请输入包含国家区号的 WhatsApp 电话号码');return s;};
 const serialized=value=>typeof value==='string'?value:value?._serialized ?? value?.$1;
 const bounded=async(promise,ms)=>{let timer;try{return await Promise.race([promise,new Promise((_,reject)=>{timer=setTimeout(()=>reject(error('连接操作超时；已保存资料保留','WHATSAPP_TIMEOUT')),ms);})]);}finally{clearTimeout(timer);}};
+const execFile=promisify(execFileCallback);
+const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+const orphanedProfileBrowsers=async profile=>{const {stdout}=await execFile('/bin/ps',['-axo','pid=,ppid=,command='],{maxBuffer:1024*1024});return stdout.split('\n').map(line=>line.match(/^\s*(\d+)\s+(\d+)\s+(.*)$/)).filter(Boolean).map(match=>({pid:Number(match[1]),ppid:Number(match[2]),command:match[3]})).filter(row=>row.ppid===1&&row.command.includes(`--user-data-dir=${profile}`)&&/(?:Google Chrome|Chromium)/.test(row.command));};
 
 // Only the maintained library owns the WhatsApp protocol and browser internals.
 // This adapter never exposes its Client, authentication data, or send methods to UI.
 export class WhatsAppWebClient {
- constructor({userDataPath,restriction=null,clientFactory=null,chromePath=null,clock=()=>Date.now(),reconnectDelays=[5000,15000,30000,60000]}={}){
-  this.mode='browser';this.live=true;this.userDataPath=userDataPath;this.authPath=path.join(userDataPath,'whatsapp-live-auth');this.marker=path.join(this.authPath,'connection.json');this.restriction=restriction;this.clientFactory=clientFactory;this.chromePath=chromePath;this.chromeOverride=chromePath;this.clock=clock;this.delays=reconnectDelays;this.events=new EventEmitter();this.candidates=new Map();this.targets=[];this.inboxRemotes=new Map();this.state={provider:'whatsapp-web.js',status:'disconnected',message:'自动消息连接尚未启动'};this.generation=0;this.closed=false;this.attempt=0;this.queue=Promise.resolve();this.mediaQueue=[];this.mediaActive=0;this.ownedClients=new Set();this.exitHook=()=>{for(const c of this.ownedClients){try{c.pupBrowser?.process()?.kill('SIGTERM');}catch{}}};
+ constructor({userDataPath,restriction=null,clientFactory=null,chromePath=null,clock=()=>Date.now(),reconnectDelays=[5000,15000,30000,60000],staleBrowserScanner=orphanedProfileBrowsers,processTerminator=pid=>process.kill(pid,'SIGTERM'),wait=pause}={}){
+  this.mode='browser';this.live=true;this.userDataPath=userDataPath;this.authPath=path.join(userDataPath,'whatsapp-live-auth');this.marker=path.join(this.authPath,'connection.json');this.restriction=restriction;this.clientFactory=clientFactory;this.chromePath=chromePath;this.chromeOverride=chromePath;this.clock=clock;this.delays=reconnectDelays;this.staleBrowserScanner=staleBrowserScanner;this.processTerminator=processTerminator;this.wait=wait;this.events=new EventEmitter();this.candidates=new Map();this.targets=[];this.inboxRemotes=new Map();this.state={provider:'whatsapp-web.js',status:'disconnected',message:'自动消息连接尚未启动'};this.generation=0;this.closed=false;this.attempt=0;this.queue=Promise.resolve();this.mediaQueue=[];this.mediaActive=0;this.ownedClients=new Set();this.exitHook=()=>{for(const c of this.ownedClients){try{c.pupBrowser?.process()?.kill('SIGTERM');}catch{}}};
  }
  status(){return {...this.state};}
  subscribe(fn){this.events.on('update',fn);return()=>this.events.off('update',fn);}
@@ -25,10 +30,11 @@ export class WhatsAppWebClient {
  async saveConnection(enabled){await mkdir(this.authPath,{recursive:true,mode:0o700});await chmod(this.authPath,0o700);await writeFile(this.marker,JSON.stringify({enabled}),{mode:0o600});}
  async open(){this.closed=false;await this.checkDependency();await this.saveConnection(true);void this.connect();return this.status();}
  async resume(){if(await this.canResume()){this.closed=false;void this.connect();}return this.status();}
+ async reclaimOrphanedProfile(){const profile=path.join(this.authPath,'session-local-account');let rows;try{rows=await this.staleBrowserScanner(profile);}catch{return [];}const pids=[...new Set(rows.map(row=>row.pid).filter(pid=>Number.isInteger(pid)&&pid>1))];if(!pids.length)return [];for(const pid of pids){try{await this.processTerminator(pid);}catch{}}for(let attempt=0;attempt<10;attempt++){await this.wait(150);try{if(!(await this.staleBrowserScanner(profile)).length)break;}catch{break;}}this.emit({kind:'orphaned-browser-reclaimed',count:pids.length});return pids;}
  async connect(){
   if(this.closed||this.connecting||this.client)return;const generation=++this.generation,attempt=Symbol();this.connectAttempt=attempt;
   this.connecting=(async()=>{let attemptClient;try{
-   await this.checkDependency();await mkdir(this.authPath,{recursive:true,mode:0o700});await chmod(this.authPath,0o700);
+   await this.checkDependency();await mkdir(this.authPath,{recursive:true,mode:0o700});await chmod(this.authPath,0o700);await this.reclaimOrphanedProfile();
    let client;
    if(this.clientFactory)client=await this.clientFactory();else{
     const {default:library}=await import('whatsapp-web.js');

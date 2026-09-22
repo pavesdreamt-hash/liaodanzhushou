@@ -76,6 +76,6 @@ export class LocalWebServer{
     // The locked UI is embedded through srcdoc and carries its own styles and
     // interaction script. srcdoc inherits this policy, while external scripts
     // and non-local application resources remain blocked.
-    const headers={'content-type':TYPES.get(path.extname(file))||'application/octet-stream','content-length':body.length,'cache-control':'no-store','x-content-type-options':'nosniff','referrer-policy':'no-referrer','content-security-policy':"default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-src 'self' https://www.google.com https://maps.google.com https://*.google.com; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"};response.writeHead(200,headers);response.end(body);
+    const headers={'content-type':TYPES.get(path.extname(file))||'application/octet-stream','content-length':body.length,'cache-control':'no-store','x-content-type-options':'nosniff','referrer-policy':'no-referrer','content-security-policy':"default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://pps.whatsapp.net https://mmg.whatsapp.net; connect-src 'self'; frame-src 'self' https://www.google.com https://maps.google.com https://*.google.com; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"};response.writeHead(200,headers);response.end(body);
   }
 }
