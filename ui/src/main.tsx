@@ -107,6 +107,11 @@ function ConfirmedApp(){
         inventory.after(profitButton);
       }
     }
+    const navIcons:Record<string,string>={'聊单工作台':'messages-square','订单管理':'archive','商品库存':'boxes','利润核算':'chart-no-axes-combined','助手配置':'bot','连接与设置':'settings'};
+    for(const button of doc.querySelectorAll<HTMLButtonElement>('aside button')){
+      const icon=navIcons[(button.textContent||'').replace(/\s+/g,'').trim()],placeholder=button.querySelector<HTMLElement>('[data-lucide]');
+      if(icon&&placeholder)placeholder.dataset.lucide=icon;
+    }
     const createIcons=(options?:{nodes?:Array<Document|Element>;attrs?:Record<string,string|number>})=>{
       const roots=options?.nodes?.length?options.nodes:[doc];
       for(const root of roots){

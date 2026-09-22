@@ -3,11 +3,13 @@ html,body{margin:0;padding:0;height:100%;min-height:0;overflow:hidden;background
 :is(#unified-specificity,[id]).unified-page .up-app{height:100%;min-height:0;max-width:none;margin:0;border:0;border-radius:0;display:flex;flex-direction:column;overflow:hidden}
 :is(#unified-specificity,[id]).unified-page .up-top{height:56px;min-height:56px;flex:0 0 56px;box-sizing:border-box;padding:0 20px;border-radius:0}
 :is(#unified-specificity,[id]).unified-page .up-shell{flex:1;min-height:0;display:grid;grid-template-columns:var(--up-nav) minmax(0,1fr);overflow:hidden}
-:is(#unified-specificity,[id]).unified-page .up-sidebar{position:relative;display:flex;flex-direction:column;min-height:0;height:100%;padding:22px 14px 14px;box-sizing:border-box;overflow:visible}
+:is(#unified-specificity,[id]).unified-page .up-sidebar{position:relative;display:flex;flex-direction:column;min-height:0;height:100%;padding:22px 12px 12px;box-sizing:border-box;overflow:visible}
 :is(#unified-specificity,[id]).unified-page .up-nav-scroll{flex:1;min-height:0;overflow:auto;scrollbar-width:thin;overscroll-behavior:contain}
-:is(#unified-specificity,[id]).unified-page .up-nav{display:flex;width:100%;font-size:var(--up-nav-font);min-height:46px;padding:8px 10px;gap:10px;white-space:normal;overflow-wrap:anywhere;box-sizing:border-box}
-:is(#unified-specificity,[id]).unified-page .up-nav svg{width:18px;height:18px;flex-shrink:0}
-:is(#unified-specificity,[id]).unified-page .nav-label{font-size:calc(var(--up-nav-font) - 3px)}
+:is(#unified-specificity,[id]).unified-page .up-sidebar .nav-group+.nav-group{margin-top:22px}
+:is(#unified-specificity,[id]).unified-page .up-nav{display:flex;width:100%;height:44px;min-height:44px;padding:0 12px;gap:10px;color:#746d80;border-radius:9px;font-size:15px;white-space:normal;overflow-wrap:anywhere;box-sizing:border-box}
+:is(#unified-specificity,[id]).unified-page .up-nav:is(.on,.active,[aria-current="page"]){color:#7c3aed;background:#f4efff;font-weight:600}
+:is(#unified-specificity,[id]).unified-page .up-nav svg{width:18px;height:18px;flex-shrink:0;color:inherit}
+:is(#unified-specificity,[id]).unified-page .nav-label{margin:0 10px 9px;color:#746d80;font-size:12px;line-height:1.4}
 :is(#unified-specificity,[id]).unified-page .up-status{margin-top:12px;flex-shrink:0;font-size:11px}
 :is(#unified-specificity,[id]).unified-page .up-main{display:block;min-width:0;min-height:0;padding:14px 18px;overflow:auto;overscroll-behavior:contain;scrollbar-gutter:stable;font-size:var(--up-content-font)}
 :is(#unified-specificity,[id]).unified-page .up-main :is(td,input,select,textarea,.field-value,.value,.item-name,.product-name){font-size:calc(var(--up-content-font) - 1px)}

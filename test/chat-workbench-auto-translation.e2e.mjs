@@ -19,18 +19,34 @@ test('聊天工作台默认先读取当前页缓存，再自动翻译未译消�
   });
   const frame=page.frameLocator('iframe.confirmed-frame');await frame.locator('.cwb-refresh').click();
   await frame.getByText('聊单助手',{exact:true}).waitFor();
-  assert.equal(await frame.locator('.cwb-top-version').textContent(),'1.3.5');
+  assert.equal(await frame.locator('.cwb-top-version').textContent(),'1.4.0');
   assert.match(await frame.locator('button[title="订单管理"] svg').getAttribute('class')||'',/lucide-archive/);
   const topbar=await frame.locator('.cwb-topbar').boundingBox(),nav=await frame.locator('.cwb-nav').boundingBox(),conversations=await frame.locator('.cwb-conversations').boundingBox();
+  const chatHead=await frame.locator('.cwb-chat-head').boundingBox(),orderHead=await frame.locator('.cwb-order>header').boundingBox();
   assert.equal(Math.round(topbar?.height||0),56);
+  assert.ok(chatHead&&orderHead&&Math.abs(chatHead.y+chatHead.height-orderHead.y-orderHead.height)<=1,'聊天标题区下边线与订单信息标题区下边线重合');
   assert.ok(nav&&conversations&&Math.abs(nav.x+nav.width-conversations.x)<=1,'导航与客户聊天列保持相邻分界');
   assert.equal(await frame.locator('.cwb-nav').evaluate(element=>getComputedStyle(element).borderRightWidth),'1px');
   assert.equal(await frame.locator('.cwb-nav').evaluate(element=>getComputedStyle(element).paddingTop),'22px');
   assert.equal(await frame.locator('.cwb-nav-label').first().evaluate(element=>getComputedStyle(element).marginBottom),'9px');
-  await frame.locator('#chat-workbench-desktop').evaluate(root=>{root.style.setProperty('--cwb-list-width','240px');root.ownerDocument.defaultView?.dispatchEvent(new Event('resize'));});
+  for(const selector of ['.cwb-list-head h1','.cwb-current-contact strong','.cwb-order h2'])assert.equal(await frame.locator(selector).evaluate(element=>getComputedStyle(element).fontSize),'16px');
+  await frame.locator('#chat-workbench-desktop').evaluate(root=>{root.style.setProperty('--cwb-list-width','240px');root.style.setProperty('--cwb-order-width','100px');root.ownerDocument.defaultView?.dispatchEvent(new Event('resize'));});
   assert.equal(await frame.locator('#chat-workbench-desktop').evaluate(root=>root.style.getPropertyValue('--cwb-list-width')),'');
+  assert.equal(await frame.locator('#chat-workbench-desktop').evaluate(root=>root.style.getPropertyValue('--cwb-order-width')),'');
   const shell=await frame.locator('#chat-workbench-desktop').boundingBox(),defaultChat=await frame.locator('.cwb-chat').boundingBox();
   assert.ok(shell&&defaultChat&&Math.abs(defaultChat.x-shell.x-Math.max(shell.width/3,456))<=1,'放大或拉伸窗口后，导航和客户聊天栏整体恢复为三分之一宽度');
+  const order=await frame.locator('.cwb-order').boundingBox(),orderResizer=frame.locator('.cwb-order-resizer');
+  assert.equal(await orderResizer.count(),1);
+  assert.equal(await frame.locator('.cwb-conversations').evaluate(element=>getComputedStyle(element).borderRightWidth),'0px');
+  assert.equal(await frame.locator('.cwb-chat').evaluate(element=>getComputedStyle(element).borderRightWidth),'0px');
+  for(const selector of ['.cwb-column-resizer','.cwb-order-resizer']){
+    assert.equal(await frame.locator(selector).evaluate(element=>getComputedStyle(element).backgroundColor),'rgba(0, 0, 0, 0)');
+    assert.equal(await frame.locator(selector).evaluate(element=>getComputedStyle(element,'::after').width),'2px');
+  }
+  assert.ok(shell&&order&&order.width>=shell.width*.2-1&&order.width<=shell.width/3+1,'订单信息列默认宽度位于窗口五分之一到三分之一之间');
+  const handle=await orderResizer.boundingBox();assert.ok(handle&&order);
+  await page.mouse.move(handle.x+handle.width/2,handle.y+handle.height/2);await page.mouse.down();await page.mouse.move(handle.x-48,handle.y+handle.height/2);await page.mouse.up();
+  const widenedOrder=await frame.locator('.cwb-order').boundingBox();assert.ok(widenedOrder&&widenedOrder.width>order.width&&widenedOrder.width<=shell.width/3+1,'拖动分隔条可以调整订单信息列宽度');
   await frame.locator('#cwb-phone').getByText('10002',{exact:true}).waitFor();
   await frame.getByText('缓存译文',{exact:true}).waitFor();await frame.getByText('自动译文 New source',{exact:true}).waitFor();
   assert.equal(await frame.getByText('缓存译文',{exact:true}).evaluate(element=>getComputedStyle(element).color),'rgb(76, 29, 149)');
