@@ -1,15 +1,18 @@
 <div id="chat-workbench-desktop" class="cwb-shell is-nav-open" aria-label="聊单工作台">
   <aside class="cwb-nav" aria-label="主导航">
-    <button class="cwb-nav-toggle" type="button" aria-label="折叠导航" title="折叠导航"><i data-lucide="panel-left-close"></i><span>我的工作台</span></button>
-    <nav>
+    <nav class="cwb-nav-section" aria-label="我的工作台">
+      <span class="cwb-nav-label">我的工作台</span>
       <button type="button" aria-current="page" title="聊单工作台"><i data-lucide="messages-square"></i><span>聊单工作台</span></button>
       <button type="button" title="订单管理"><i data-lucide="shopping-bag"></i><span>订单管理</span></button>
       <button type="button" title="商品库存"><i data-lucide="boxes"></i><span>商品库存</span></button>
       <button type="button" title="利润核算"><i data-lucide="chart-no-axes-combined"></i><span>利润核算</span></button>
+    </nav>
+    <nav class="cwb-nav-section" aria-label="助手管理">
+      <span class="cwb-nav-label">助手管理</span>
       <button type="button" title="助手配置"><i data-lucide="bot"></i><span>助手配置</span></button>
       <button type="button" title="连接与设置"><i data-lucide="settings"></i><span>连接与设置</span></button>
     </nav>
-    <span class="cwb-connection"><i></i><span>WhatsApp 连接状态待核对</span></span><span class="cwb-version" title="当前应用版本">v__APP_VERSION__</span>
+    <div class="cwb-nav-footer"><button class="cwb-nav-toggle" type="button" aria-label="折叠导航" title="折叠导航"><i data-lucide="panel-left-close"></i><span>折叠导航</span></button><span class="cwb-connection"><i></i><span>WhatsApp 连接状态待核对</span></span><span class="cwb-version" title="当前应用版本">v__APP_VERSION__</span></div>
   </aside>
   <section class="cwb-conversations" aria-label="客户会话">
     <header class="cwb-list-head"><div class="cwb-list-title"><h1>客户聊天 <b id="cwb-count">0</b></h1><span class="cwb-list-actions"><button type="button" class="cwb-refresh" title="刷新订单与当前聊天"><i data-lucide="refresh-cw"></i><span>刷新</span></button></span></div><label class="cwb-search"><i data-lucide="search"></i><input type="search" placeholder="搜索电话号码或订单编号"></label><div class="cwb-filters"><button type="button" data-filter="all" aria-pressed="true"><span>全部</span><b hidden>0</b></button><button type="button" data-filter="unread"><span>未读</span><b hidden>0</b></button><button type="button" data-filter="unreplied"><span>未回</span><b hidden>0</b></button></div></header>
@@ -17,7 +20,7 @@
   </section>
   <div class="cwb-column-resizer" role="separator" aria-orientation="vertical" aria-label="调整客户聊天列宽度" title="拖动调整客户聊天列宽度"></div>
   <main class="cwb-chat" aria-label="当前客户聊天">
-    <header class="cwb-chat-head"><div class="cwb-current-contact"><strong id="cwb-phone">请选择客户</strong><small id="cwb-connection-note">登录后从左侧选择真实 WhatsApp 会话</small></div><div class="cwb-controls"><button type="button" class="cwb-mode is-selected" data-mode="manual"><i data-lucide="user-round"></i>人工</button><button type="button" class="cwb-mode" data-mode="assist" disabled title="待启用"><i data-lucide="sparkles"></i>AI辅助<em>待启用</em></button><button type="button" class="cwb-mode" data-mode="auto" disabled title="待启用"><i data-lucide="bot"></i>AI自动<em>待启用</em></button><div class="cwb-translation-wrap"><button type="button" class="cwb-translation is-on" aria-expanded="false"><i data-lucide="languages"></i><span>翻译</span><i data-lucide="chevron-down"></i></button><div class="cwb-translation-popover" hidden><label>客户语言<select id="cwb-customer-language"><option value="auto">自动识别</option><option value="en">英语</option></select></label><label>我的语言<select disabled><option>中文</option></select></label><label class="cwb-switch"><input id="cwb-read-translation" type="checkbox" checked><span>阅读翻译为中文</span></label><label class="cwb-switch"><input id="cwb-send-translation" type="checkbox" checked><span>中文翻译为客户语言</span></label><button type="button" class="cwb-translate-visible">翻译未译消息</button></div></div></div></header>
+    <header class="cwb-chat-head"><div class="cwb-current-contact"><strong id="cwb-phone">请选择客户</strong><small id="cwb-connection-note">登录后从左侧选择真实 WhatsApp 会话</small></div><div class="cwb-controls"><button type="button" class="cwb-mode is-selected" data-mode="manual"><i data-lucide="user-round"></i>人工</button><button type="button" class="cwb-mode" data-mode="assist" disabled title="待启用"><i data-lucide="sparkles"></i>AI辅助<em>待启用</em></button><button type="button" class="cwb-mode" data-mode="auto" disabled title="待启用"><i data-lucide="bot"></i>AI自动<em>待启用</em></button><div class="cwb-translation-wrap"><button type="button" class="cwb-translation is-on" aria-expanded="false"><i data-lucide="languages"></i><span>翻译</span><i data-lucide="chevron-down"></i></button><div class="cwb-translation-popover" hidden><label>客户语言<select id="cwb-customer-language"><option value="auto">自动识别</option><option value="en">英语</option></select></label><label>我的语言<select disabled><option>中文</option></select></label><label class="cwb-switch"><input id="cwb-auto-read-translation" type="checkbox" checked><span>自动翻译当前页</span></label><label class="cwb-switch"><input id="cwb-read-translation" type="checkbox" checked><span>阅读翻译为中文</span></label><label class="cwb-switch"><input id="cwb-send-translation" type="checkbox" checked><span>中文翻译为客户语言</span></label><button type="button" class="cwb-translate-visible">翻译未译消息</button></div></div></div></header>
     <div id="cwb-history-state" class="cwb-history-state" hidden></div>
     <section id="cwb-messages" class="cwb-messages" aria-live="polite"><div class="cwb-empty-chat">登录 WhatsApp 后，从左侧选择真实会话。</div></section>
     <button type="button" id="cwb-new-message" class="cwb-new-message" hidden>有新消息</button>

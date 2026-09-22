@@ -66,3 +66,21 @@
 #chat-workbench-desktop .cwb-list-empty button{margin-top:10px;padding:7px 10px;color:var(--cwb-accent);border:1px solid #dacdf0;background:#fff;border-radius:7px;font-size:12px}
 
 #chat-workbench-desktop .cwb-version{display:block;margin:2px auto 0;color:#8a8294;font-size:10px;line-height:1.2;text-align:center;white-space:nowrap}
+
+/* D-037: match the confirmed navigation hierarchy in its expanded state. */
+#chat-workbench-desktop.is-nav-open{grid-template-columns:208px var(--cwb-list-width) 8px minmax(360px,1fr) minmax(260px,330px)}
+#chat-workbench-desktop .cwb-nav{gap:0;padding:18px 12px 12px}
+#chat-workbench-desktop .cwb-nav-section{display:grid;gap:6px}
+#chat-workbench-desktop .cwb-nav-section+.cwb-nav-section{margin-top:22px}
+#chat-workbench-desktop .cwb-nav-label{display:none;margin:0 10px 3px;color:var(--cwb-muted);font-size:12px;line-height:1.4}
+#chat-workbench-desktop .cwb-nav-section button{min-height:44px;padding:0 12px;gap:10px;font-size:15px}
+#chat-workbench-desktop .cwb-nav-section button svg{width:18px;height:18px}
+#chat-workbench-desktop .cwb-nav-footer{margin-top:auto;display:grid;gap:7px}
+#chat-workbench-desktop .cwb-nav-toggle{min-height:32px;width:32px;padding:0;display:grid;place-items:center;color:var(--cwb-muted);background:transparent}
+#chat-workbench-desktop .cwb-nav-toggle span{display:none}
+#chat-workbench-desktop .cwb-nav-toggle svg{width:17px;height:17px}
+#chat-workbench-desktop .cwb-connection{margin-top:0;padding:9px 4px 0}
+#chat-workbench-desktop.is-nav-open .cwb-nav-label{display:block}
+#chat-workbench-desktop.is-nav-open .cwb-nav-section span{opacity:1;pointer-events:auto}
+@media(max-width:1180px){#chat-workbench-desktop.is-nav-open{grid-template-columns:208px var(--cwb-list-width) 7px minmax(340px,1fr) 260px}}
+@media(max-width:980px){#chat-workbench-desktop.is-nav-open{grid-template-columns:64px var(--cwb-list-width) 7px minmax(0,1fr)}#chat-workbench-desktop .cwb-nav-label{display:none!important}#chat-workbench-desktop .cwb-nav-section button{justify-content:center;padding:0}#chat-workbench-desktop .cwb-nav-toggle{margin-inline:auto}}
