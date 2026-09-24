@@ -1,7 +1,7 @@
 {
   "name": "liaodan-assistant-next",
   "productName": "聊单助手",
-  "version": "1.5.0",
+  "version": "1.9.5",
   "private": true,
   "type": "module",
   "main": "src/main.mjs",
@@ -22,7 +22,7 @@
     "test:old": "npm --prefix .. test",
     "check": "npm run typecheck && npm run build:ui && npm run check:shared && node scripts/check-project.mjs",
     "build:icon": "node scripts/build-icon.mjs",
-    "start": "npm run build:ui && electron .",
+    "start": "npm run build:ui && node scripts/run-desktop.mjs",
     "pack": "npm run test && npm run check && electron-builder --config scripts/electron-builder.cjs --mac dir --x64",
     "dist": "npm run build:ui && npm run test && npm run check && electron-builder --config scripts/electron-builder.cjs --mac dir --x64 && node scripts/package-chat-preview.mjs",
     "postinstall": "node scripts/whatsapp-compat.mjs",

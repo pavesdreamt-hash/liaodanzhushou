@@ -10,14 +10,15 @@ export function installEmptyWorkspace(doc:Document,page:Page){
   root.dataset.emptyData='true';
   if(page==='workbench')return;
   if(page==='order'){
-    root.querySelector<HTMLElement>('.od-phone-meta > span')!.textContent='--:--';
+    const setText=(selector:string,text:string)=>{const element=root.querySelector<HTMLElement>(selector);if(element)element.textContent=text;};
+    setText('.od-phone-meta > span','--:--');
     root.querySelector<HTMLElement>('.od-heading-copy h1')!.textContent='尚未选择订单';
     root.querySelector<HTMLElement>('.od-status-actions')!.hidden=true;
     root.querySelector<HTMLElement>('.od-content')!.replaceChildren(emptyCard(doc,'暂无真实订单','先在工作台关联并核对 WhatsApp 聊天。此空白版本不使用示例订单信息。'));
-    root.querySelector<HTMLElement>('.od-contact strong')!.textContent='未关联客户';
-    root.querySelector<HTMLElement>('.od-contact small')!.textContent='连接并核对 WhatsApp 聊天';
-    root.querySelector<HTMLElement>('.od-avatar')!.textContent='?';
-    root.querySelector<HTMLElement>('.od-messages')!.replaceChildren(emptyCard(doc,'暂无聊天记录','关联真实聊天后，仅显示已确认范围内的消息。'));
+    setText('.od-contact strong','未关联客户');
+    setText('.od-contact small','连接并核对 WhatsApp 聊天');
+    setText('.od-avatar','?');
+    root.querySelector<HTMLElement>('.od-messages')?.replaceChildren(emptyCard(doc,'暂无聊天记录','关联真实聊天后，仅显示已确认范围内的消息。'));
     return;
   }
   const side=root.querySelector<HTMLElement>('.connection,.wa');

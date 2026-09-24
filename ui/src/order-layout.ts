@@ -1,4 +1,6 @@
 import {STORAGE_KEY,PHONE_RATIO,defaults,sanitize,geometry,resizePhone,type LayoutPreferences,type DisplayProfile} from './order-layout-model';
+import {NAV_COLLAPSED_KEY} from './unified-layout';
+import {version} from '../../package.json';
 
 export type OrderLayoutDesktop = {
   mergedTitlebar?:boolean;
@@ -8,7 +10,7 @@ export type OrderLayoutDesktop = {
 };
 
 // Mounted only inside the order-detail iframe. Moving existing nodes preserves its business listeners.
-export function installOrderLayout(doc:Document,win:Window,desktop?:OrderLayoutDesktop,onTitlebar?:(right:number,blocked:boolean)=>void){
+export function installOrderLayout(doc:Document,win:Window,desktop?:OrderLayoutDesktop,onTitlebar?:(right:number,blocked:boolean)=>void,{removeChatWorkspace=false}:{removeChatWorkspace?:boolean}={}){
   const root=doc.querySelector<HTMLElement>('#ui008-order-detail,#chat-workbench-aligned')!;
   const layout=root.querySelector<HTMLElement>('.od-layout')!;
   const phone=root.querySelector<HTMLElement>('.od-phone')!;
@@ -17,10 +19,16 @@ export function installOrderLayout(doc:Document,win:Window,desktop?:OrderLayoutD
   const navScroll=doc.createElement('div');navScroll.className='ol-nav-scroll';sidebar.prepend(navScroll);
   sidebar.querySelectorAll('.od-nav-group').forEach(group=>navScroll.append(group));
   sidebar.querySelectorAll<HTMLButtonElement>('.od-nav-item').forEach(item=>item.setAttribute('aria-label',item.textContent!.trim()));
+  root.querySelector('.od-connection')?.remove();
+  const navHeading=sidebar.querySelector<HTMLElement>('.od-nav-label')!,navTitle=doc.createElement('span'),navToggle=doc.createElement('button');
+  navTitle.textContent=navHeading.textContent?.trim()||'我的工作台';navToggle.type='button';navToggle.className='ol-nav-toggle';navHeading.replaceChildren(navTitle,navToggle);navHeading.classList.add('ol-nav-heading');
+  const navFooter=doc.createElement('div');navFooter.className='ol-version';navFooter.textContent=`v${version}`;sidebar.append(navFooter);
+  let navCollapsed=false;try{navCollapsed=win.localStorage.getItem(NAV_COLLAPSED_KEY)==='true';}catch{}
+  const renderNavToggle=()=>{navToggle.innerHTML=`<i data-lucide="${navCollapsed?'panel-left-open':'panel-left-close'}"></i>`;const label=navCollapsed?'展开导航栏':'折叠导航栏';navToggle.setAttribute('aria-label',label);navToggle.title=label;(win as Window&{lucide?:{createIcons:(options:{nodes:Element[]})=>void}}).lucide?.createIcons({nodes:[navToggle]});};
   const chat=root.querySelector<HTMLElement>('.od-chat-column')!;
   const chatScroll=doc.createElement('div');chatScroll.className='ol-chat-scroll';chatScroll.setAttribute('role','region');chatScroll.setAttribute('aria-label','手机区域，可上下滚动');chat.before(chatScroll);chatScroll.append(chat);
   const workspace=doc.createElement('div');workspace.className='reply-chat-workspace';chatScroll.before(workspace);const rail=root.querySelector('.reply-rail');if(rail)workspace.append(rail);workspace.append(chatScroll);
-  const railWidth=()=>root.classList.contains('reply-rail-collapsed')||root.classList.contains('reply-floating')?40:prefs.replyWidth+8;
+  const railWidth=()=>removeChatWorkspace?0:root.classList.contains('reply-rail-collapsed')||root.classList.contains('reply-floating')?40:prefs.replyWidth+8;
   const box=doc.createElement('div');box.className='ol-phone-box';phone.before(box);box.append(phone);
   content.id='ol-content';box.id='ol-phone';sidebar.id='ol-sidebar';
   const composer=root.querySelector<HTMLElement>('.od-composer')!;
@@ -44,6 +52,7 @@ export function installOrderLayout(doc:Document,win:Window,desktop?:OrderLayoutD
     <output class="ol-save-state" aria-live="polite"></output><div class="ol-dialog-actions"><button type="button" class="od-button" data-reset>恢复本屏幕默认</button><button type="button" class="od-button od-button-primary" data-close>完成</button></div>`;
   root.append(dialog);
   const inputs=Object.fromEntries(Array.from(dialog.querySelectorAll<HTMLInputElement>('[data-setting]')).map(input=>[input.dataset.setting!,input]));
+  if(removeChatWorkspace){dialog.querySelector('h2')!.textContent='订单详情布局';for(const key of ['contentWidth','phoneWidth','phoneHeight','replyWidth','locked','chatFont'])inputs[key].closest('label')!.hidden=true;dialog.querySelectorAll('p')[1]!.textContent='导航宽度和页面字号会按当前显示器保存。';}
   const status=dialog.querySelector<HTMLOutputElement>('output')!;
   let disposed=false,ready=!desktop,display:DisplayProfile={id:`browser-${win.screen.width}x${win.screen.height}-${win.devicePixelRatio}`,label:'当前屏幕'};
   let prefs=defaults(win.innerWidth,win.innerHeight),saved=false;
@@ -62,7 +71,8 @@ export function installOrderLayout(doc:Document,win:Window,desktop?:OrderLayoutD
     if(disposed)return;
     const g=geometry(prefs,win.innerWidth,railWidth());
     root.classList.toggle('ol-compact',g.compact);
-    const variables={'--reply-panel-width':prefs.replyWidth,'--ol-rail':railWidth(),'--ol-nav':g.nav,'--ol-phone-width':g.phoneWidth,'--ol-phone-height':g.phoneHeight,'--ol-nav-font':prefs.navFont,'--ol-content-delta':prefs.contentFont-15,'--ol-chat-delta':prefs.chatFont-13};
+    root.classList.toggle('ol-nav-collapsed',navCollapsed);
+    const variables={'--reply-panel-width':prefs.replyWidth,'--ol-rail':railWidth(),'--ol-nav':g.compact||navCollapsed?64:g.nav,'--ol-phone-width':g.phoneWidth,'--ol-phone-height':g.phoneHeight,'--ol-nav-font':prefs.navFont,'--ol-content-delta':prefs.contentFont-15,'--ol-chat-delta':prefs.chatFont-13};
     for(const [key,value] of Object.entries(variables))root.style.setProperty(key,`${value}px`);
     const values={...prefs,navWidth:g.nav,phoneWidth:g.phoneWidth,phoneHeight:g.phoneHeight,contentWidth:Math.round(content.getBoundingClientRect().width)};
     for(const [key,input] of Object.entries(inputs)){if(input.type==='checkbox')input.checked=prefs.locked;else input.value=String(values[key as keyof typeof values]);}
@@ -110,6 +120,7 @@ export function installOrderLayout(doc:Document,win:Window,desktop?:OrderLayoutD
   const navDivider=divider('ol-nav-divider','调整导航宽度','ol-sidebar','nav');sidebar.append(navDivider);
   const columnDivider=divider('ol-column-divider','调整中间内容宽度','ol-content','column');layout.append(columnDivider);
   const replyDivider=divider('reply-width-divider','调整回复区宽度','ol-composer','reply-width');rail?.append(replyDivider);replyDivider.ondblclick=()=>{prefs={...prefs,replyWidth:300};paint();persist();};
+  navToggle.onclick=()=>{navCollapsed=!navCollapsed;try{win.localStorage.setItem(NAV_COLLAPSED_KEY,String(navCollapsed));}catch{}renderNavToggle();paint();};
   for(const [direction,label] of Object.entries({n:'上边',s:'下边',w:'左边',e:'右边',nw:'左上角',ne:'右上角',sw:'左下角',se:'右下角'})){
     const el=doc.createElement('button');el.type='button';el.className=`ol-resize ol-resize-${direction}`;el.setAttribute('aria-label',`调整手机${label}`);el.title=`拖动调整手机${label}；也可使用方向键`;handle(el,direction);box.append(el);
   }
@@ -132,9 +143,11 @@ export function installOrderLayout(doc:Document,win:Window,desktop?:OrderLayoutD
   const dialogs=new MutationObserver(()=>paint());dialogs.observe(doc.body,{subtree:true,attributes:true,attributeFilter:['open','hidden']});
   const visibility=new MutationObserver(()=>{box.hidden=phone.hidden;});visibility.observe(phone,{attributes:true,attributeFilter:['hidden']});
   const measurements=new ResizeObserver(()=>paint());measurements.observe(root.querySelector('.od-top-actions')!);measurements.observe(root.querySelector('.od-phone-top')!);measurements.observe(root.querySelector('.od-phone-toolbar')!);
+  if(removeChatWorkspace){root.classList.add('ol-details-only');workspace.remove();columnDivider.remove();}
   let unsubscribe:(()=>void)|undefined;
   if(desktop){unsubscribe=desktop.onDisplayChanged(changeDisplay);desktop.getDisplay().then(next=>{if(next)changeDisplay(next);else{ready=true;read();paint();}}).catch(()=>{ready=true;read();paint();});}
   else read();
+  renderNavToggle();
   paint();
   return ()=>{disposed=true;endDrag(true);win.removeEventListener('resize',onResize);root.removeEventListener('reply-rail-change',paint);dialogs.disconnect();visibility.disconnect();measurements.disconnect();unsubscribe?.();};
 }

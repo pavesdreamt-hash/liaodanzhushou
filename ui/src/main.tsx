@@ -21,7 +21,7 @@ import replyCss from './reply-tools.css?raw';
 import mediaDialogCss from './media-dialog.css?raw';
 import productMediaCss from './product-media.css?raw';
 import {aliasWorkbench,installUnifiedLayout} from './unified-layout';
-import {installProductPictures,installReplyTools} from './reply-tools';
+import {installProductPictures} from './reply-tools';
 import {installEmptyWorkspace} from './empty-workspace';
 import {installDesktopChatWorkbench} from './chat-workbench-desktop';
 import {installRestoredPage} from './restored-pages';
@@ -39,6 +39,8 @@ const UI_BUILD_MARKER='liaodan-assistant-next-ui';
 document.documentElement.dataset.build=UI_BUILD_MARKER;
 
 type Page='workbench'|'orders'|'inventory'|'profit'|'assistant'|'settings'|'product'|'order'|'profit-detail';
+type DragRect={left:number;top:number;width:number;height:number};
+type DragArea={right:number;blocked:boolean;workbenchRects:DragRect[]};
 const chatPages=new Set<Page>(['order','workbench']);
 const productPages=new Set<Page>(['inventory','product']);
 const restoredPages=new Set<Page>(['inventory','profit','assistant','settings','product','profit-detail']);
@@ -54,6 +56,10 @@ const routeByLabel:Record<string,Page>={
   '利润核算':'profit','利润':'profit','助手配置':'assistant','助手设置':'assistant','连接与设置':'settings'
 };
 
+const sameDragRects=(first:DragRect[],second:DragRect[])=>first.length===second.length&&first.every((rect,index)=>{
+  const next=second[index];return rect.left===next.left&&rect.top===next.top&&rect.width===next.width&&rect.height===next.height;
+});
+
 function iconName(value:string){return value.split('-').map(x=>x?x[0].toUpperCase()+x.slice(1):'').join('')}
 
 function ConfirmedApp(){
@@ -66,7 +72,7 @@ function ConfirmedApp(){
   const frame=useRef<HTMLIFrameElement>(null);
   const desktop=(window as Window&{orderLayoutDesktop?:OrderLayoutDesktop}).orderLayoutDesktop;
   const merged=Boolean(desktop?.mergedTitlebar);
-  const [dragArea,setDragArea]=useState({right:600,blocked:false});
+  const [dragArea,setDragArea]=useState<DragArea>({right:600,blocked:false,workbenchRects:[]});
   const cleanup=useRef<(()=>void)|undefined>(undefined);
   useEffect(()=>()=>cleanup.current?.(),[]);
   useEffect(()=>{if(merged)void desktop?.setOrderChrome?.(true);},[page,merged,desktop]);
@@ -88,7 +94,7 @@ function ConfirmedApp(){
   const setup=()=>{
     cleanup.current?.();cleanup.current=undefined;
     const current=frame.current;const doc=current?.contentDocument;const win=current?.contentWindow as (Window&{lucide?:{createIcons:(options?:{nodes?:Array<Document|Element>;attrs?:Record<string,string|number>})=>void}})|null;
-    if(!doc||!win)return;
+    if(!current||!doc||!win)return;
     const navButtons=Array.from(doc.querySelectorAll('aside button,nav button'));
     for(const button of navButtons){
       const text=(button.textContent||'').replace(/\s+/g,'').trim();
@@ -129,10 +135,12 @@ function ConfirmedApp(){
     };
     win.lucide={createIcons};createIcons({nodes:[doc]});
     const disposers:Array<()=>void>=[];
-    const chrome=(right:number,blocked:boolean)=>setDragArea(previous=>previous.right===right&&previous.blocked===blocked?previous:{right,blocked});
+    const chrome=(right:number,blocked:boolean)=>setDragArea(previous=>{
+      const next={right,blocked,workbenchRects:page==='workbench'?previous.workbenchRects:[]};
+      return previous.right===next.right&&previous.blocked===next.blocked&&sameDragRects(previous.workbenchRects,next.workbenchRects)?previous:next;
+    });
     if(page==='order'){
-      disposers.push(installReplyTools(doc,win,{orderId:page==='order'?selectedOrderId||undefined:undefined}));
-      disposers.push(installOrderLayout(doc,win,desktop,chrome));
+      disposers.push(installOrderLayout(doc,win,desktop,chrome,{removeChatWorkspace:true}));
     }else if(page!=='workbench')disposers.push(installUnifiedLayout(doc,win,desktop,chrome));
     if(page==='order')installEmptyWorkspace(doc,page);
     if(restoredPages.has(page)){
@@ -151,12 +159,32 @@ function ConfirmedApp(){
     if(page==='order'&&selectedOrderId)disposers.push(installOrderDetail(doc,selectedOrderId));
     if(page==='workbench'){
       disposers.push(installDesktopChatWorkbench(doc));
-      // This page reserves the shared 56px application title bar above all business controls.
-      const updateWorkbenchChrome=()=>chrome(0,Boolean(doc.querySelector('dialog[open],.overlay:not([hidden])')));
+      // The iframe cannot provide a reliable native macOS drag hit region. Build the shared
+      // 56px strip in the parent document, while physically leaving holes above its controls.
+      const workbench=doc.querySelector<HTMLElement>('#chat-workbench-desktop')!;
+      let chromeFrame=0;
+      const updateWorkbenchChrome=()=>{
+        const blocked=Boolean(doc.querySelector('dialog[open],.overlay:not([hidden])')),
+          frameBounds=current.getBoundingClientRect(),strip={left:Math.ceil(frameBounds.left+96),top:Math.ceil(frameBounds.top),right:Math.floor(frameBounds.right),bottom:Math.floor(frameBounds.top+56)},padding=4,
+          controls=Array.from(doc.querySelectorAll<HTMLElement>('#cwb-connection-status,.cwb-top-modes')),
+          holes=controls.map(control=>{
+            const bounds=control.getBoundingClientRect(),left=Math.max(strip.left,Math.floor(frameBounds.left+bounds.left-padding)),top=Math.max(strip.top,Math.floor(frameBounds.top+bounds.top-padding)),right=Math.min(strip.right,Math.ceil(frameBounds.left+bounds.right+padding)),bottom=Math.min(strip.bottom,Math.ceil(frameBounds.top+bounds.bottom+padding));
+            return {left,top,right,bottom};
+          }).filter(hole=>hole.right>hole.left&&hole.bottom>hole.top),
+          xStops=Array.from(new Set([strip.left,strip.right,...holes.flatMap(hole=>[hole.left,hole.right])])).sort((first,second)=>first-second),
+          yStops=Array.from(new Set([strip.top,strip.bottom,...holes.flatMap(hole=>[hole.top,hole.bottom])])).sort((first,second)=>first-second),nextRects:DragRect[]=[];
+        if(holes.length)for(let y=0;y<yStops.length-1;y++)for(let x=0;x<xStops.length-1;x++){
+          const left=xStops[x],top=yStops[y],right=xStops[x+1],bottom=yStops[y+1],centerX=(left+right)/2,centerY=(top+bottom)/2;
+          if(right>left&&bottom>top&&!holes.some(hole=>centerX>=hole.left&&centerX<=hole.right&&centerY>=hole.top&&centerY<=hole.bottom))nextRects.push({left,top,width:right-left,height:bottom-top});
+        }
+        setDragArea(previous=>previous.right===0&&previous.blocked===blocked&&sameDragRects(previous.workbenchRects,nextRects)?previous:{right:0,blocked,workbenchRects:nextRects});
+      };
+      const scheduleWorkbenchChrome=()=>{win.cancelAnimationFrame(chromeFrame);chromeFrame=win.requestAnimationFrame(updateWorkbenchChrome);};
       updateWorkbenchChrome();
-      const chromeObserver=new MutationObserver(updateWorkbenchChrome);
-      chromeObserver.observe(doc.body,{subtree:true,childList:true,attributes:true,attributeFilter:['open','hidden']});
-      disposers.push(()=>chromeObserver.disconnect());
+      const chromeObserver=new MutationObserver(scheduleWorkbenchChrome);
+      chromeObserver.observe(doc.body,{subtree:true,childList:true,characterData:true,attributes:true,attributeFilter:['open','hidden','class','style']});
+      win.addEventListener('resize',scheduleWorkbenchChrome);
+      disposers.push(()=>{win.cancelAnimationFrame(chromeFrame);chromeObserver.disconnect();win.removeEventListener('resize',scheduleWorkbenchChrome);});
     }
     disposers.push(installHoverHints(doc));
     createIcons({nodes:[doc]});
@@ -183,7 +211,8 @@ function ConfirmedApp(){
   };
   const iframe=<iframe key={`${page}:${page==='order'?selectedOrderId||'':page==='product'?selectedProductId||'':page==='profit-detail'?selectedProfitDay||'':''}`} ref={frame} className="confirmed-frame" title="聊单助手" srcDoc={html} onLoad={setup}/>;
   if(!merged)return iframe;
-  return <div className="desktop-shell">{iframe}{!dragArea.blocked&&<div className="order-window-drag" aria-hidden="true" style={{right:page==='workbench'?0:dragArea.right,height:56}}/>}</div>;
+  const dragLayers=!dragArea.blocked&&(page==='workbench'?dragArea.workbenchRects.map((rect,index)=><div key={`${rect.left}:${rect.top}:${rect.width}:${rect.height}:${index}`} className="order-window-drag" aria-hidden="true" style={{left:rect.left,top:rect.top,width:rect.width,height:rect.height,right:'auto'}}/>):<div className="order-window-drag" aria-hidden="true" style={{right:dragArea.right,height:56}}/>);
+  return <div className="desktop-shell">{iframe}{dragLayers}</div>;
 }
 
 createRoot(document.getElementById('root')!).render(<StrictMode><ConfirmedApp/></StrictMode>);

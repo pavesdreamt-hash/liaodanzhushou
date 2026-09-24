@@ -41,7 +41,7 @@ export class AssistantSettings{
       }
       state.usageMode??='verification';state.dailyDate??=null;state.dailyCalls??=0;
       if(!['verification','daily'].includes(state.usageMode)||!Number.isSafeInteger(state.dailyCalls)||state.dailyCalls<0||state.dailyDate!==null&&!/^\d{4}-\d{2}-\d{2}$/.test(state.dailyDate))throw new Error();
-      for(const p of Object.values(state.providers)){p.configRevision??=0;if(!Number.isSafeInteger(p.configRevision)||p.configRevision<0)throw new Error();}state.ledger??=[];if(!Array.isArray(state.ledger)||state.ledger.length>100)throw new Error();for(const entry of state.ledger){if(!entry||!['extraction','translation','reply','compose','translate-intent','translate-draft','connection-test'].includes(entry.purpose)||!['started','interrupted','failed','responded'].includes(entry.status)||typeof entry.at!=='string'||!Number.isFinite(Date.parse(entry.at)))throw new Error();if(entry.status==='started')entry.status='interrupted';}this.state=state;this.saved=true;this.onChanged();
+      for(const p of Object.values(state.providers)){p.configRevision??=0;if(!Number.isSafeInteger(p.configRevision)||p.configRevision<0)throw new Error();}state.ledger??=[];if(!Array.isArray(state.ledger)||state.ledger.length>100)throw new Error();for(const entry of state.ledger){if(!entry||!['extraction','translation','reply','compose','translate-intent','translate-draft','image-ocr','connection-test'].includes(entry.purpose)||!['started','interrupted','failed','responded'].includes(entry.status)||typeof entry.at!=='string'||!Number.isFinite(Date.parse(entry.at)))throw new Error();if(entry.status==='started')entry.status='interrupted';}this.state=state;this.saved=true;this.onChanged();
     }catch(error){if(error?.code==='AI_SECURE_STORAGE_PENDING')throw settingsError(error.message,error.code);throw settingsError('助手设置无法解密或格式损坏；请保留文件并检查本机安全存储','AI_SETTINGS_UNREADABLE');}
   }
   async requireEncryption(){
@@ -98,7 +98,7 @@ export class AssistantSettings{
     let config,requestId,expectedRevision;
     await this.serial(async()=>{
       await this.load();this.validate({provider,revision});
-      if(!['extraction','translation','reply','compose','translate-intent','translate-draft'].includes(purpose))throw settingsError('AI 用途无效');
+      if(!['extraction','translation','reply','compose','translate-intent','translate-draft','image-ocr'].includes(purpose))throw settingsError('AI 用途无效');
       if(this.requestBusy)throw settingsError('已有 AI 请求正在进行，请稍候');
       const p=this.state.providers[provider];if(!p.model)throw settingsError('请先填写并保存模型名称');if(!p.key)throw settingsError('请先保存此服务商的 API 密钥');
       const verification=probe||this.verificationOnly||this.state.usageMode!=='daily',today=this.today();

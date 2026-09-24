@@ -29,8 +29,8 @@ export function pointInPolygon(latitude,longitude,points=[]){
 }
 
 export function normalizeDeliveryRange(value={}){
-  const cities=Array.isArray(value.cities)?value.cities.map(normalized).filter(Boolean):[],polygons=Array.isArray(value.polygons)?value.polygons.filter(entry=>entry&&typeof entry.name==='string'&&Array.isArray(entry.points)&&entry.points.length>=3).map(entry=>({name:entry.name.trim(),points:entry.points.map(point=>[Number(point?.[0]),Number(point?.[1])])})).filter(entry=>entry.name&&entry.points.every(([lat,lng])=>finiteLatitude(lat)&&finiteLongitude(lng))):[];
-  return {cities:[...new Set(cities)],polygons};
+  const cities=Array.isArray(value.cities)?value.cities.map(normalized).filter(Boolean):[],blockedCities=Array.isArray(value.blockedCities)?value.blockedCities.map(normalized).filter(Boolean):[],polygons=Array.isArray(value.polygons)?value.polygons.filter(entry=>entry&&typeof entry.name==='string'&&Array.isArray(entry.points)&&entry.points.length>=3).map(entry=>({name:entry.name.trim(),points:entry.points.map(point=>[Number(point?.[0]),Number(point?.[1])])})).filter(entry=>entry.name&&entry.points.every(([lat,lng])=>finiteLatitude(lat)&&finiteLongitude(lng))):[];
+  return {cities:[...new Set(cities)].filter(city=>!blockedCities.includes(city)),blockedCities:[...new Set(blockedCities)],polygons};
 }
 
 export async function loadAddressVerificationConfiguration(userDataPath,{environment=process.env}={}){
@@ -40,8 +40,8 @@ export async function loadAddressVerificationConfiguration(userDataPath,{environ
 
 export class AddressDeliveryVerifier{
   constructor({apiKey='',range={},fetchImpl=globalThis.fetch,clock=()=>new Date(),timeoutMs=10000}={}){this.apiKey=String(apiKey).trim();this.range=normalizeDeliveryRange(range);this.fetchImpl=fetchImpl;this.clock=clock;this.timeoutMs=timeoutMs;}
-  get configured(){return Boolean(this.apiKey&&(this.range.polygons.length||this.range.cities.length));}
-  configurationStatus(){if(!this.apiKey)return {status:'not_configured',reason:'尚未配置Google Geocoding API'};if(!this.range.polygons.length&&!this.range.cities.length)return {status:'not_configured',reason:'尚未配置物流派送范围'};return {status:'ready',reason:null};}
+  get configured(){return Boolean(this.apiKey&&(this.range.polygons.length||this.range.cities.length||this.range.blockedCities.length));}
+  configurationStatus(){if(!this.apiKey)return {status:'not_configured',reason:'尚未配置Google Geocoding API'};if(!this.range.polygons.length&&!this.range.cities.length&&!this.range.blockedCities.length)return {status:'not_configured',reason:'尚未配置物流派送范围'};return {status:'ready',reason:null};}
   async verify(recipient={}){
     const configuration=this.configurationStatus(),fingerprint=addressFingerprint(recipient);if(configuration.status!=='ready')return {...configuration,addressFingerprint:fingerprint};
     const address=buildGeocodingAddress(recipient);if(!address)return {status:'unusable',reason:'地址信息为空',addressFingerprint:fingerprint,checkedAt:this.clock().toISOString()};
@@ -54,7 +54,7 @@ export class AddressDeliveryVerifier{
     const result=payload.results[0],location=result?.geometry?.location,locationType=result?.geometry?.location_type,latitude=Number(location?.lat),longitude=Number(location?.lng);
     if(result.partial_match||!RELIABLE_LOCATION_TYPES.has(locationType)||!finiteLatitude(latitude)||!finiteLongitude(longitude))return {status:'unusable',reason:'Google定位结果不够明确',addressFingerprint:fingerprint,checkedAt};
     let inRange=false,matchBasis='';if(this.range.polygons.length){const polygon=this.range.polygons.find(entry=>pointInPolygon(latitude,longitude,entry.points));inRange=Boolean(polygon);matchBasis=polygon?`polygon:${polygon.name}`:'polygon:none';}
-    else{const names=cityNames(result),city=this.range.cities.find(value=>names.has(value));inRange=Boolean(city);matchBasis=city?`city:${city}`:'city:none';}
+    else{const names=cityNames(result),blocked=this.range.blockedCities.find(value=>names.has(value)),city=this.range.cities.find(value=>names.has(value));inRange=Boolean(city)&&!blocked;matchBasis=blocked?`blocked-city:${blocked}`:city?`city:${city}`:'city:none';}
     return {status:inRange?'deliverable':'out_of_range',reason:inRange?'地址在已配置派送范围内':'地址不在已配置派送范围内',normalizedAddress:String(result.formatted_address||'').trim()||null,latitudeE7:Math.round(latitude*1e7),longitudeE7:Math.round(longitude*1e7),matchBasis,addressFingerprint:fingerprint,checkedAt};
   }
 }

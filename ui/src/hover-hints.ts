@@ -1,6 +1,6 @@
 const TARGET='button,[role="button"],[data-tooltip],.card[aria-label],section[aria-label]';
 
-const source=(element:HTMLElement)=>element.dataset.tooltip?.trim()||element.getAttribute('title')?.trim()||element.getAttribute('aria-label')?.trim()||'';
+const source=(element:HTMLElement)=>element.matches('.cwb-conversation-more[aria-expanded="true"]')?'':element.dataset.tooltip?.trim()||element.getAttribute('title')?.trim()||element.getAttribute('aria-label')?.trim()||'';
 
 export function installHoverHints(doc:Document){
   const win=doc.defaultView;if(!win)return()=>{};

@@ -13,6 +13,7 @@ test('reviewed compatibility reads renamed native message keys without querying 
  const model=api.getMessageModel({body:'Fictional',serialize:()=>({id:{$1:id,remote:'15550000002@c.us'}})});assert.equal(model.id._serialized,id);
  const chat={serialize:()=>({msgs:[{}]}),lastReceivedKey:{$1:id}};await api.getChatModel(chat);assert.deepEqual(queries,[id,id]);
  queries.length=0;chat.lastReceivedKey={};await api.getChatModel(chat);assert.deepEqual(queries,[]);
+ const patched=patchReadCompatibility(source);assert.match(patched,/delete message\.__x_id;/);assert.ok(patched.indexOf('delete message.__x_id;')<patched.indexOf("Bot's won't reply if canonicalUrl is set"));assert.match(patched,/Msg\.get\(window\.WWebJS\.getMsgKeyId\(newMsgKey\)\)/);
  assert.equal(patchReadCompatibility(patchReadCompatibility(source)),patchReadCompatibility(source));
  assert.throws(()=>patchReadCompatibility('unreviewed version'),/source changed/);
 });

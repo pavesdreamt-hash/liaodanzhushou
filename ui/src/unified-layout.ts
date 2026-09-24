@@ -1,5 +1,8 @@
 import {defaults,sanitize,STORAGE_KEY,type DisplayProfile} from './order-layout-model';
 import type {OrderLayoutDesktop} from './order-layout';
+import {version} from '../../package.json';
+
+export const NAV_COLLAPSED_KEY='liaodan-unified-nav-collapsed';
 
 export function aliasWorkbench(doc:Document){
   const root=doc.querySelector<HTMLElement>('#chat-workbench-aligned')!;
@@ -22,7 +25,18 @@ export function installUnifiedLayout(doc:Document,win:Window,desktop:OrderLayout
   const scroll=doc.createElement('div');scroll.className='up-nav-scroll';side.prepend(scroll);
   side.querySelectorAll('.nav-group').forEach(el=>scroll.append(el));
   side.querySelectorAll<HTMLButtonElement>('.nav-item,.nav').forEach(el=>{el.classList.add('up-nav');el.setAttribute('aria-label',el.textContent!.trim());});
-  root.querySelector('.connection,.wa')?.classList.add('up-status');
+  root.querySelector('.connection,.wa')?.remove();
+  const footer=doc.createElement('div');footer.className='up-version';footer.textContent=`v${version}`;side.append(footer);
+  const heading=side.querySelector<HTMLElement>('.nav-label'),navTitle=doc.createElement('span');
+  navTitle.textContent=heading?.textContent?.trim()||'我的工作台';
+  const navToggle=doc.createElement('button');navToggle.type='button';navToggle.className='up-nav-toggle';
+  heading?.replaceChildren(navTitle,navToggle);heading?.classList.add('up-nav-heading');
+  let collapsed=false;try{collapsed=win.localStorage.getItem(NAV_COLLAPSED_KEY)==='true';}catch{}
+  const renderToggle=()=>{
+    navToggle.innerHTML=`<i data-lucide="${collapsed?'panel-left-open':'panel-left-close'}"></i>`;
+    navToggle.setAttribute('aria-label',collapsed?'展开导航栏':'折叠导航栏');navToggle.title=collapsed?'展开导航栏':'折叠导航栏';
+    (win as Window&{lucide?:{createIcons:(options:{nodes:Element[]})=>void}}).lucide?.createIcons({nodes:[navToggle]});
+  };
   if(desktop?.mergedTitlebar)top.style.paddingLeft='104px';
   const button=doc.createElement('button');button.type='button';button.className='up-settings';button.textContent='布局设置';actions.prepend(button);
   const dialog=doc.createElement('dialog');dialog.className='shared-dialog';dialog.innerHTML='<h2>页面布局</h2><p>各页面共用导航和内容字号，按显示器保存。</p><label>导航宽度（px）<input data-setting="navWidth" type="number" min="144" max="340"></label><label>导航字号（px）<input data-setting="navFont" type="number" min="13" max="22"></label><label>内容字号（px）<input data-setting="contentFont" type="number" min="13" max="22"></label><output aria-live="polite"></output><footer><button data-reset>恢复本屏幕默认</button><button data-close>完成</button></footer>';root.append(dialog);
@@ -30,15 +44,16 @@ export function installUnifiedLayout(doc:Document,win:Window,desktop:OrderLayout
   const state=dialog.querySelector('output')!;
   const paint=()=>{
     if(disposed)return;
-    const compact=win.innerWidth<980;root.classList.toggle('up-compact',compact);
-    root.style.setProperty('--up-nav',`${compact?64:Math.max(144,Math.min(prefs.navWidth,340))}px`);
+    const compact=win.innerWidth<980;root.classList.toggle('up-compact',compact);root.classList.toggle('up-nav-collapsed',collapsed);
+    root.style.setProperty('--up-nav',`${compact||collapsed?64:Math.max(144,Math.min(prefs.navWidth,340))}px`);
     root.style.setProperty('--up-nav-font',`${prefs.navFont}px`);root.style.setProperty('--up-content-font',`${prefs.contentFont}px`);
     dialog.querySelectorAll<HTMLInputElement>('[data-setting]').forEach(el=>{el.value=String(prefs[el.dataset.setting as 'navWidth']);el.disabled=el.dataset.setting==='navWidth'&&compact;});
     onTitlebar(win.innerWidth-actions.getBoundingClientRect().left+10,Boolean(doc.querySelector('dialog[open],.overlay:not([hidden])')));
     root.dataset.layoutReady='true';
   };
-  const read=()=>{try{prefs=sanitize(JSON.parse(window.localStorage.getItem(STORAGE_KEY)||'{}')[display.id],defaults(win.innerWidth,win.innerHeight));}catch{prefs=defaults(win.innerWidth,win.innerHeight);}paint();};
+  const read=()=>{try{prefs=sanitize(JSON.parse(window.localStorage.getItem(STORAGE_KEY)||'{}')[display.id],defaults(win.innerWidth,win.innerHeight));}catch{prefs=defaults(win.innerWidth,win.innerHeight);}renderToggle();paint();};
   const save=()=>{try{const records=JSON.parse(window.localStorage.getItem(STORAGE_KEY)||'{}');records[display.id]=prefs;window.localStorage.setItem(STORAGE_KEY,JSON.stringify(records));state.textContent='已保存到本屏幕';}catch{state.textContent='调整已生效，但本机存储不可用';}};
+  navToggle.onclick=()=>{collapsed=!collapsed;try{win.localStorage.setItem(NAV_COLLAPSED_KEY,String(collapsed));}catch{}renderToggle();paint();};
   button.onclick=()=>dialog.showModal();dialog.querySelector<HTMLButtonElement>('[data-close]')!.onclick=()=>dialog.close();
   dialog.querySelector<HTMLButtonElement>('[data-reset]')!.onclick=()=>{prefs=defaults(win.innerWidth,win.innerHeight);save();paint();};
   dialog.querySelectorAll<HTMLInputElement>('input').forEach(el=>el.onchange=()=>{if(Number.isFinite(el.valueAsNumber))prefs=sanitize({...prefs,[el.dataset.setting!]:el.valueAsNumber},prefs);save();paint();});

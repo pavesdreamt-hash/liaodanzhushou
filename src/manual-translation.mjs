@@ -58,3 +58,38 @@ export async function translateManualReply(settings,payload){
   for(const emoji of graphemes(intent)){const index=present.indexOf(emoji);if(index<0)text+=emoji;else present.splice(index,1);}
   return {text,chinese:result.chinese.trim()};
 }
+
+export async function generateManualAssistantDraft(settings,payload){
+  const intent=payload?.intent;
+  if(intent!==undefined&&typeof intent!=='string')throw invalid('中文意图无效');
+  if(typeof intent==='string'&&intent.length>6000)throw invalid('一次最多输入 6000 个字符的中文意图');
+  const messages=validateChatMessages(payload).map(message=>{
+    if(!['customer','merchant'].includes(message.direction)||typeof message.sentAt!=='string'||!Number.isFinite(Date.parse(message.sentAt)))throw invalid('当前会话文字无效，请重新选择客户');
+    return {id:message.id,direction:message.direction,text:message.text.trim(),sentAt:message.sentAt};
+  });
+  const referenceMessageId=payload?.referenceMessageId??null;
+  if(referenceMessageId!==null&&(typeof referenceMessageId!=='string'||!referenceMessageId.trim()||referenceMessageId.length>200))throw invalid('引用的客户消息无效');
+  const customerMessages=messages.filter(message=>message.direction==='customer');
+  const reference=referenceMessageId===null?customerMessages.at(-1):customerMessages.find(message=>message.id===referenceMessageId);
+  if(referenceMessageId!==null&&!reference)throw invalid('引用消息不属于当前客户会话');
+  const trimmedIntent=typeof intent==='string'?intent.trim():'';
+  if(!reference&&!trimmedIntent)throw invalid('请输入中文意图，或选择当前会话中的客户文字消息');
+  const configuration=await settings.configuration();
+  // The main process supplies this bounded, currently verified conversation; never trust
+  // renderer-provided chat text or turn an AI result into a send operation.
+  const result=await settings.complete({purpose:'reply',input:{mode:reference?'reply':'proactive',tone:'professional',intent:trimmedIntent,reference:reference||null,context:null,conversation:messages},configuration});
+  if(typeof result?.text!=='string'||!result.text.trim()||result.text.length>12000||typeof result.chinese!=='string'||!result.chinese.trim()||result.chinese.length>12000)throw invalid('AI 草稿结果不完整，已有草稿保留，请重试');
+  return {text:result.text.trim(),chinese:result.chinese.trim(),referenceId:reference?.id||null,note:'AI 草稿请人工核对后使用，未发送消息。'};
+}
+
+export async function recognizeImageText(settings,payload){
+  const dataUrl=payload?.dataUrl;
+  const match=typeof dataUrl==='string'&&dataUrl.match(/^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/]+=*)$/i);
+  if(!match)throw invalid('这条消息没有可识别的 PNG、JPEG 或 WebP 图片');
+  const bytes=Math.floor(match[2].length*3/4)-(match[2].endsWith('==')?2:match[2].endsWith('=')?1:0);
+  if(!bytes||bytes>16*1024*1024)throw invalid('图片超过 16 MB 或内容为空，无法识别');
+  const configuration=await settings.configuration();
+  const result=await settings.complete({purpose:'image-ocr',input:{image:dataUrl},configuration});
+  if(typeof result?.text!=='string'||!result.text.trim()||result.text.length>16000)throw invalid('没有识别到可用文字');
+  return {text:result.text.trim()};
+}
