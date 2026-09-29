@@ -5,6 +5,15 @@ import {ManualChatHistory} from './manual-chat-history.mjs';
 
 const fail=message=>Object.assign(new Error(message),{stage:'人工发送',code:'MANUAL_CHAT'});
 const hash=value=>createHash('sha256').update(value).digest('hex');
+const locallyCachedMedia=value=>typeof value==='string'&&/^data:(?:image\/(?:png|jpeg|webp|gif)|video\/mp4);base64,[A-Za-z0-9+/]+=*$/i.test(value);
+const mediaBytes=value=>{const body=String(value||'').split(',',2)[1]||'';return Math.floor(body.length*3/4)-(body.endsWith('==')?2:body.endsWith('=')?1:0);};
+const resizableImage=value=>/^data:image\/(?:png|jpeg|webp|gif);base64,[A-Za-z0-9+/]+=*$/i.test(String(value||''));
+const originalImageCacheLimit=3*1024*1024;
+const mediaFailure=(error,now)=>{
+  const code=String(error?.code||'WHATSAPP_MEDIA_READ_FAILED').replace(/[^A-Z0-9_]/g,'').slice(0,80)||'WHATSAPP_MEDIA_READ_FAILED';
+  const message=String(error?.message||'图片读取失败，可稍后重试。').replace(/[\r\n]+/g,' ').slice(0,300);
+  return {code,message,at:new Date(now()).toISOString()};
+};
 const allowedAttachmentTypes=new Set(['image/jpeg','image/png','image/webp','application/pdf','text/plain','text/csv','application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document','application/vnd.ms-excel','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','application/zip','application/x-zip-compressed']);
 const attachmentLimitBytes=16*1024*1024,totalAttachmentLimitBytes=32*1024*1024;
 const attachmentBytes=data=>{const value=data.slice(data.indexOf(',')+1);return Math.floor(value.length*3/4)-(value.endsWith('==')?2:value.endsWith('=')?1:0);};
@@ -17,8 +26,8 @@ const safeAttachment=(value,index)=>{
   const mimetype=match[1].toLowerCase(),kind=mimetype.startsWith('image/')?'image':'file';return {dataUrl:value.dataUrl,name,mimetype,kind,size};
 };
 export class ManualChat {
-  constructor({adapter,directory,now=()=>Date.now()}){
-    this.adapter=adapter;this.directory=directory;this.now=now;this.bindings=new Map();this.queue=Promise.resolve();this.chatHistory=new ManualChatHistory(directory);
+  constructor({adapter,directory,now=()=>Date.now(),thumbnailEncoder=null,thumbnailThresholdBytes=originalImageCacheLimit}={}){
+    this.adapter=adapter;this.directory=directory;this.now=now;this.thumbnailEncoder=thumbnailEncoder;this.thumbnailThresholdBytes=thumbnailThresholdBytes;this.bindings=new Map();this.queue=Promise.resolve();this.chatHistory=new ManualChatHistory(directory,{now});
     this.captureQueue=Promise.resolve();this.captureIssue=null;
     this.unsubscribeInbox=adapter.subscribeInbox?.(message=>{
       this.captureQueue=this.captureQueue.then(async()=>{
@@ -85,10 +94,36 @@ export class ManualChat {
     try{const page=await this.adapter.recent({...b,limit,before,beforeId});return await this.historyPage(b,page,{limit,before,beforeId});}
     catch(error){return this.retainedPage(b,{limit,before,beforeId});}
   }
+  async markSeen({token}){
+    const b=await this.target(token);
+    if(b.identityVerified!==true)throw fail('当前会话号码映射尚未核对，未执行标记已读');
+    if(typeof this.adapter.markSeen!=='function')throw fail('当前 WhatsApp 连接不支持标记已读');
+    const result=await this.adapter.markSeen(b);
+    if(result?.seen!==true)throw fail('WhatsApp 未确认当前会话已读');
+    return {seen:true};
+  }
   async media({token,messageId,force=false}){
     if(typeof messageId!=='string'||!messageId.trim()||messageId.length>200)throw fail('图片消息标识无效');
-    const b=await this.target(token);if(typeof this.adapter.retryMedia!=='function')throw fail('当前 WhatsApp 连接不支持读取图片');
-    const row=await this.adapter.retryMedia({...b,messageId:messageId.trim(),force:force===true});return row?(await this.decorate([row],b))[0]:null;
+    const b=await this.target(token),id=messageId.trim(),historyRow=await this.chatHistory.message(b.accountId,b.chatId,id),saved=force?null:historyRow;
+    if(saved?.metadata?.media?.some(media=>media.status==='cached'&&locallyCachedMedia(media.dataUrl)))return (await this.decorate([saved],b))[0];
+    if(typeof this.adapter.retryMedia!=='function')throw fail('当前 WhatsApp 连接不支持读取图片');
+    try{
+      const row=await this.adapter.retryMedia({...b,messageId:id,force:force===true});if(!row)return null;
+      const prepared=await this.prepareLocalMedia(row),withoutFailure={...prepared.row,metadata:{...prepared.row.metadata,mediaFailure:null}},decorated=(await this.decorate([withoutFailure],b))[0];if(prepared.cacheable)await this.chatHistory.save(b.accountId,b.chatId,[decorated]);return decorated;
+    }catch(error){
+      if(historyRow)await this.chatHistory.save(b.accountId,b.chatId,[{...historyRow,metadata:{...historyRow.metadata,mediaFailure:mediaFailure(error,this.now)}}]).catch(()=>{});
+      throw error;
+    }
+  }
+  async prepareLocalMedia(row){
+    const media=row.metadata?.media||[];let changed=false,cacheable=true;
+    const next=[];
+    for(const item of media){
+      if(item?.status!=='cached'||!resizableImage(item.dataUrl)||mediaBytes(item.dataUrl)<=this.thumbnailThresholdBytes){next.push(item);continue;}
+      if(typeof this.thumbnailEncoder!=='function'){cacheable=false;next.push(item);continue;}
+      try{const dataUrl=await this.thumbnailEncoder(item.dataUrl);if(!locallyCachedMedia(dataUrl))throw Error('缩略图编码结果无效');next.push({...item,dataUrl,cacheKind:'thumbnail',sourceBytes:mediaBytes(item.dataUrl)});changed=true;}catch{cacheable=false;next.push(item);}
+    }
+    return {row:changed?{...row,metadata:{...row.metadata,media:next}}:row,cacheable};
   }
   async ledger(){try{return JSON.parse(await readFile(path.join(this.directory,'manual-outbox.json'),'utf8'));}catch(e){if(e.code==='ENOENT')return [];throw e;}}
   async persist(records){await mkdir(this.directory,{recursive:true});const temp=path.join(this.directory,`outbox-${randomUUID()}.tmp`);await writeFile(temp,JSON.stringify(records),{mode:0o600});await rename(temp,path.join(this.directory,'manual-outbox.json'));}

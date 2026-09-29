@@ -4,7 +4,7 @@ import {mkdtemp,rm} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {DatabaseSync} from 'node:sqlite';
-import {ShopPlusConnection,buildShopPlusRequest,signShopPlusParameters} from '../src/orders/shopplus-api.mjs';
+import {ShopPlusConnection,buildShopPlusRequest,signShopPlusParameters,SHOPPLUS_PRODUCT_LIST_TIMEOUT_MS,SHOPPLUS_PRODUCT_LIST_READ_RETRIES} from '../src/orders/shopplus-api.mjs';
 import {migrateOrderDatabase} from '../src/orders/database.mjs';
 import {OrderAppService} from '../src/orders/order-app-service.mjs';
 import {createCostCatalog} from '../src/orders/cost-catalog.mjs';
@@ -24,6 +24,36 @@ test('ShopPlus 签名遵循参数排序，并且请求体不包含 API Secret',a
   }finally{await rm(directory,{recursive:true,force:true});}
 });
 
+test('ShopPlus 商品读取权限与订单读取权限分开记录，产品列表请求受字段和分页约束',async()=>{
+  const directory=await mkdtemp(path.join(os.tmpdir(),'shopplus-products-api-'));let received;
+  try{
+    let productAttempts=0;
+    const connection=new ShopPlusConnection({userDataPath:directory,safeStorage:fakeStorage,promptCredential:async label=>label==='ShopPlus App Key'?'fictional-app-key':'fictional-secret',now:()=>new Date('2026-09-25T08:00:00Z'),fetchImpl:async(_url,options)=>{received=JSON.parse(options.body);if(received.name==='products'&&productAttempts++===0)throw Error('fictional transient network interruption');return {ok:true,json:async()=>({code:'0',data:{productVOs:[{id:'fictional-product-1'}],totalCount:1}})};}});
+    await connection.configure();
+    const result=await connection.listProductsPage({pageNum:1,pageSize:2,fields:[3,1,2]});
+    assert.deepEqual(result.products,[{id:'fictional-product-1'}]);
+    assert.equal(received.name,'products');
+    assert.deepEqual(JSON.parse(decodeURIComponent(received.data)),{pageNum:1,pageSize:2,fields:[1,2,3]});
+    assert.equal(productAttempts,Math.min(2,SHOPPLUS_PRODUCT_LIST_READ_RETRIES+1));
+    assert.ok(SHOPPLUS_PRODUCT_LIST_TIMEOUT_MS>30_000);
+    const before=await connection.status();assert.equal(before.test,null);assert.equal(before.productTest,null);
+    await connection.markProductVerified();
+    const verified=await connection.status();assert.equal(verified.test,null);assert.equal(verified.productTest.status,'verified');
+    await connection.markProductFailed('fictional product permission denied');
+    const failed=await connection.status();assert.equal(failed.productTest.status,'failed');assert.match(failed.productTest.message,/fictional product permission denied/);
+  }finally{await rm(directory,{recursive:true,force:true});}
+});
+
+test('ShopPlus 网站上下架和单变体库存只提交受限字段并要求读回确认',async()=>{
+  const directory=await mkdtemp(path.join(os.tmpdir(),'shopplus-write-api-'));const requests=[];
+  try{
+    const connection=new ShopPlusConnection({userDataPath:directory,safeStorage:fakeStorage,promptCredential:async label=>label==='ShopPlus App Key'?'fictional-app-key':'fictional-secret',now:()=>new Date('2026-09-26T08:00:00Z'),fetchImpl:async(_url,options)=>{const request=JSON.parse(options.body);requests.push({name:request.name,data:JSON.parse(decodeURIComponent(request.data))});if(request.name==='products.updateSpuSelective')return {ok:true,json:async()=>({code:'0',data:{result:true}})};if(request.name==='products.skus.addOrUpdate')return {ok:true,json:async()=>({code:'0',data:{result:true}})};return {ok:true,json:async()=>({code:'0',data:{id:101,publishStatus:0,productVariantDTOs:[{id:202,productVariantInventoryDTO:{availableStockQuantity:3}}]}})};}});
+    await connection.configure();const unpublished=await connection.updateProductPublishStatus({productId:101,publishStatus:0});assert.equal(unpublished.publishStatus,0);const stocked=await connection.updateVariantInventory({productId:101,variantId:202,stockQuantity:3});assert.equal(stocked.productVariantDTOs[0].productVariantInventoryDTO.availableStockQuantity,3);
+    assert.deepEqual(requests.map(request=>[request.name,request.data]),[['products.updateSpuSelective',{id:101,publishStatus:0}],['products.detail',{id:101}],['products.skus.addOrUpdate',{productId:101,updateProductVariants:[{id:202,availableStockQuantity:3}]}],['products.detail',{id:101}]]);
+    await assert.rejects(()=>connection.updateVariantInventory({productId:101,variantId:202,stockQuantity:'1.5'}),/库存数量/);
+  }finally{await rm(directory,{recursive:true,force:true});}
+});
+
 test('ShopPlus API 同步按订单区分重复商品编号，缺成本保留待核对而不用零替代',async t=>{
   const database=new DatabaseSync(':memory:');migrateOrderDatabase(database);t.after(()=>database.close());
   const app=new OrderAppService({database,userDataPath:'/fictional',clock:()=>new Date('2026-09-22T12:00:00Z'),costCatalogLoader:async()=>createCostCatalog([]),beforeCommit:async()=>{}}),order=rawOrder(),sameItemIdDifferentOrder=rawOrder('SHOPPLUS-FICTIONAL-2');
@@ -35,6 +65,20 @@ test('ShopPlus API 同步按订单区分重复商品编号，缺成本保留待�
   const orderId=database.prepare('SELECT id FROM orders WHERE shopplus_order_no=?').get(order.orderNo).id,customerConfirmed=app.confirmCustomerInformation({orderId,note:'fictional customer profile confirmation'});assert.ok(customerConfirmed.customerInformationConfirmedAt);
   const corrected=app.correctOrderStatus({orderId,status:'outbound_processing',reason:'fictional fulfillment status correction'});assert.equal(corrected.trackingStatus,'outbound_processing');assert.equal(database.prepare("SELECT COUNT(*) count FROM order_events WHERE order_id=? AND event_type='package_status_corrected'").get(orderId).count,1);
   const again=await app.syncShopPlusApiOrders({orders:[order,sameItemIdDifferentOrder],fetchedAt:'2026-09-22T12:05:00.000Z'});assert.deepEqual({imported:again.imported,existing:again.existing,blocked:again.blocked},{imported:0,existing:2,blocked:0});assert.equal(database.prepare('SELECT COUNT(*) count FROM orders').get().count,2);assert.equal(database.prepare("SELECT COUNT(*) count FROM order_events WHERE event_type='shopplus_api_imported'").get().count,2);
+});
+
+test('ShopPlus 新订单提醒只基于已关联会话和本机沟通记录，且定时更新默认关闭',async t=>{
+  const database=new DatabaseSync(':memory:');migrateOrderDatabase(database);t.after(()=>database.close());
+  const app=new OrderAppService({database,userDataPath:'/fictional',clock:()=>new Date('2026-09-25T12:00:00Z'),costCatalogLoader:async()=>createCostCatalog([]),beforeCommit:async()=>{}}),synced=await app.syncShopPlusApiOrders({orders:[rawOrder('SHOPPLUS-ATTENTION-FICTIONAL')],fetchedAt:'2026-09-25T12:00:00.000Z'}),orderId=synced.importedOrderIds[0];
+  assert.deepEqual(app.orderSyncSchedule(),{enabled:false,intervalMinutes:30});
+  assert.throws(()=>app.configureOrderSyncSchedule({enabled:true,intervalMinutes:5}),/15、30 或 60/);
+  assert.deepEqual(app.configureOrderSyncSchedule({enabled:true,intervalMinutes:15}),{enabled:true,intervalMinutes:15});
+  let attention=app.shopPlusSyncAttention();assert.equal(attention.orders.length,1);assert.equal(attention.orders[0].contactStatus,'chat_not_bound');
+  database.prepare('INSERT INTO order_assistant(order_id,account_id,chat_id,binding_revision) VALUES(?,?,?,?)').run(orderId,'fictional-account','wa-phone:971500000001',1);
+  attention=app.shopPlusSyncAttention();assert.equal(attention.orders[0].contactStatus,'chat_bound_no_messages');
+  database.prepare('INSERT INTO order_chat_messages(order_id,binding_revision,message_id,direction,sent_at,body) VALUES(?,?,?,?,?,?)').run(orderId,1,'fictional-message','merchant','2026-09-25T12:01:00.000Z','Fictional saved conversation');
+  attention=app.shopPlusSyncAttention();assert.equal(attention.orders[0].contactStatus,'communicated');assert.equal(attention.orders[0].messageCount,1);
+  assert.equal(app.acknowledgeShopPlusSyncAttention({orderIds:[orderId]}).orders.length,0);
 });
 
 test('本机订单编辑可添加、删除商品并重算数量、单价和订单金额',async t=>{

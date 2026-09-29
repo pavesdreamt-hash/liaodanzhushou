@@ -2,7 +2,6 @@ import {StrictMode,createElement,useEffect,useMemo,useRef,useState} from 'react'
 import {createRoot} from 'react-dom/client';
 import {renderToStaticMarkup} from 'react-dom/server';
 import {CircleHelp,icons} from 'lucide-react';
-import workbenchHtml from './confirmed/workbench.html?raw';
 import desktopWorkbenchHtml from './chat-workbench-desktop.html?raw';
 import ordersHtml from './confirmed/orders.html?raw';
 import inventoryHtml from './confirmed/inventory.html?raw';
@@ -12,6 +11,7 @@ import settingsHtml from './confirmed/settings.html?raw';
 import productHtml from './confirmed/product.html?raw';
 import orderHtml from './confirmed/order.html?raw';
 import profitDetailHtml from './confirmed/profit-detail.html?raw';
+import sourceLibraryHtml from './confirmed/source-library.html?raw';
 import './styles.css';
 import './window-chrome.css';
 import orderLayoutCss from './order-layout.css?raw';
@@ -20,12 +20,12 @@ import unifiedCss from './unified-layout.css?raw';
 import replyCss from './reply-tools.css?raw';
 import mediaDialogCss from './media-dialog.css?raw';
 import productMediaCss from './product-media.css?raw';
-import {aliasWorkbench,installUnifiedLayout} from './unified-layout';
+import {installUnifiedLayout} from './unified-layout';
 import {installProductPictures} from './reply-tools';
 import {installEmptyWorkspace} from './empty-workspace';
 import {installDesktopChatWorkbench} from './chat-workbench-desktop';
 import {installRestoredPage} from './restored-pages';
-import {installOrdersPage,installOrderDetail,installWorkbenchOrders} from './order-business';
+import {installOrdersPage,installOrderDetail} from './order-business';
 import orderBusinessCss from './order-business.css?raw';
 import workbenchOrdersCss from './workbench-orders.css?raw';
 import emptyCss from './empty-workspace.css?raw';
@@ -38,15 +38,15 @@ import {version} from '../../package.json';
 const UI_BUILD_MARKER='liaodan-assistant-next-ui';
 document.documentElement.dataset.build=UI_BUILD_MARKER;
 
-type Page='workbench'|'orders'|'inventory'|'profit'|'assistant'|'settings'|'product'|'order'|'profit-detail';
+type Page='workbench'|'orders'|'inventory'|'source'|'profit'|'assistant'|'settings'|'product'|'order'|'profit-detail';
 type DragRect={left:number;top:number;width:number;height:number};
 type DragArea={right:number;blocked:boolean;workbenchRects:DragRect[]};
 const chatPages=new Set<Page>(['order','workbench']);
-const productPages=new Set<Page>(['inventory','product']);
-const restoredPages=new Set<Page>(['inventory','profit','assistant','settings','product','profit-detail']);
+const productPages=new Set<Page>(['inventory','source','product']);
+const restoredPages=new Set<Page>(['inventory','source','profit','assistant','settings','product','profit-detail']);
 const moduleStyle=(name:string,css:string)=>`<style data-ui-module="${name}">${css}</style>`;
 const pages:Record<Page,string>={
-  workbench:desktopWorkbenchHtml,orders:ordersHtml,inventory:inventoryHtml,profit:profitHtml,
+  workbench:desktopWorkbenchHtml,orders:ordersHtml,inventory:inventoryHtml,source:sourceLibraryHtml,profit:profitHtml,
   assistant:assistantHtml,settings:settingsHtml,product:productHtml,order:orderHtml,
   'profit-detail':profitDetailHtml
 };
@@ -75,10 +75,14 @@ function ConfirmedApp(){
   const [dragArea,setDragArea]=useState<DragArea>({right:600,blocked:false,workbenchRects:[]});
   const cleanup=useRef<(()=>void)|undefined>(undefined);
   useEffect(()=>()=>cleanup.current?.(),[]);
+  useEffect(()=>{(window as Window&{__liaodanOpenInventory?:()=>void}).__liaodanOpenInventory=()=>setPage('inventory');return()=>{delete (window as Window&{__liaodanOpenInventory?:()=>void}).__liaodanOpenInventory;};},[]);
   useEffect(()=>{if(merged)void desktop?.setOrderChrome?.(true);},[page,merged,desktop]);
   const html=useMemo(()=>{
     const chat=chatPages.has(page),product=productPages.has(page);
-    return (restoredPages.has(page)?pages[page].replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi,''):pages[page]).replaceAll('__APP_VERSION__',version).replace(/>1\.0</g,`>${version}<`)
+    // Confirmed order/list markup supplies the visual shell only. Its historical inline scripts
+    // contain demo interactions and can run before the real order data mounts, so the current
+    // renderer owns every order-list/detail interaction and data field.
+    return ((restoredPages.has(page)||page==='orders'||page==='order')?pages[page].replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi,''):pages[page]).replaceAll('__APP_VERSION__',version).replace(/>1\.0</g,`>${version}<`)
       +moduleStyle('shared-layout',unifiedCss)
       +(chat?moduleStyle('chat-layout',orderLayoutCss.replaceAll('#ui008-order-detail',':is(#ui008-order-detail,#chat-workbench-aligned)')):'')
       +(chat||product?moduleStyle('media-dialog',mediaDialogCss):'')
@@ -141,19 +145,21 @@ function ConfirmedApp(){
     });
     if(page==='order'){
       disposers.push(installOrderLayout(doc,win,desktop,chrome,{removeChatWorkspace:true}));
-    }else if(page!=='workbench')disposers.push(installUnifiedLayout(doc,win,desktop,chrome));
+    }else if(page!=='workbench'&&page!=='source')disposers.push(installUnifiedLayout(doc,win,desktop,chrome));
     if(page==='order')installEmptyWorkspace(doc,page);
     if(restoredPages.has(page)){
-      disposers.push(installRestoredPage(doc,win,page as 'inventory'|'profit'|'assistant'|'settings'|'product'|'profit-detail',{
+      disposers.push(installRestoredPage(doc,win,page as 'inventory'|'source'|'profit'|'assistant'|'settings'|'product'|'profit-detail',{
         productId:selectedProductId||undefined,day:selectedProfitDay||undefined,
         openProduct:id=>{setSelectedProductId(id);setPage('product');},
+        openInventory:()=>setPage('inventory'),
+        openSource:()=>setPage('source'),
         openDay:day=>{setSelectedProfitDay(day);setPage('profit-detail');},
         openOrder:id=>{setSelectedOrderId(id);setPage('order');}
       }));
-      if(productPages.has(page))disposers.push(installProductPictures(doc,page));
+      if(page==='product'&&!selectedProductId?.startsWith('shopplus:'))disposers.push(installProductPictures(doc,page));
     }
     if(page==='orders'){
-      disposers.push(installOrdersPage(doc,{openOrder:id=>{setSelectedOrderId(id);setPage('order');},initialAction:pendingOrderAction.current}));
+      disposers.push(installOrdersPage(doc,{openOrder:id=>{setSelectedOrderId(id);setPage('order');},initialAction:pendingOrderAction.current,openSettings:()=>setPage('settings')}));
       pendingOrderAction.current=undefined;
     }
     if(page==='order'&&selectedOrderId)disposers.push(installOrderDetail(doc,selectedOrderId));
@@ -192,6 +198,7 @@ function ConfirmedApp(){
     doc.addEventListener('click',event=>{
       const button=(event.target as Element|null)?.closest('button');if(!button)return;
       if(button.matches('[data-open-orders-import]')){event.preventDefault();event.stopImmediatePropagation();pendingOrderAction.current='import';setPage('orders');return;}
+      if(button.dataset.openInventory==='true'){event.preventDefault();event.stopImmediatePropagation();setPage('inventory');return;}
       if(button.dataset.openSettings==='true'){event.preventDefault();event.stopImmediatePropagation();setPage('settings');return;}
       const orderId=button.matches('[data-open-order-detail]')?button.closest<HTMLElement>('[data-order-id]')?.dataset.orderId:undefined;
       if(orderId){event.preventDefault();event.stopImmediatePropagation();setSelectedOrderId(orderId);setPage('order');return;}

@@ -12,7 +12,7 @@ export async function promptInLocalWindow(label,{electron=null,timeoutMs=600000}
   const channel='native-secret:submit',file=fileURLToPath(new URL('../../renderer/native-secret.html',import.meta.url));
   const finish=(error,value=null,alreadyClosed=false)=>{if(settled)return;settled=true;clearTimeout(timer);ipcMain.removeHandler(channel);active=false;error?reject(settingsError('安全输入窗口未完成，请重试；原有密钥未修改','AI_KEY_INPUT_FAILED')):resolve(value);if(!alreadyClosed&&win&&!win.isDestroyed())win.destroy();};
   try{
-   win=new BrowserWindow({width:440,height:300,resizable:false,title:label.startsWith('ShopPlus ')?'ShopPlus 订单同步':label+' API 密钥',show:false,autoHideMenuBar:true,webPreferences:{preload:fileURLToPath(new URL('./secret-preload.cjs',import.meta.url)),contextIsolation:true,nodeIntegration:false,sandbox:true,webSecurity:true}});
+   win=new BrowserWindow({width:440,height:300,resizable:false,title:label.startsWith('ShopPlus ')?'聊单助手连接与设置':label+' API 密钥',show:false,autoHideMenuBar:true,webPreferences:{preload:fileURLToPath(new URL('./secret-preload.cjs',import.meta.url)),contextIsolation:true,nodeIntegration:false,sandbox:true,webSecurity:true}});
    win.webContents.setWindowOpenHandler(()=>({action:'deny'}));win.webContents.on('will-navigate',e=>e.preventDefault());
    ipcMain.handle(channel,(event,payload)=>{
     if(event.sender!==win.webContents||event.senderFrame!==win.webContents.mainFrame||event.senderFrame.url!==pathToFileURL(file).href)return {ok:false};

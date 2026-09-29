@@ -12,8 +12,11 @@ export const INVENTORY_SHEET='库存情况';
 export const MAPPING_SHEET='商品映射';
 export const INVENTORY_HEADERS=['商品编号','来源商品名称','成本变化','建议售价变化','库存变化','附加信息变化'];
 export const MAPPING_HEADERS=['商品编号','来源匹配标识','来源商品名称','状态','备注'];
-export const MAPPING_STATUSES=['正常','待编号','待确认','来源已移除'];
+export const MAPPING_STATUSES=['正常','待编号','待确认','本机已忽略','来源已移除'];
 export const CORE_COLUMNS=['A','D','E','F','G'];
+// Checks collection completeness, not the smaller, deduplicated product count
+// used for the current mapping workflow.
+export const SOURCE_EXPECTED_RAW_ROWS=199;
 export const TIMEZONE='Asia/Shanghai';
 export const SOURCE_RULES=Object.freeze({headerRow:1,minimumNamedProducts:140,minimumEndRow:170,minimumEndColumn:19,
   minimumPreviousRatio:0.90,maximumEmptyRatio:0.10,maximumNewEmptyRatio:0.05,maxScrollSteps:160});

@@ -59,6 +59,17 @@ export async function translateManualReply(settings,payload){
   return {text,chinese:result.chinese.trim()};
 }
 
+export async function backTranslateManualReply(settings,payload){
+  const english=payload?.text;
+  if(typeof english!=='string'||!english.trim())throw invalid('请先填写需要回译的英文');
+  if(english.length>6000)throw invalid('一次最多回译 6000 个字符，请分段核对');
+  const configuration=await settings.configuration();
+  // Only the merchant's currently editable English draft leaves this process.
+  const result=await settings.complete({purpose:'translate-draft',input:{english},configuration});
+  if(result?.text!==english||typeof result?.chinese!=='string'||!result.chinese.trim()||result.chinese.length>16000)throw invalid('回译结果不完整，原稿已保留，请重试');
+  return {text:english,chinese:result.chinese.trim()};
+}
+
 export async function generateManualAssistantDraft(settings,payload){
   const intent=payload?.intent;
   if(intent!==undefined&&typeof intent!=='string')throw invalid('中文意图无效');

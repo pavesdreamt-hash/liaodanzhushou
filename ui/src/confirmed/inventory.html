@@ -34,17 +34,23 @@
     #ui011-inventory .connection{margin-top:auto;padding:15px 8px 2px;color:var(--muted);border-top:1px solid var(--line);font-size:10px}
     #ui011-inventory .connection strong{display:flex;align-items:center;gap:6px;color:var(--green);font-weight:500}
     #ui011-inventory .online{width:7px;height:7px;background:var(--green);border-radius:50%;box-shadow:0 0 0 4px var(--green-soft)}
+    #ui011-inventory{height:100%;min-height:0;display:flex}
+    #ui011-inventory .app{flex:1;min-height:0;display:flex;flex-direction:column}
+    #ui011-inventory .shell{flex:1;min-height:0}
     #ui011-inventory .main{min-width:0;padding:20px 22px 26px}
+    #ui011-inventory.unified-page .main.up-main{display:flex;flex-direction:column;min-height:0;height:100%}
     #ui011-inventory .page-head{position:relative;display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:14px}
     #ui011-inventory .eyebrow{color:var(--muted);font-size:10px}
-    #ui011-inventory h1{margin:3px 0 4px;font-size:20px;line-height:1.2;font-weight:600}
-    #ui011-inventory .subtitle{margin:0;color:var(--muted);font-size:11px}
+    #ui011-inventory h1{margin:3px 0 0;display:flex;align-items:center;gap:6px;font-size:20px;line-height:1.2;font-weight:600}
+    #ui011-inventory .title-help{width:18px;height:18px;display:inline-grid;place-items:center;color:var(--muted);background:var(--surface-2);border:1px solid var(--line);border-radius:50%}
+    #ui011-inventory .title-help svg{width:12px;height:12px}
     #ui011-inventory .page-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
     #ui011-inventory .button{min-height:36px;padding:0 12px;display:inline-flex;align-items:center;justify-content:center;gap:6px;background:var(--surface);border:1px solid var(--line);border-radius:9px;font-size:11px;white-space:nowrap}
     #ui011-inventory .button:hover{border-color:var(--accent-line)}
     #ui011-inventory .button-primary{color:#fff;background:var(--accent);border-color:var(--accent)}
-    #ui011-inventory .button-connected{position:relative;color:var(--green)}
-    #ui011-inventory .button-connected>svg{width:17px;height:17px}
+    #ui011-inventory .connection-state{min-height:36px;padding:0 10px;display:inline-flex;align-items:center;gap:6px;color:var(--muted);background:var(--surface);border:1px solid var(--line);border-radius:9px;font-size:11px;white-space:nowrap}
+    #ui011-inventory .connection-state.is-verified{color:var(--green);border-color:#bee8d9;background:var(--green-soft)}
+    #ui011-inventory .connection-dot{width:7px;height:7px;background:#aaa3b1;border-radius:50%}#ui011-inventory .connection-state.is-verified .connection-dot{background:var(--green)}
     #ui011-inventory .help-mini{width:18px;height:18px;margin-left:1px;display:grid;place-items:center;color:var(--muted);background:var(--surface-2);border:1px solid var(--line);border-radius:50%}
     #ui011-inventory .help-mini svg{width:11px;height:11px}
     #ui011-inventory .change-count{position:absolute;right:-5px;top:-8px;min-width:24px;padding:2px 5px;color:#fff;background:var(--red);border:2px solid var(--bg);border-radius:99px;font-size:8px;line-height:1.2}
@@ -63,8 +69,9 @@
     #ui011-inventory .stat-label{display:flex;align-items:center;justify-content:space-between;gap:8px;color:var(--muted);font-size:11px}
     #ui011-inventory .stat strong{display:block;margin-top:7px;font-size:22px;line-height:1;font-weight:600}
     #ui011-inventory .stat small{display:block;margin-top:6px;color:var(--muted);font-size:10px}
-    #ui011-inventory .workspace{height:570px;display:grid;grid-template-columns:minmax(0,1fr) 292px;gap:14px;align-items:stretch}
+    #ui011-inventory .workspace{min-height:570px;flex:1 1 auto;display:grid;grid-template-columns:minmax(0,1fr) 292px;gap:14px;align-items:stretch}
     #ui011-inventory .card{min-width:0;height:100%;background:var(--surface);border:1px solid var(--line);border-radius:13px}
+    #ui011-inventory .workspace>.card{height:auto;min-height:0}
     #ui011-inventory .list-card{display:flex;flex-direction:column;overflow:hidden}
     #ui011-inventory .toolbar{padding:12px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--line)}
     #ui011-inventory .search{min-width:180px;flex:1;position:relative}
@@ -74,50 +81,69 @@
     #ui011-inventory .toolbar select{width:120px;padding:0 8px}
     #ui011-inventory .result-count{padding:9px 13px;color:var(--muted);background:var(--surface-2);border-bottom:1px solid var(--line);font-size:10px}
     #ui011-inventory .table-wrap{min-height:0;flex:1;overflow:auto}
-    #ui011-inventory table{width:100%;border-collapse:collapse;table-layout:fixed;min-width:500px}
+    #ui011-inventory table{width:100%;border-collapse:collapse;table-layout:fixed;min-width:680px}
     #ui011-inventory thead{position:sticky;top:0;z-index:2}
     #ui011-inventory th{padding:10px 13px;color:var(--muted);font-size:11px;font-weight:400;text-align:left;background:var(--surface-2);border-bottom:1px solid var(--line)}
     #ui011-inventory td{padding:10px 13px;border-bottom:1px solid var(--line);vertical-align:middle;font-size:13px}
+    #ui011-inventory :is(th,td):nth-child(1){padding-left:24px}
+    #ui011-inventory :is(th,td):nth-child(2){padding-left:20px}
     #ui011-inventory tbody tr{background:var(--surface);cursor:pointer}
     #ui011-inventory tbody tr[aria-selected="true"]{background:var(--accent-soft)}
     #ui011-inventory tbody tr:hover{background:#fbf9ff}
     #ui011-inventory tbody tr:last-child td{border-bottom:0}
-    #ui011-inventory .product-cell{display:grid;grid-template-columns:48px minmax(0,1fr);gap:10px;align-items:center}
+    #ui011-inventory .product-cell{min-width:0}
     #ui011-inventory .product-photo{width:48px;height:48px;display:grid;place-items:center;color:var(--accent);background:linear-gradient(145deg,#f4efff,#e9ddff);border:1px solid #e6dafc;border-radius:10px;overflow:hidden}
     #ui011-inventory .product-photo svg{width:22px;height:22px}#ui011-inventory .product-photo.p2,#ui011-inventory .overview-photo.p2{color:#287b77;background:linear-gradient(145deg,#eaf9f6,#d8f0eb)}#ui011-inventory .product-photo.p3,#ui011-inventory .overview-photo.p3{color:#b26631;background:linear-gradient(145deg,#fff4ea,#f7e3d2)}#ui011-inventory .product-photo.p4,#ui011-inventory .overview-photo.p4{color:#4d69bb;background:linear-gradient(145deg,#edf2ff,#dde6ff)}#ui011-inventory .product-photo.p5,#ui011-inventory .overview-photo.p5{color:#976b24;background:linear-gradient(145deg,#fff9e8,#f3e9c8)}#ui011-inventory .product-photo.p6,#ui011-inventory .overview-photo.p6{color:#a34871;background:linear-gradient(145deg,#fff0f7,#f5ddea)}
-    #ui011-inventory .product-name{font-size:13px;font-weight:600}#ui011-inventory .price-cell{font-size:13px;font-weight:500;font-variant-numeric:tabular-nums}
+    #ui011-inventory .product-name{overflow:hidden;text-overflow:ellipsis;font-size:13px;font-weight:600;white-space:nowrap}#ui011-inventory .price-cell{font-size:13px;font-weight:500;font-variant-numeric:tabular-nums}
+    #ui011-inventory .table-action{padding:5px 8px;color:var(--accent);background:var(--accent-soft);border:1px solid var(--accent-line);border-radius:6px;font-size:10px;white-space:nowrap}
     #ui011-inventory .fresh{display:inline-flex;align-items:center;gap:3px;margin-left:6px;color:var(--blue);font-size:8px;font-weight:500}.fresh:before{content:"";width:5px;height:5px;background:var(--blue);border-radius:50%}
     #ui011-inventory .badge{display:inline-flex;align-items:center;gap:4px;min-height:29px;padding:5px 9px;border-radius:7px;font-size:11px;white-space:nowrap}
-    #ui011-inventory .is-in{color:var(--green);background:var(--green-soft)}#ui011-inventory .is-out{color:var(--red);background:var(--red-soft)}
-    #ui011-inventory .overview-edit-button{min-height:32px;padding:0 10px;display:inline-flex;align-items:center;gap:5px;color:var(--accent);background:var(--accent-soft);border:1px solid var(--accent-line);border-radius:8px;font-size:10px;font-weight:600}
+    #ui011-inventory .is-in{color:var(--green);background:var(--green-soft)}#ui011-inventory .is-out{color:var(--red);background:var(--red-soft)}#ui011-inventory .is-low{color:var(--amber);background:var(--amber-soft)}#ui011-inventory .is-pending{color:var(--muted);background:var(--surface-2)}
     #ui011-inventory .empty{padding:46px 20px;text-align:center;color:var(--muted)}
-    #ui011-inventory .overview{position:relative;padding:15px;overflow:visible}
-    #ui011-inventory .overview-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px}
+    #ui011-inventory .list-footer{min-height:52px;padding:8px 12px 8px 16px;display:flex;align-items:center;gap:10px;border-top:1px solid var(--line);background:var(--surface)}
+    #ui011-inventory .list-page-summary{margin-right:auto;color:var(--muted);font-size:10px;white-space:nowrap}
+    #ui011-inventory .list-sort{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:10px;white-space:nowrap}
+    #ui011-inventory .list-sort select{height:30px;max-width:142px;padding:0 25px 0 8px;color:var(--text);background:var(--surface);border:1px solid var(--line);border-radius:7px;font-size:10px}
+    #ui011-inventory .list-pager{display:flex;align-items:center;gap:5px;color:var(--muted);font-size:10px;font-variant-numeric:tabular-nums;white-space:nowrap}
+    #ui011-inventory .list-pager button{width:28px;height:28px;display:grid;place-items:center;color:var(--muted);background:var(--surface-2);border:1px solid var(--line);border-radius:7px}
+    #ui011-inventory .list-pager button:disabled{cursor:not-allowed;opacity:.58}
+    #ui011-inventory .list-pager svg{width:15px;height:15px}
+    #ui011-inventory .overview{position:relative;padding:12px;overflow-y:auto}
+    #ui011-inventory .overview-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
     #ui011-inventory .overview-title-wrap{display:flex;align-items:center;gap:6px}#ui011-inventory .overview-title{display:flex;align-items:center;gap:7px;font-size:14px;font-weight:600}#ui011-inventory .overview-title svg{color:var(--accent)}
     #ui011-inventory .overview-help{width:19px;height:19px;display:grid;place-items:center;color:var(--muted);background:transparent;border-radius:50%}#ui011-inventory .overview-help svg{width:14px;height:14px}
-    #ui011-inventory .overview-info{position:absolute;z-index:4;left:14px;right:14px;top:51px;padding:10px 11px;color:var(--muted);background:var(--surface);border:1px solid var(--line);border-radius:9px;box-shadow:0 10px 28px rgba(45,35,65,.14);font-size:9px}
-    #ui011-inventory .overview-photo{height:168px;display:grid;place-items:center;color:var(--accent);background:linear-gradient(145deg,#f7f3ff,#e9ddff);border:1px solid #e6dafc;border-radius:11px;overflow:hidden}
+    #ui011-inventory .overview-info{position:absolute;z-index:4;left:14px;right:14px;top:51px;padding:10px 11px;color:var(--muted);background:var(--surface);border:1px solid var(--line);border-radius:9px;box-shadow:0 10px 28px rgba(45,35,65,.14);font-size:11px}
+    #ui011-inventory .overview-photo{width:min(100%,176px);justify-self:center;aspect-ratio:1;display:grid;place-items:center;color:var(--accent);background:linear-gradient(145deg,#f7f3ff,#e9ddff);border:1px solid #e6dafc;border-radius:11px;overflow:hidden}
     #ui011-inventory .overview-photo svg{width:58px;height:58px}
-    #ui011-inventory .overview-identity{padding:13px 0 12px;border-bottom:1px solid var(--line)}
-    #ui011-inventory .overview-identity h2{margin:0 0 7px;font-size:17px;font-weight:600}
-    #ui011-inventory .overview-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:12px}
-    #ui011-inventory .overview-field{padding:9px;background:var(--surface-2);border-radius:8px}.overview-field label{display:block;margin-bottom:4px;color:var(--muted);font-size:9px}.overview-field strong{font-size:12px;font-weight:600}
+    #ui011-inventory .overview-photo img{display:block;width:100%;height:100%;padding:8px;object-fit:contain}
+    #ui011-inventory .overview-identity{padding:10px 0 7px;border-bottom:1px solid var(--line)}
+    #ui011-inventory .overview-identity h2{margin:0 0 6px;font-size:17px;font-weight:600}
+    #ui011-inventory .product-code{margin:0 0 8px;color:var(--muted);font-size:10px;word-break:break-word}
+    #ui011-inventory .overview-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:7px}
+    #ui011-inventory .overview-field{padding:10px;background:var(--surface-2);border-radius:8px}#ui011-inventory .overview-field label{display:block;margin-bottom:5px;color:var(--muted);font-size:11px!important}#ui011-inventory .overview-field strong{font-size:14px!important;font-weight:600}
     #ui011-inventory .overview-field.wide{grid-column:1/-1}
     #ui011-inventory .editable[contenteditable="true"]{padding:3px 5px;margin:-3px -5px;background:#fff;border:1px solid var(--accent-line);border-radius:5px;outline:0}
-    #ui011-inventory .chat-state{margin-top:11px;padding:10px;display:flex;align-items:flex-start;gap:8px;background:var(--green-soft);border-radius:8px}.chat-state svg{flex:0 0 auto;color:var(--green)}.chat-state strong{display:block;font-size:10px}.chat-state p{margin:2px 0 0;color:var(--muted);font-size:8px}
+    #ui011-inventory .chat-state{margin-top:10px;padding:9px;display:flex;align-items:flex-start;gap:8px;background:var(--green-soft);border-radius:8px}.chat-state svg{flex:0 0 auto;color:var(--green)}.chat-state strong{display:block;font-size:10px}.chat-state p{margin:2px 0 0;color:var(--muted);font-size:8px}
     #ui011-inventory .chat-state.out{background:var(--red-soft)}.chat-state.out svg{color:var(--red)}
-    #ui011-inventory .overview-actions{margin-top:11px}#ui011-inventory .overview-actions .button{width:100%;min-height:40px;font-size:12px;font-weight:600}
+    #ui011-inventory .overview-actions{margin:10px 0 16px}#ui011-inventory .overview-actions .button{width:100%;min-height:38px;font-size:12px;font-weight:600}
+    @media(max-height:850px){#ui011-inventory .overview-actions{margin-top:-6px}}
+    #ui011-inventory .overview-description{padding-top:10px;border-top:1px solid var(--line)}
+    #ui011-inventory .overview-description strong{display:block;color:var(--muted);font-size:10px;font-weight:600}
+    #ui011-inventory .overview-description p{display:-webkit-box;overflow:hidden;margin:4px 0 0;color:var(--muted);font-size:11px;line-height:1.5;white-space:pre-line;-webkit-box-orient:vertical;-webkit-line-clamp:4}
     #ui011-inventory .toast{position:absolute;z-index:9;left:50%;bottom:16px;transform:translateX(-50%);width:max-content;max-width:80%;padding:9px 13px;color:#fff;background:#282431;border-radius:9px;font-size:11px;box-shadow:0 8px 24px rgba(0,0,0,.16)}
     #ui011-inventory .spin{animation:ui011-spin .75s linear infinite}@keyframes ui011-spin{to{transform:rotate(360deg)}}
     @media(max-width:940px){
       #ui011-inventory .shell{grid-template-columns:60px minmax(0,1fr)}#ui011-inventory .sidebar{padding-inline:8px}#ui011-inventory .nav-label,#ui011-inventory .nav-item span,#ui011-inventory .connection{display:none}#ui011-inventory .nav-item{justify-content:center;padding:0}#ui011-inventory .workspace{grid-template-columns:minmax(0,1fr) 260px}
     }
     @media(max-width:760px){
-      #ui011-inventory .shell{display:block}#ui011-inventory .sidebar{min-height:0;padding:7px 10px;flex-direction:row;overflow-x:auto;border-right:0;border-bottom:1px solid var(--line)}#ui011-inventory .nav-group{display:contents}#ui011-inventory .nav-group+.nav-group{margin:0}#ui011-inventory .nav-item{width:42px;flex:0 0 42px}#ui011-inventory .main{padding:15px 12px 20px}#ui011-inventory .workspace{height:auto;grid-template-columns:1fr}#ui011-inventory .list-card{height:500px}#ui011-inventory .overview{height:auto}#ui011-inventory .sync-popover{right:0;top:86px}
+      #ui011-inventory .shell{display:block}#ui011-inventory .sidebar{min-height:0;padding:7px 10px;flex-direction:row;overflow-x:auto;border-right:0;border-bottom:1px solid var(--line)}#ui011-inventory .nav-group{display:contents}#ui011-inventory .nav-group+.nav-group{margin:0}#ui011-inventory .nav-item{width:42px;flex:0 0 42px}#ui011-inventory .main{padding:15px 12px 20px}#ui011-inventory .workspace{height:auto;min-height:0;flex:0 0 auto;grid-template-columns:1fr}#ui011-inventory .list-card{height:500px}#ui011-inventory .overview{height:auto}#ui011-inventory .sync-popover{right:0;top:86px}
     }
     @media(max-width:560px){
-      #ui011-inventory .preview-label,#ui011-inventory .version,#ui011-inventory .user{display:none}#ui011-inventory .page-head{flex-direction:column;align-items:flex-start}#ui011-inventory .page-actions{width:100%;justify-content:flex-start}#ui011-inventory .button-connected{flex:1}#ui011-inventory .stats{grid-template-columns:1fr}#ui011-inventory .toolbar{align-items:stretch;flex-direction:column}#ui011-inventory .toolbar select{width:100%}#ui011-inventory .sync-popover{left:0;right:auto;top:125px;width:min(100%,300px)}
+      #ui011-inventory .preview-label,#ui011-inventory .version,#ui011-inventory .user{display:none}#ui011-inventory .page-head{flex-direction:column;align-items:flex-start}#ui011-inventory .page-actions{width:100%;justify-content:flex-start}#ui011-inventory .connection-state{flex:1}#ui011-inventory .stats{grid-template-columns:1fr}#ui011-inventory .toolbar{align-items:stretch;flex-direction:column}#ui011-inventory .toolbar select{width:100%}#ui011-inventory .list-footer{align-items:flex-start;flex-wrap:wrap}.list-page-summary{width:100%;margin-right:0}.list-sort{margin-right:auto}#ui011-inventory .sync-popover{left:0;right:auto;top:125px;width:min(100%,300px)}
     }
+    /* 2.1.6：仅扩展商品概览外卡片，保留卡片内已确认的紧凑结构。 */
+    @media(min-width:941px){#ui011-inventory .workspace{grid-template-columns:minmax(0,1fr) 340px}}
+    @media(min-width:761px) and (max-width:940px){#ui011-inventory .workspace{grid-template-columns:minmax(0,1fr) 300px}}
   </style>
 
   <section class="app">
@@ -135,44 +161,50 @@
 
       <main class="main">
         <div class="page-head">
-          <div><div class="eyebrow">商品与库存</div><h1>商品库存</h1><p class="subtitle">库存状态来自表格，用于聊单选品和订单发货判断。</p></div>
+          <div><div class="eyebrow">商品与库存</div><h1>商品库存 <button class="title-help" id="ui011-page-help" type="button" aria-label="商品库存采集规则"><i data-lucide="circle-help"></i></button></h1></div>
           <div class="page-actions">
-            <button class="button button-connected" id="ui011-connection" type="button"><i data-lucide="sheet"></i><span>库存表已连接</span><span class="help-mini" aria-label="连接详情"><i data-lucide="help-circle"></i></span><span class="change-count" id="ui011-change-count">2项</span></button>
-            <button class="button" id="ui011-open-source" type="button"><i data-lucide="external-link"></i>打开来源库存表</button>
-            <button class="button button-primary" id="ui011-sync" type="button"><i data-lucide="refresh-cw"></i><span>立即同步</span></button>
+            <span class="connection-state" id="ui011-connection"><span class="connection-dot"></span><span id="ui011-connection-label">ShopPlus 商品读取待验证</span><button class="help-mini" id="ui011-connection-help" type="button" aria-label="商品读取状态说明"><i data-lucide="help-circle"></i></button></span>
+            <button class="button" id="ui011-source-library" type="button"><i data-lucide="database"></i>来源资料</button>
+            <button class="button button-primary" id="ui011-product-manager" type="button"><i data-lucide="refresh-cw"></i><span>采集与更新商品</span></button>
           </div>
           <section class="sync-popover" id="ui011-popover" hidden>
-            <div class="popover-head"><span>库存表连接与变化</span><button class="icon-button" id="ui011-close-popover" type="button" aria-label="关闭"><i data-lucide="x"></i></button></div>
-            <div class="popover-meta">KDocs · Sheet1　上次同步 2026-09-20 09:42</div>
-            <ul class="change-list"><li><strong>KY02</strong><span class="change-direction change-danger">有货 <i data-lucide="arrow-right"></i> 无货</span></li><li><strong>AB12</strong><span class="change-direction change-success">无货 <i data-lucide="arrow-right"></i> 有货</span></li></ul>
-            <div class="order-impact"><i data-lucide="triangle-alert"></i> KY02 影响 1 个待确认订单，已加入“需要处理”。</div>
+            <div class="popover-head"><span id="ui011-popover-title">商品读取说明</span><button class="icon-button" id="ui011-close-popover" type="button" aria-label="关闭"><i data-lucide="x"></i></button></div>
+            <div class="popover-meta" id="ui011-popover-meta">尚未读取 ShopPlus 商品。</div>
+            <ul class="change-list" id="ui011-popover-list"></ul>
+            <div class="order-impact" id="ui011-popover-alert" hidden></div>
           </section>
         </div>
 
         <div class="stats" aria-label="库存概况">
-          <button class="stat" type="button" data-filter="all" aria-pressed="true"><span class="stat-label"><span>全部商品</span><i data-lucide="package-open"></i></span><strong id="ui011-total">0</strong><small>当前商品档案</small></button>
-          <button class="stat" type="button" data-filter="in" aria-pressed="false"><span class="stat-label"><span>有货</span><i data-lucide="circle-check"></i></span><strong id="ui011-in">0</strong><small>聊单时可以推荐</small></button>
-          <button class="stat" type="button" data-filter="out" aria-pressed="false"><span class="stat-label"><span>无货</span><i data-lucide="circle-x"></i></span><strong id="ui011-out">0</strong><small>订单暂不能发货</small></button>
+          <button class="stat" type="button" data-filter="all" aria-pressed="true"><span class="stat-label"><span>已采集商品</span><i data-lucide="package-open"></i></span><strong id="ui011-total">0</strong></button>
+          <button class="stat" type="button" data-filter="in" aria-pressed="false"><span class="stat-label"><span>有库存</span><i data-lucide="circle-check"></i></span><strong id="ui011-in">0</strong></button>
+          <button class="stat" type="button" data-filter="review" aria-pressed="false"><span class="stat-label"><span>图片待确认</span><i data-lucide="circle-alert"></i></span><strong id="ui011-out">0</strong></button>
         </div>
 
         <div class="workspace">
           <section class="card list-card" aria-label="商品列表">
-            <div class="toolbar"><label class="search"><span class="sr-only">搜索商品</span><i data-lucide="search"></i><input id="ui011-search" type="search" placeholder="搜索商品名称"></label><select id="ui011-status" aria-label="库存状态"><option value="all">全部状态</option><option value="in">有货</option><option value="out">无货</option></select></div>
+            <div class="toolbar"><label class="search"><span class="sr-only">搜索商品</span><i data-lucide="search"></i><input id="ui011-search" type="search" placeholder="搜索商品名称"></label><select id="ui011-status" aria-label="库存状态"><option value="all">全部状态</option><option value="in">有库存</option><option value="review">图片待确认</option></select></div>
             <div class="result-count" id="ui011-result-count">共 0 个商品</div>
             <div class="table-wrap">
-              <table><colgroup><col style="width:47%"><col style="width:25%"><col style="width:28%"></colgroup><thead><tr><th>商品</th><th>售价</th><th>库存状态</th></tr></thead><tbody id="ui011-rows"></tbody></table>
-              <div class="empty" id="ui011-empty" hidden>没有符合条件的商品。</div>
+              <table><colgroup><col style="width:7%"><col style="width:28%"><col style="width:17%"><col style="width:17%"><col style="width:16%"><col style="width:15%"></colgroup><thead><tr><th>序号</th><th>商品名称</th><th>网站售价（AED）</th><th>网站库存</th><th>上架状态</th><th>操作</th></tr></thead><tbody id="ui011-rows"></tbody></table>
+              <div class="empty" id="ui011-empty" hidden>尚未采集有库存商品。</div>
             </div>
+            <footer class="list-footer" aria-label="商品列表导航与排序">
+              <span class="list-page-summary" id="ui011-page-summary">本轮第 0–0 项 · 共 0 项</span>
+              <label class="list-sort"><span>排序</span><select id="ui011-sort" aria-label="商品排序"><option value="captured">采集顺序</option><option value="price-asc">网站售价：低到高</option><option value="price-desc">网站售价：高到低</option><option value="stock-desc">库存数量：高到低</option></select></label>
+              <nav class="list-pager" aria-label="商品页码"><button id="ui011-page-prev" type="button" disabled aria-label="上一页"><i data-lucide="chevron-left"></i></button><span id="ui011-page-current" aria-live="polite">0 / 0</span><button id="ui011-page-next" type="button" disabled aria-label="下一页"><i data-lucide="chevron-right"></i></button></nav>
+            </footer>
           </section>
 
           <aside class="card overview" aria-label="商品概览">
-            <div class="overview-head"><span class="overview-title-wrap"><span class="overview-title"><i data-lucide="package-search"></i>商品概览</span><button class="overview-help" id="ui011-overview-help" type="button" aria-label="库存说明"><i data-lucide="circle-help"></i></button></span><button class="overview-edit-button" id="ui011-edit" type="button"><i data-lucide="pencil"></i><span>编辑</span></button></div>
-            <div class="overview-info" id="ui011-overview-info" hidden>库存状态来自库存表同步，本页仅显示，暂不支持手动修改。</div>
+            <div class="overview-head"><span class="overview-title-wrap"><span class="overview-title"><i data-lucide="package-search"></i>商品概览</span><button class="overview-help" id="ui011-overview-help" type="button" aria-label="库存说明"><i data-lucide="circle-help"></i></button></span></div>
+            <div class="overview-info" id="ui011-overview-info" hidden>这里仅显示本次有库存的商品试采集结果。成本价和建议售价将来由成本表导入；底价与商品介绍可在产品详情页保存到本机，不会写回网站。</div>
             <div class="overview-photo" id="ui011-overview-photo"><i data-lucide="package"></i></div>
-            <div class="overview-identity"><h2 class="editable" id="ui011-overview-name">—</h2><span class="badge is-in" id="ui011-overview-stock">有货</span></div>
-            <div class="overview-grid"><div class="overview-field"><label>成本价（AED）</label><strong class="editable" id="ui011-cost">—</strong></div><div class="overview-field"><label>建议售价（AED）</label><strong class="editable" id="ui011-suggested">—</strong></div><div class="overview-field"><label>售价（AED）</label><strong class="editable" id="ui011-price">—</strong></div><div class="overview-field"><label>库存</label><strong id="ui011-stock-value">—</strong></div></div>
-            <div class="chat-state" id="ui011-chat-state"><i data-lucide="message-circle-check"></i><div><strong>聊单中可用</strong><p>人工与 AI 选品时可以推荐该商品。</p></div></div>
+            <div class="overview-identity"><h2 id="ui011-overview-name">—</h2><p class="product-code" id="ui011-product-number">商品编号：—</p><span class="badge is-in" id="ui011-overview-stock">有库存</span></div>
+            <div class="overview-grid"><div class="overview-field"><label>成本价（AED）</label><strong id="ui011-cost">—</strong></div><div class="overview-field"><label>建议售价（AED）</label><strong id="ui011-suggested">—</strong></div><div class="overview-field"><label>底价设置（AED）</label><strong id="ui011-floor">—</strong></div><div class="overview-field"><label>库存数量</label><strong id="ui011-stock-value">—</strong></div></div>
+            <div class="chat-state" id="ui011-chat-state"><i data-lucide="circle-check"></i><div><strong id="ui011-review-title">等待商品采集</strong><p id="ui011-review-copy">仅在实际读取成功后显示商品资料。</p></div></div>
             <div class="overview-actions"><button class="button button-primary" id="ui011-full-details" type="button"><i data-lucide="arrow-up-right"></i>进入产品详情页</button></div>
+            <section class="overview-description" aria-label="产品简介"><strong>产品简介</strong><p id="ui011-overview-description">尚未采集产品简介。</p></section>
           </aside>
         </div>
       </main>
@@ -180,7 +212,7 @@
     <div class="toast" id="ui011-toast" role="status" aria-live="polite" hidden></div>
   </section>
 
-  <script>
+  <script type="application/x-liaodan-static-preview">
     (()=>{
       const root=document.getElementById('ui011-inventory'),$=s=>root.querySelector(s),$$=s=>[...root.querySelectorAll(s)];
       const products=[
@@ -206,7 +238,7 @@
       $('#ui011-search').addEventListener('input',renderRows);$('#ui011-status').addEventListener('change',()=>{quickFilter='all';$$('.stat').forEach((b,i)=>b.setAttribute('aria-pressed',String(i===0)));renderRows()});
       $('#ui011-connection').addEventListener('click',()=>{$('#ui011-popover').hidden=!$('#ui011-popover').hidden;$('#ui011-change-count').hidden=false});$('#ui011-close-popover').addEventListener('click',e=>{e.stopPropagation();$('#ui011-popover').hidden=true;$('#ui011-change-count').hidden=true});
       $('#ui011-open-source').addEventListener('click',()=>showToast('演示：正式功能将打开 KDocs 来源库存表'));
-      $('#ui011-sync').addEventListener('click',()=>{const button=$('#ui011-sync'),icon=button.querySelector('svg,i'),label=button.querySelector('span');button.disabled=true;icon.classList.add('spin');label.textContent='正在同步';setTimeout(()=>{button.disabled=false;icon.classList.remove('spin');label.textContent='立即同步';showToast('库存同步完成：5 个有货，3 个无货')},900)});
+      $('#ui011-product-manager').addEventListener('click',()=>showToast('演示：正式功能将在采集与更新商品中读取目录或更新已采集资料'));
       $('#ui011-overview-help').addEventListener('click',()=>{$('#ui011-overview-info').hidden=!$('#ui011-overview-info').hidden});
       $('#ui011-edit').addEventListener('click',()=>{if(!editing){setEditing(true);showToast('已进入人工修改模式，库存状态不可修改');return}const p=selected();p.name=$('#ui011-overview-name').textContent.trim()||p.name;p.cost=Number($('#ui011-cost').textContent)||p.cost;p.suggested=Number($('#ui011-suggested').textContent)||p.suggested;p.price=Number($('#ui011-price').textContent)||p.price;setEditing(false);renderRows();showToast('商品概览已保存')});
       const goDetails=()=>showToast(`演示：进入 ${selected().name} 产品详情页`);$('#ui011-full-details').addEventListener('click',goDetails);$('#ui011-help').addEventListener('click',()=>showToast('库存只读取表格中的“有货 / 无货”状态'));

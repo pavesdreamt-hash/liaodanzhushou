@@ -19,7 +19,7 @@ const data=path.join(temporary,'data');
 const liveFixture=path.join(temporary,'fictional-live.json');
 const settingsFixture=path.join(temporary,'fictional-settings.json');
 await writeFile(liveFixture,JSON.stringify({fictional:true,chatName:'Fictional Translation Customer',allowManualSend:false,accountPhone:'971500000201',targetPhone:'971500000202',messages:[{id:'false_971500000202@c.us_fixture_1',direction:'customer',text:'Can you confirm the fictional address?',sentAt:'2026-09-24T00:00:00.000Z'}]}));
-await writeFile(settingsFixture,JSON.stringify({key:'fictional-composer-translation-key',translationText:'Please confirm the fictional address.',translationChinese:'请确认虚构地址。'}));
+await writeFile(settingsFixture,JSON.stringify({key:'fictional-composer-translation-key',translationText:'Please confirm the fictional address.',translationChinese:'请确认虚构地址。',backTranslationChinese:'请确认虚构地址（回译核对）。'}));
 
 let application;
 try{
@@ -65,39 +65,63 @@ try{
  const savedKey=await translationRequest('key',{provider:initialSettings.data.activeProvider,revision:initialSettings.data.revision});
  assert.equal(savedKey.ok,true,JSON.stringify(savedKey));
  assert.equal(savedKey.data.canceled,false);
- const convert=frame.locator('.cwb-convert');
+ const chineseTab=frame.getByRole('button',{name:'中文输入',exact:true});
+ const englishTab=frame.getByRole('button',{name:'英文翻译',exact:true});
+ const backTranslate=frame.locator('.cwb-back-translate');
  const chinese=frame.getByLabel('中文输入');
- assert.equal(await convert.count(),1);
- assert.equal(await convert.isDisabled(),true);
- const replyLedger=async()=>{
+ assert.equal(await frame.locator('.cwb-composer-tabs > button[data-editor]').count(),2,'仅保留中文输入和英文翻译两个文字入口');
+ assert.equal(await frame.getByRole('button',{name:'转为英文',exact:true}).count(),0,'不得保留第三个“转为英文”动作');
+ assert.equal(await backTranslate.isHidden(),true,'没有英文草稿时不显示回译中文核对');
+ const forwardLedger=async()=>{
   const settings=await translationRequest('settings');
   assert.equal(settings.ok,true,JSON.stringify(settings));
   return settings.data.ledger.filter(entry=>entry.purpose==='translate-intent');
  };
+ const backLedger=async()=>{
+  const settings=await translationRequest('settings');
+  assert.equal(settings.ok,true,JSON.stringify(settings));
+  return settings.data.ledger.filter(entry=>entry.purpose==='translate-draft');
+ };
 
  await application.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().find(window=>window.isVisible())?.setContentSize(1280,820));
  await chinese.fill('请确认虚构地址。');
- assert.equal((await replyLedger()).length,0,'输入本身不得发起翻译');
- assert.equal(await convert.isDisabled(),false);
- await convert.click();
+ assert.equal((await forwardLedger()).length,0,'输入本身不得发起翻译');
+ await englishTab.click();
  const english=frame.getByLabel('英文翻译');
  await waitFor(async()=>await english.inputValue()==='Please confirm the fictional address.');
- assert.deepEqual((await replyLedger()).map(entry=>({purpose:entry.purpose,status:entry.status,simulation:entry.simulation})),[{purpose:'translate-intent',status:'responded',simulation:true}]);
+ assert.deepEqual((await forwardLedger()).map(entry=>({purpose:entry.purpose,status:entry.status,simulation:entry.simulation})),[{purpose:'translate-intent',status:'responded',simulation:true}]);
+ await english.fill('Please carefully confirm the fictional address.');
+ assert.equal(await english.inputValue(),'Please carefully confirm the fictional address.','英文翻译结果必须可在原输入框直接编辑');
+ assert.equal((await forwardLedger()).length,1,'编辑英文不得触发额外正向翻译');
+ await backTranslate.waitFor({state:'visible'});
+ await backTranslate.click();
+ const backPopover=frame.locator('.cwb-back-translation-popover');
+ await backPopover.waitFor({state:'visible'});
+ assert.match(await backPopover.textContent()||'',/原中文/);
+ assert.match(await backPopover.textContent()||'',/请确认虚构地址。/);
+ assert.match(await backPopover.textContent()||'',/请确认虚构地址（回译核对）。/);
+ assert.equal(await english.inputValue(),'Please carefully confirm the fictional address.','回译核对不得改写英文草稿');
+ assert.deepEqual((await backLedger()).map(entry=>({purpose:entry.purpose,status:entry.status,simulation:entry.simulation})),[{purpose:'translate-draft',status:'responded',simulation:true}]);
+ await backTranslate.click();
+ assert.equal(await backPopover.isHidden(),true);
+ await backTranslate.click();
+ await backPopover.waitFor({state:'visible'});
+ assert.equal((await backLedger()).length,1,'相同英文再次查看应使用本地缓存，不重复请求');
  await page.screenshot({path:path.join(output,'composer-translation-1280x820.png')});
 
- await frame.locator('[data-editor="zh"]').click();
+ await chineseTab.click();
  await frame.locator('.cwb-quick').click();
  await frame.getByRole('button',{name:'确认订单',exact:true}).click();
  assert.equal(await chinese.inputValue(),'感谢你的支持，请确认以上订单信息是否正确。');
- assert.equal((await replyLedger()).length,1,'快捷回复填入时不得自动翻译');
- await convert.click();
+ assert.equal((await forwardLedger()).length,1,'快捷回复填入时不得自动翻译');
+ await englishTab.click();
  await waitFor(async()=>await english.inputValue()==='Please confirm the fictional address.');
- assert.equal((await replyLedger()).length,2,'快捷回复必须经同一明确转换动作');
+ assert.equal((await forwardLedger()).length,2,'快捷回复必须经同一英文翻译入口');
  assert.equal(await frame.locator('.cwb-send').isDisabled(),false,'英文草稿仍需通过既有人工发送确认入口');
 
  await application.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().find(window=>window.isVisible())?.setContentSize(820,640));
  await page.waitForTimeout(250);
- assert.equal(await convert.isVisible(),true,'窄窗口中转换操作仍可见');
+ assert.equal(await englishTab.isVisible(),true,'窄窗口中英文翻译入口仍可见');
  await page.screenshot({path:path.join(output,'composer-translation-820x640.png')});
  const fixtureAfter=JSON.parse(await readFile(liveFixture,'utf8'));
  assert.equal(fixtureAfter.messages.length,1,'验收不得向虚构 WhatsApp 发送消息');
@@ -114,10 +138,11 @@ try{
   checks:[
    'final Mac x64 app launched directly',
    'packaged app version and x64 identity',
-   'visible single manual convert button is disabled for empty Chinese input',
-   'fictional Chinese input triggers one simulated manual translation only after explicit click',
-   'editable English draft is shown after translation',
-   'quick reply only fills Chinese until the same explicit convert action',
+   'two textual composer tabs remain: 中文输入 and 英文翻译; no third conversion button',
+   'fictional Chinese input triggers one simulated manual translation only after explicit 英文翻译 click',
+   'translated English is directly editable in the same fixed composer editor',
+   'icon-only English-to-Chinese back check preserves both drafts and reuses its local cache',
+   'quick reply only fills Chinese until the same explicit 英文翻译 action',
    'existing manual send confirmation entry remains available without sending',
    '820x640 and 1280x820 packaged screenshots',
    'no real WhatsApp message or real AI call'

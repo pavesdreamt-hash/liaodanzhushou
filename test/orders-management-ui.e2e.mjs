@@ -24,13 +24,32 @@ test('订单管理使用真实列表，小窗口列不重叠且多商品没有�
   const page=await app.firstWindow();page.setDefaultTimeout(15000);await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].setSize(820,640));const frame=page.frameLocator('iframe.confirmed-frame');
   await frame.locator('aside').getByRole('button',{name:'订单管理',exact:true}).click();
   await frame.locator('#ui040').waitFor();
+  const statusBadges=frame.locator('.ob-order-status');await statusBadges.first().waitFor();assert.equal(await statusBadges.evaluateAll(items=>items.every(item=>!/(unshipped|shipped_pending|outbound_processing)/.test(item.textContent||''))),true,'订单管理状态列不显示英文内部状态');assert.equal(await statusBadges.evaluateAll(items=>items.some(item=>item.textContent==='待发货')&&items.every(item=>getComputedStyle(item).borderRadius!=='0px')),true,'状态列显示中文状态和轻微圆角色标');
+  const draftId=await page.evaluate(async()=>{const result=await window.inventoryApp.orders.createDraft({requestId:'fictional-delete-draft-ui-2412'});if(!result.ok)throw Error(result.error?.message||'无法创建虚构草稿');return result.data.id;});
+  await frame.getByRole('button',{name:'商品库存',exact:true}).click();
+  await frame.getByRole('button',{name:'订单管理',exact:true}).click();
+  await frame.locator('#ui040').waitFor();
+  const draftRow=frame.locator('.ob-rows tr').filter({hasText:'草稿 #'}).first();await draftRow.waitFor();
+  assert.equal(await draftRow.getByRole('button',{name:'删除草稿',exact:true}).count(),1,'只有草稿行显示删除草稿入口');
+  assert.equal(await frame.locator('.ob-rows tr').filter({hasText:'PAGE-1'}).getByRole('button',{name:'删除草稿',exact:true}).count(),0,'正式订单不显示删除草稿入口');
+  await draftRow.getByRole('button',{name:'删除草稿',exact:true}).click();
+  const draftDeleteDialog=frame.locator('dialog.ob-draft-delete-confirm');await draftDeleteDialog.getByRole('heading',{name:'删除订单草稿',exact:true}).waitFor();
+  if(process.env.KDOCS_DRAFT_DELETE_SCREENSHOT){await mkdir(path.dirname(process.env.KDOCS_DRAFT_DELETE_SCREENSHOT),{recursive:true});await page.screenshot({path:process.env.KDOCS_DRAFT_DELETE_SCREENSHOT});}
+  await draftDeleteDialog.getByRole('button',{name:'取消',exact:true}).click();
+  assert.equal(await draftRow.count(),1,'取消删除不改变草稿');
+  await draftRow.getByRole('button',{name:'删除草稿',exact:true}).click();
+  await draftDeleteDialog.getByRole('button',{name:'确认删除草稿',exact:true}).click();
+  await draftRow.waitFor({state:'detached'});
+  assert.equal(await page.evaluate(async id=>{const result=await window.inventoryApp.orders.detail(id);if(!result.ok)throw Error(result.error?.message||'无法读取订单');return result.data;},draftId),null,'确认后草稿才从本机删除');
+  assert.match(await frame.locator('.ob-orders > .ob-feedback').innerText(),/已删除草稿/,'删除结果在订单管理页就近显示');
   assert.equal(await frame.getByRole('button',{name:'新增订单',exact:true}).count(),0);
   assert.equal(await frame.getByRole('button',{name:'同步最新订单',exact:true}).count(),1);
   assert.equal(await frame.getByText('API 已连接',{exact:true}).count(),0);
   await frame.getByRole('button',{name:'同步最新订单',exact:true}).click();
   const syncDialog=frame.getByRole('dialog');await syncDialog.getByRole('heading',{name:'同步 ShopPlus 订单',exact:true}).waitFor();
-  assert.equal(await syncDialog.getByText('尚未配置 ShopPlus API',{exact:true}).count(),1);
-  assert.equal(await syncDialog.getByRole('button',{name:'配置 ShopPlus API',exact:true}).count(),1);
+  assert.equal(await syncDialog.getByText('ShopPlus 尚未在连接与设置配置',{exact:true}).count(),1);
+  assert.equal(await syncDialog.getByRole('button',{name:'配置 ShopPlus API',exact:true}).count(),0);
+  assert.equal(await syncDialog.getByRole('button',{name:'前往连接与设置',exact:true}).count(),1);
   assert.equal(await syncDialog.getByRole('button',{name:'同步最新订单',exact:true}).isDisabled(),true);
   await syncDialog.getByRole('button',{name:'关闭',exact:true}).click();
   assert.equal(await frame.getByText('UI-040',{exact:false}).count(),0);
@@ -75,5 +94,5 @@ test('订单管理使用真实列表，小窗口列不重叠且多商品没有�
   await frame.locator('#chat-workbench-desktop').waitFor();
   assert.equal(await frame.locator('#chat-workbench-desktop').evaluate(element=>element.classList.contains('is-nav-open')),false,'工作台同步采用全站折叠状态');
   assert.equal(await frame.locator('.cwb-version').textContent(),`v${packageInfo.version}`);
- }finally{if(database)database.close();if(app){await Promise.race([app.close().catch(()=>{}),new Promise(resolve=>setTimeout(resolve,3000))]);if(app.process().exitCode===null)app.process().kill('SIGKILL');}await rm(directory,{recursive:true,force:true});}
+ }finally{if(database)database.close();if(app){const process=app.process();await Promise.race([app.close().catch(()=>{}),new Promise(resolve=>setTimeout(resolve,3000))]);if(process.exitCode===null)process.kill('SIGKILL');}await rm(directory,{recursive:true,force:true});}
 });

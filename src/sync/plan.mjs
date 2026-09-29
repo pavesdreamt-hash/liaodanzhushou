@@ -1,5 +1,5 @@
 import {assignSourceKeys} from '../mapping/source-key.mjs';
-import {mappingValues} from '../mapping/mapping.mjs';
+import {mappingValues,parseMappingRows} from '../mapping/mapping.mjs';
 import {parseInventory,historyHeaders} from './history.mjs';
 import {compareBusiness} from './diff.mjs';
 import {INVENTORY_HEADERS,MAPPING_SHEET,INVENTORY_SHEET} from '../config.mjs';
@@ -11,13 +11,21 @@ const equal=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 export function buildSyncPlan({sourceSnapshot,mappingState,inventoryValues,mappingValuesBefore,metadata,now=new Date()}){
   const inventory=parseInventory(inventoryValues),previous=new Map(inventory.rows.map(r=>[r.businessId,{sourceName:r.sourceName,cost:r.latest?.cost||'',suggestedPrice:r.latest?.suggestedPrice||'',stock:r.latest?.stock||'',additionalInfo:r.latest?.additionalInfo||''}]));
   const sourceByKey=new Map(assignSourceKeys(sourceSnapshot.products.filter(r=>coreText(r.sourceName))).map(r=>[r.sourceKey,r]));
-  const inventoryIds=new Set(inventory.rows.map(r=>r.businessId)),mappingIds=new Set(mappingState.rows.filter(r=>r.businessId).map(r=>r.businessId));
+  // A correction to a saved mapping changes the local website-product number
+  // for the same source row.  Carry its existing local inventory row across
+  // to that new number, rather than treating the old number as an orphan and
+  // rejecting the user's explicit correction.
+  const previousMappings=parseMappingRows(mappingValuesBefore||[]),previousMappingByKey=new Map(previousMappings.map(row=>[row.sourceKey,row])),replacements=new Map();
+  for(const row of mappingState.rows){const old=previousMappingByKey.get(row.sourceKey);if(old?.status==='正常'&&old.businessId&&row.businessId&&old.businessId!==row.businessId)replacements.set(old.businessId,row.businessId);}
+  for(const [oldId,newId] of replacements)if(previous.has(newId)&&newId!==oldId)throw new AppError(`更正后的商品编号已存在于库存情况：${newId}`,{stage:'商品映射',code:'MAPPING_REPLACEMENT_CONFLICT'});
+  const oldIdForNewId=new Map([...replacements].map(([oldId,newId])=>[newId,oldId]));
+  const inventoryIds=new Set(inventory.rows.map(row=>replacements.get(row.businessId)||row.businessId)),mappingIds=new Set(mappingState.rows.filter(r=>(r.status==='正常'||r.status==='来源已移除')&&r.businessId).map(r=>r.businessId));
   const orphan=[...inventoryIds].filter(id=>!mappingIds.has(id));if(orphan.length)throw new AppError(`库存情况存在未纳入商品映射的编号：${orphan.slice(0,10).join('、')}`,{stage:'同步计划',code:'ORPHAN_INVENTORY_ROWS'});
   const products=[],detail=[],counts={total:sourceSnapshot.quality.namedProducts,matched:0,pendingNumber:0,ambiguous:0,added:0,removed:0,
     costChanged:0,priceChanged:0,stockChanged:0,additionalInfoChanged:0,nameChanged:0,modified:0};
   for(const row of mappingState.rows){
-    if(row.status==='待编号'){counts.pendingNumber++;continue;}if(row.status==='待确认'){counts.ambiguous++;continue;}if(!row.businessId)continue;
-    const source=sourceByKey.get(row.sourceKey),old=previous.get(row.businessId);let current;
+    if(row.status==='待编号'){counts.pendingNumber++;continue;}if(row.status==='待确认'){counts.ambiguous++;continue;}if(row.status==='本机已忽略'||!row.businessId)continue;
+    const source=sourceByKey.get(row.sourceKey),previousBusinessId=oldIdForNewId.get(row.businessId)||row.businessId,old=previous.get(previousBusinessId);let current;
     // A user may number a mapping after the last inventory baseline and the
     // source may disappear before its first inventory write. Do not create a
     // ghost "added" row whose only value is 来源已移除.
@@ -30,9 +38,10 @@ export function buildSyncPlan({sourceSnapshot,mappingState,inventoryValues,mappi
   }
   const formalChanged=products.some(p=>p.change.changed),newHistoryHeaders=formalChanged?historyHeaders(now,inventory.historyHeaders):[];
   const oldById=new Map(inventory.rows.map(r=>[r.businessId,r.raw])),header=formalChanged?[...INVENTORY_HEADERS,...newHistoryHeaders,...inventory.historyHeaders]:inventory.raw[0]||INVENTORY_HEADERS;
+  const remappedInventory=[inventory.raw[0]||INVENTORY_HEADERS,...inventory.raw.slice(1).map(row=>{const replacement=replacements.get(coreText(row?.[0]));return replacement?[replacement,...row.slice(1)]:row;})];
   const inventoryAfter=formalChanged?[header,...products.map(p=>{
-    const old=oldById.get(p.businessId)||[];return [p.businessId,p.sourceName,p.change.costChange,p.change.priceChange,p.change.stockChange,p.change.additionalInfoChange,
-      p.cost,p.suggestedPrice,p.stock,p.additionalInfo,...old.slice(6)];})]:inventory.raw;
+    const old=oldById.get(oldIdForNewId.get(p.businessId)||p.businessId)||[];return [p.businessId,p.sourceName,p.change.costChange,p.change.priceChange,p.change.stockChange,p.change.additionalInfoChange,
+      p.cost,p.suggestedPrice,p.stock,p.additionalInfo,...old.slice(6)];})]:remappedInventory;
   const mappingAfter=mappingValues(mappingState.rows),mappingChanged=!equal(mappingAfter,(mappingValuesBefore||[]).map(r=>r.map(coreText)));
   const requiresInput=counts.ambiguous>0;
   const fingerprint=stableHash({sheets:metadata.sheets.map(s=>s.properties),inventory:trimMatrix(inventory.raw),mapping:trimMatrix(mappingValuesBefore||[])});

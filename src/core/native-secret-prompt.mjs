@@ -6,7 +6,7 @@ const run=promisify(execFile);
 const allowedLabels=new Set(['DeepSeek','OpenAI / GPT','ShopPlus App Key','ShopPlus API Secret']);
 export function secretPromptScript(label){
   if(!allowedLabels.has(label))throw settingsError('未知服务商');
-  const shopPlus=label.startsWith('ShopPlus '),message=shopPlus?`请输入 ${label}。该内容只保存在本机加密存储中，不会显示在应用页面。`:`请输入 ${label} API 密钥。保存后自动复用，不会显示在网页中。`,title=shopPlus?'ShopPlus 订单同步':'KDocs 助手设置';
+  const shopPlus=label.startsWith('ShopPlus '),message=shopPlus?`请输入 ${label}。该内容只保存在本机加密存储中，不会显示在应用页面。订单同步与商品库存会自动复用这一份配置。`:`请输入 ${label} API 密钥。保存后自动复用，不会显示在网页中。`,title=shopPlus?'聊单助手连接与设置':'KDocs 助手设置';
   return `text returned of (display dialog "${message}" default answer "" with hidden answer buttons {"取消", "保存"} default button "保存" cancel button "取消" with title "${title}")`;
 }
 export async function promptForApiKey(label,{execute=run,platform=process.platform,localPrompt=promptInLocalWindow}={}){

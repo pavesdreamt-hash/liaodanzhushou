@@ -61,5 +61,5 @@ test('聊天窗口只读取进入当前视口的图片，滚动到图片后才�
   await frame.locator('.cwb-conversation').nth(1).click();await frame.locator('.cwb-message-text').filter({hasText:'Second chat'}).waitFor();
   assert.equal(await frame.locator('.cwb-message-image').count(),0,'切换会话后旧图片不能留在新聊天');
   assert.equal(await frame.locator('dialog.cwb-image-lightbox').count(),0);
- }finally{try{application?.process().kill('SIGKILL');}catch{}await rm(directory,{recursive:true,force:true});}
+ }finally{try{if(application)await Promise.race([application.close(),new Promise(resolve=>setTimeout(resolve,4000))]);}catch{}try{application?.process().kill('SIGKILL');}catch{}await new Promise(resolve=>setTimeout(resolve,150));await rm(directory,{recursive:true,force:true});}
 });

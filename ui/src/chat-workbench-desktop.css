@@ -20,6 +20,8 @@
 #chat-workbench-desktop .cwb-hidden-toggle[aria-pressed=true]{background:#e8ddff;color:#5d28d2}
 #chat-workbench-desktop .cwb-hidden-toggle b{min-width:15px;height:15px;padding:0 3px;display:inline-grid;place-items:center;border-radius:999px;background:#7451bd;color:#fff;font-size:9px;line-height:1}
 #chat-workbench-desktop .cwb-hidden-toggle b[hidden]{display:none}
+#chat-workbench-desktop .cwb-filters button[data-filter=all] b{background:#6d4cc8}
+#chat-workbench-desktop .cwb-filters button b[hidden]{display:none}
 #chat-workbench-desktop .cwb-conversation-wrap{position:relative}
 #chat-workbench-desktop .cwb-conversation-meta{display:flex;flex-direction:column;align-items:flex-end;gap:9px}
 #chat-workbench-desktop .cwb-conversation-unread{min-width:18px;height:18px;padding:0 4px;display:inline-flex;align-items:center;justify-content:center;border-radius:999px;color:#fff;background:#ef4444;font-size:10px;line-height:1;font-weight:600}
@@ -234,6 +236,11 @@
 #chat-workbench-desktop .cwb-message-avatar svg{width:15px;height:15px}
 #chat-workbench-desktop .cwb-message-avatar img{display:block;width:100%;height:100%;object-fit:cover}
 #chat-workbench-desktop .cwb-message.incoming .cwb-bubble{max-width:calc(100% - 40px)}
+#chat-workbench-desktop .cwb-message-meta .cwb-message-meta-trail{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+#chat-workbench-desktop .cwb-message-meta .cwb-message-delivery{display:inline-grid;place-items:center;width:14px;height:14px;color:#7c7484}
+#chat-workbench-desktop .cwb-message-meta .cwb-message-delivery svg{width:14px;height:14px}
+#chat-workbench-desktop .cwb-message-meta .cwb-message-delivery.is-read{color:#2788ce}
+#chat-workbench-desktop .cwb-message-meta .cwb-message-delivery.is-failed{color:#d84a4f}
 
 /* D-101: message actions stay beside the bubble and never add vertical message space. */
 #chat-workbench-desktop .cwb-message:focus{outline:0}
@@ -346,14 +353,33 @@
 .cwb-image-lightbox img{display:block;max-width:100%;max-height:100%;object-fit:contain;cursor:zoom-in}
 .cwb-image-lightbox img.is-full-size{max-width:none;max-height:none;cursor:zoom-out}
 
-#chat-workbench-desktop .cwb-report-review-dialog{width:min(760px,calc(100vw - 48px)}
-#chat-workbench-desktop .cwb-report-review-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 14px;margin:14px 0}
-#chat-workbench-desktop .cwb-report-review-fields label{display:grid;gap:5px;color:var(--cwb-muted);font-size:12px}
-#chat-workbench-desktop .cwb-report-review-fields input{width:100%;min-height:36px;padding:0 9px;border:1px solid var(--cwb-line);border-radius:7px;color:var(--cwb-text);background:#fff}
-#chat-workbench-desktop .cwb-report-review-items{margin:0 0 13px;padding:10px;border:1px solid var(--cwb-line);border-radius:8px;background:#faf9fc}
-#chat-workbench-desktop .cwb-report-review-items p{margin:6px 0;color:var(--cwb-text);font-size:12px}
-#chat-workbench-desktop .cwb-report-review-items button{margin-top:4px;color:var(--cwb-accent);font-size:12px}
-@media(max-width:620px){#chat-workbench-desktop .cwb-report-review-fields{grid-template-columns:1fr}}
+/* D-111: the two text tabs remain the primary flow; the compact arrow is only a back-translation check. */
+#chat-workbench-desktop .cwb-composer-tabs>.cwb-back-translate{width:27px;min-width:27px;padding:0;justify-content:center;color:var(--cwb-accent);border:1px solid #d8c8f4;background:var(--cwb-soft)}
+#chat-workbench-desktop .cwb-composer-tabs>.cwb-back-translate[hidden],#chat-workbench-desktop .cwb-back-translation-popover[hidden]{display:none!important}
+#chat-workbench-desktop .cwb-composer-tabs>.cwb-back-translate:disabled{color:#8f879d;border-color:#e3deea;background:#f7f6f9;cursor:not-allowed}
+#chat-workbench-desktop .cwb-composer textarea{overflow-y:auto}
+#chat-workbench-desktop .cwb-back-translation-popover{position:absolute;z-index:6;right:12px;bottom:calc(100% + 7px);width:min(420px,calc(100% - 24px));max-height:190px;padding:10px;display:grid;gap:8px;overflow:auto;color:#514761;background:#fff;border:1px solid #dfd4ef;border-radius:9px;box-shadow:0 10px 28px #33264a24;font-size:11px;line-height:1.5}
+#chat-workbench-desktop .cwb-back-translation-popover section{padding:7px 8px;background:#f8f6fb;border-radius:7px}
+#chat-workbench-desktop .cwb-back-translation-popover small{display:block;color:#746d80;font-size:10px}
+#chat-workbench-desktop .cwb-back-translation-popover p{margin:3px 0 0;white-space:pre-wrap;word-break:break-word}
+
+
+.cwb-report-review-dialog{width:min(880px,calc(100vw - 48px))}
+.cwb-report-review-dialog .cwb-report-review-fields{display:grid;gap:9px;margin:14px 0}
+.cwb-report-review-dialog .cwb-report-review-field{display:grid;grid-template-columns:minmax(148px,190px) minmax(0,1fr);gap:15px;align-items:center;min-height:36px}
+.cwb-report-review-dialog .cwb-report-review-field>span{color:var(--cwb-muted);font-size:13px}
+.cwb-report-review-dialog .cwb-report-review-fields input{box-sizing:border-box;width:100%;min-height:36px;padding:0 9px;border:1px solid var(--cwb-line);border-radius:7px;color:var(--cwb-text);background:#fff}
+.cwb-report-review-dialog .cwb-report-review-fields input[readonly]{color:#514961;background:#f8f7fa;cursor:text}
+.cwb-report-review-dialog .cwb-report-review-field.is-google-address a{display:block;overflow:hidden;color:#5d38b7;text-overflow:ellipsis;white-space:nowrap;font-size:12px;line-height:1.4}
+.cwb-report-review-dialog .cwb-report-review-field.is-google-address a:not([href]){color:var(--cwb-muted);text-decoration:none}
+.cwb-report-review-dialog .cwb-report-review-items{margin:0 0 13px;padding:12px;border:1px solid var(--cwb-line);border-radius:8px;background:#faf9fc}
+.cwb-report-review-dialog .cwb-report-review-table{width:100%;margin-top:9px;border:1px solid #e4deeb;border-radius:6px;overflow:hidden}
+.cwb-report-review-dialog .cwb-report-review-item-row{display:grid;grid-template-columns:minmax(0,1fr) 100px 120px;gap:10px;align-items:center;min-height:33px;padding:0 9px;border-top:1px solid #ece7f2;color:var(--cwb-text);font-size:12px}
+.cwb-report-review-dialog .cwb-report-review-item-row:first-child{border-top:0}
+.cwb-report-review-dialog .cwb-report-review-item-row.is-header{min-height:31px;color:var(--cwb-muted);background:#f3f0f8;font-size:11px;font-weight:600}
+.cwb-report-review-dialog .cwb-report-review-item-row span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cwb-report-review-dialog .cwb-report-review-note{margin:0 0 14px;color:var(--cwb-muted);font-size:12px}
+@media(max-width:620px){.cwb-report-review-dialog .cwb-report-review-field{grid-template-columns:1fr;gap:4px}.cwb-report-review-dialog .cwb-report-review-item-row{grid-template-columns:minmax(0,1fr) 62px 88px!important;gap:6px!important;padding:0 7px!important}}
 
 /* D-087: address actions are limited to editing and an explicit delivery decision. */
 #chat-workbench-desktop .cwb-address-map-open{width:100%;margin:12px 0 0;padding:8px;border:1px solid #ddd4ed;border-radius:7px;color:var(--cwb-accent);background:#faf8ff;font-size:12px}
@@ -395,7 +421,3 @@
 .cwb-order-item-edit-row .cwb-quantity-stepper input::-webkit-inner-spin-button{appearance:none}
 @media(max-width:760px){.cwb-items-editor-dialog{width:calc(100vw - 28px)}.cwb-order-item-column-heads,.cwb-order-item-edit-row{grid-template-columns:repeat(3,minmax(0,1fr))}.cwb-dialog-help-tip{left:auto;right:0;top:calc(100% + 8px);transform:none}}
 .cwb-order-item-column-heads span{font-size:12px!important}
-
-/* D-110: manual text translation stays explicit and visible beside the draft tabs. */
-#chat-workbench-desktop .cwb-composer-tabs>.cwb-convert{color:#fff;border-color:var(--cwb-accent);background:var(--cwb-accent)}
-#chat-workbench-desktop .cwb-composer-tabs>.cwb-convert:disabled{color:#8f879d;border-color:#e3deea;background:#f7f6f9;cursor:not-allowed}

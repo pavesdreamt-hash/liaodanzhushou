@@ -45,7 +45,7 @@ test('库存无货在订单详情和TXT后端校验中阻止发货',async t=>{
 test('真实收益不重复累计多包裹运费且不扣商品账面成本',async t=>{
   const database=await openOrderDatabase({databaseFile:':memory:'});t.after(()=>database.close());
   const clock=()=>new Date('2026-09-20T08:00:00.000Z'),service=new OrderService(new OrderRepository(database),{clock}),created=service.createOrder(input('PROFIT-MULTI',[item('KY02','signed'),item('YB17','refused')])),app=new OrderAppService({database,clock});
-  app.confirmOrder({orderId:created.id});
+  app.confirmOrder({orderId:created.id,note:'虚构订单确认依据'});
   for(const parcel of created.packages)app.confirmPackageFee({packageId:parcel.id,amountAed:'5'});
   app.recordRemittance({orderId:created.id,amountCny:'100',registeredAt:'2026-09-20'});
   app.saveDailyCosts({day:'2026-09-20',adUsd:'10',usdCnyRate:'7',accountCostCny:'20'});
@@ -61,6 +61,18 @@ test('无履约订单进入回收站可恢复和永久删除，有履约记录�
   assert.equal(app.removeOrder({orderId:draft.id}).state,'recycle');assert.equal(app.list({}).length,0);assert.equal(app.list({lifecycle:'removed'})[0].lifecycleState,'recycle');
   app.restoreOrder({orderId:draft.id});assert.equal(app.list({})[0].id,draft.id);
   app.removeOrder({orderId:draft.id});assert.equal(app.permanentlyDeleteOrder({orderId:draft.id,confirmed:true}).deleted,true);assert.equal(app.detail({id:draft.id}),null);
-  const created=new OrderService(new OrderRepository(database)).createOrder(input('VOID-824',[item('KY02')]));app.confirmOrder({orderId:created.id});
+  const created=new OrderService(new OrderRepository(database)).createOrder(input('VOID-824',[item('KY02')]));app.confirmOrder({orderId:created.id,note:'虚构订单确认依据'});
   assert.equal(app.removeOrder({orderId:created.id}).state,'void');assert.throws(()=>app.permanentlyDeleteOrder({orderId:created.id,confirmed:true}),/只有无履约记录/);assert.equal(app.list({lifecycle:'removed'})[0].lifecycleState,'void');
+});
+
+test('仅未确认的手动订单草稿可在确认后直接删除',async t=>{
+  const database=await openOrderDatabase({databaseFile:':memory:'});t.after(()=>database.close());
+  const app=new OrderAppService({database,clock:()=>new Date('2026-09-28T08:00:00.000Z')});
+  const draft=app.drafts.create({requestId:'fictional-delete-draft-2412'});
+  assert.throws(()=>app.deleteDraft({orderId:draft.id}),/请确认删除草稿/);
+  assert.equal(app.deleteDraft({orderId:draft.id,confirmed:true}).deleted,true);
+  assert.equal(app.detail({id:draft.id}),null);
+  const active=new OrderService(new OrderRepository(database)).createOrder(input('ACTIVE-2412',[item('KY02')]));
+  assert.throws(()=>app.deleteDraft({orderId:active.id,confirmed:true}),/只有未确认的手动订单草稿可以删除/);
+  assert.notEqual(app.detail({id:active.id}),null);
 });

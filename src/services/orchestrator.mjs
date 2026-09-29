@@ -1,6 +1,6 @@
 import path from 'node:path';
 import {collectKdocs} from '../source/collector.mjs';
-import {loginKdocs} from '../source/browser.mjs';
+import {kdocsWorkspaceStatus,loginKdocs} from '../source/browser.mjs';
 import {parseMappingRows,reconcileMappings,applyWizardAnswers} from '../mapping/mapping.mjs';
 import {buildSyncPlan,planFileView} from '../sync/plan.mjs';
 import {readWorkbook,ensureHeaders} from '../google/workbook.mjs';
@@ -19,10 +19,10 @@ export class Orchestrator {
   async state(){return await readJSON(this.stateFile,{lastSuccessfulSync:null,lastCheck:null,productCount:0,kdocsLoggedIn:false,latest:null});}
   async loadPending(){if(this.pending)return this.pending;const saved=await readJSON(this.pendingFile,null);if(saved?.source?.capturedAt&&saved?.mappingState?.rows&&saved?.plan?.schemaVersion===1){this.pending={...saved,storage:saved.storage||'google'};this.pendingStorage=this.pending.storage;}return this.pending;}
   mappingSummary(mappingState){return {total:mappingState?.total||0,automatic:mappingState?.automatic||0,needsConfirmation:mappingState?.needsConfirmation||0,pendingNumber:mappingState?.pendingNumber||0,firstRun:Boolean(mappingState?.firstRun)};}
-  async status(){const [state,storedGoogle,pending,local]=await Promise.all([this.state(),this.oauth.status(),this.loadPending(),this.localStore.getView()]),authorizationInvalid=storedGoogle.needsReconnect||state.googleAuthorization?.status==='invalid'||isGoogleAuthorizationError(state.latest?.error),google={...storedGoogle,connected:storedGoogle.connected&&!authorizationInvalid,needsReconnect:Boolean(authorizationInvalid)};return {...state,google,targetUrl:TARGET_SPREADSHEET_URL,busy:this.running,pending:pending?planFileView(pending.plan):null,mapping:pending?this.mappingSummary(pending.mappingState):state.mapping||null,localInventory:{updatedAt:local.updatedAt,latestCapturedAt:local.latestCollection?.capturedAt||null,historyCount:local.retention.historyCount,retention:local.retention}};}
+  async status(){const [state,storedGoogle,pending,local,kdocsLogin]=await Promise.all([this.state(),this.oauth.status(),this.loadPending(),this.localStore.getView(),kdocsWorkspaceStatus()]),authorizationInvalid=storedGoogle.needsReconnect||state.googleAuthorization?.status==='invalid'||isGoogleAuthorizationError(state.latest?.error),google={...storedGoogle,connected:storedGoogle.connected&&!authorizationInvalid,needsReconnect:Boolean(authorizationInvalid)};return {...state,google,kdocsLogin,targetUrl:TARGET_SPREADSHEET_URL,busy:this.running,pending:pending?planFileView(pending.plan):null,mapping:pending?this.mappingSummary(pending.mappingState):state.mapping||null,localInventory:{updatedAt:local.updatedAt,latestCapturedAt:local.latestCollection?.capturedAt||null,historyCount:local.retention.historyCount,retention:local.retention}};}
   async localInventory(){return await this.localStore.getView();}
-  async login(){if(this.running)throw new AppError('已有任务正在运行',{stage:'KDocs登录',code:'BUSY'});this.running=true;try{const result=await loginKdocs(this.paths.profile,'https://www.kdocs.cn/l/ccFsTP9rvhmp',{onProgress:v=>this.progress(v)});
-    const state=await this.state();state.kdocsLoggedIn=true;await writeJSON(this.stateFile,state);return result;}finally{this.running=false;}}
+  async login(){if(this.running)throw new AppError('已有任务正在运行',{stage:'KDocs登录',code:'BUSY'});this.running=true;try{const result=await loginKdocs(this.paths.profile,'https://www.kdocs.cn/l/ccFsTP9rvhmp',{onProgress:v=>this.progress(v)}),state=await this.state();state.kdocsLoggedIn=result.state==='ready';state.kdocsLogin={state:result.state,updatedAt:new Date().toISOString()};await writeJSON(this.stateFile,state);return result;}finally{this.running=false;}}
+  async kdocsLoginStatus(){const result=await kdocsWorkspaceStatus(),state=await this.state();state.kdocsLoggedIn=result.state==='ready';state.kdocsLogin={state:result.state,updatedAt:new Date().toISOString()};await writeJSON(this.stateFile,state);this.progress({stage:'KDocs登录',message:result.state==='ready'?'来源资料登录已确认，可以手动开始同步':result.state==='awaiting_login'?'来源资料窗口仍在等待扫码或账号登录':result.state==='closed'?'来源资料窗口已关闭，可重新打开登录':'尚未打开来源资料登录窗口'});return result;}
   async connectGoogle(){if(this.running)throw new AppError('已有任务正在运行',{stage:'Google授权',code:'BUSY'});this.running=true;try{
     this.progress({stage:'Google授权',message:'正在启动安全授权流程...'});await this.oauth.connect();
     this.progress({stage:'Google测试',message:'正在读取目标Google Sheet元数据...'});const metadata=await this.sheets.metadata(TARGET_SPREADSHEET_ID);
@@ -61,6 +61,32 @@ export class Orchestrator {
       if(mappingState.firstRun||plan.requiresInput){this.progress({stage:'同步计划',message:mappingState.firstRun?'首次映射准备完成，等待一次确认':'发现待编号或待确认商品'});return {action:mappingState.firstRun?'first-confirmation':'mapping-input',warnings:source.snapshot.quality.warnings||[],plan:planFileView(plan),mapping:mappingState};}
       return await this.executePending();
     }catch(error){const state=await this.state(),failedAt=new Date().toISOString();if(error.code==='KDOCS_LOGIN_REQUIRED')state.kdocsLoggedIn=false;if(isGoogleAuthorizationError(error))state.googleAuthorization={status:'invalid',invalidAt:failedAt,code:'GOOGLE_AUTH_EXPIRED'};state.latest={ok:false,error:publicError(error),at:failedAt};await writeJSON(this.stateFile,state);throw error;
+    }finally{this.running=false;}
+  }
+  // This is intentionally separate from the full sync workflow.  It reads the
+  // KDocs source into the encrypted local inventory store and prepares the
+  // existing mapping wizard, but never opens or writes the Google workbook.
+  async syncSourceLocal(){
+    if(this.running)throw new AppError('来源资料同步正在运行，请稍候',{stage:'来源资料同步',code:'BUSY'});
+    this.running=true;this.pending=null;
+    try{
+      const previous=await this.latestSource();
+      this.progress({stage:'KDocs采集',message:'正在读取来源资料到本机资料库...'});
+      const source=await collectKdocs({profile:this.paths.profile,paths:this.paths,previous,onProgress:v=>this.progress(v)});
+      await this.localStore.recordCollection(source.snapshot);
+      const {mappingState,plan}=await this.preparePending(source.snapshot,{useGoogle:false});
+      if(mappingState.firstRun||plan.requiresInput){
+        this.progress({stage:'商品映射',message:mappingState.firstRun?'首次资料映射已准备，等待确认':'发现需要确认的资料映射'});
+        return {action:mappingState.firstRun?'first-confirmation':'mapping-input',warnings:source.snapshot.quality.warnings||[],plan:planFileView(plan),mapping:mappingState,localOnly:true};
+      }
+      const completed=await this.executePending();
+      return {...completed,localOnly:true};
+    }catch(error){
+      const state=await this.state(),failedAt=new Date().toISOString();
+      if(error.code==='KDOCS_LOGIN_REQUIRED')state.kdocsLoggedIn=false;
+      state.latest={ok:false,error:publicError(error),at:failedAt};
+      await writeJSON(this.stateFile,state);
+      throw error;
     }finally{this.running=false;}
   }
   async submitMapping(answers,{confirmFirstSync=false}={}){

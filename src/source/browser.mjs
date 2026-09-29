@@ -20,45 +20,85 @@ export async function browserLaunchOptions(){
   if(await exists(chromiumPath))return {executablePath:chromiumPath,browserName:'Playwright Chromium'};
   throw new AppError('没有找到Google Chrome或应用备用Chromium',{stage:'打开KDocs',code:'BROWSER_NOT_FOUND'});
 }
-export async function closeKdocsWorkspace(){
-  const session=workspaceSession;workspaceSession=null;
-  await session?.context?.close().catch(()=>{});
-}
-export async function openKdocs(profile,url,{readyTimeoutMs=60000,onProgress=()=>{}}={}){
-  if(workspaceSession){onProgress({stage:'KDocs采集',message:'正在将KDocs工作区切换到自动采集模式...'});await closeKdocsWorkspace();}
-  const launch=await browserLaunchOptions();onProgress({stage:'KDocs采集',message:`正在启动${launch.browserName}...`});
-  const context=await chromium.launchPersistentContext(profile,{...launch,...kdocsBrowserContextOptions({capture:true})});
-  await context.addInitScript(installLayoutProbe);
-  const page=context.pages()[0]||await context.newPage();
-  try{
-    await page.goto(url,{waitUntil:'domcontentloaded',timeout:60000});
-    await page.locator('#et_canvas').waitFor({state:'visible',timeout:readyTimeoutMs});await delay(1200);
-    return {context,page,browserName:launch.browserName};
-  }catch(error){await context.close();throw new AppError('KDocs库存表未显示，登录可能失效',{stage:'KDocs采集',code:'KDOCS_LOGIN_REQUIRED',details:error.message});}
-}
-export async function loginKdocs(profile,url,{timeoutMs=10*60_000,onProgress=()=>{}}={}){
-  if(workspaceSession){
-    try{
-      await workspaceSession.page.bringToFront();
-      onProgress({stage:'KDocs工作区',message:'已切换到现有Chrome工作窗口'});
-      await workspaceSession.page.locator('#et_canvas').waitFor({state:'visible',timeout:timeoutMs});
-      return {loggedIn:true,reused:true,keptOpen:true,browserName:workspaceSession.browserName};
+const safeCall=async operation=>{try{return await operation();}catch{return null;}};
+const activePage=context=>{
+  const pages=typeof context?.pages==='function'?context.pages():[];
+  return pages.find(page=>!page?.isClosed?.())||null;
+};
+
+// Login and collection deliberately share the same persistent profile.  The
+// QR page is a valid waiting state, not a failed collection state.
+export function createKdocsWorkspaceManager({launchOptions=browserLaunchOptions,launchPersistentContext=(profile,options)=>chromium.launchPersistentContext(profile,options)}={}){
+  let session=null;
+  const attachPage=(candidate,current)=>{
+    if(!candidate)return;
+    current.page=candidate;
+    candidate.on?.('close',()=>{
+      if(session!==current||current.page!==candidate)return;
+      const replacement=activePage(current.context);
+      if(replacement&&replacement!==candidate){attachPage(replacement,current);return;}
+      current.state='closed';current.reason='浏览器窗口已关闭';
+    });
+    candidate.on?.('crash',()=>{if(session===current&&current.page===candidate){current.state='failed';current.reason='浏览器页面意外退出';}});
+  };
+  const inspect=async()=>{
+    if(!session)return {state:'idle',browserName:null,keptOpen:false};
+    const current=session;
+    if(current.contextClosed||current.page?.isClosed?.()){
+      const replacement=activePage(current.context);
+      if(replacement)attachPage(replacement,current);else{current.state='closed';current.reason=current.reason||'浏览器窗口已关闭';}
     }
-    catch{await closeKdocsWorkspace();}
-  }
-  const launch=await browserLaunchOptions(),context=await chromium.launchPersistentContext(profile,{...launch,...kdocsBrowserContextOptions()});
-  const page=context.pages()[0]||await context.newPage();workspaceSession={context,page,browserName:launch.browserName};
-  context.on('close',()=>{if(workspaceSession?.context===context)workspaceSession=null;});
-  try{
-    await page.goto(url,{waitUntil:'domcontentloaded',timeout:60000});await page.bringToFront();
-    onProgress({stage:'KDocs工作区',message:'已在独立Chrome窗口打开；可自由缩放和编辑，完成登录后窗口会继续保留'});
-    await page.locator('#et_canvas').waitFor({state:'visible',timeout:timeoutMs});await delay(800);
-    return {loggedIn:true,reused:false,keptOpen:true,browserName:launch.browserName};
-  }catch(error){
-    await closeKdocsWorkspace();
-    throw new AppError('在规定时间内没有检测到库存表',{stage:'KDocs登录',code:'KDOCS_LOGIN_TIMEOUT'});
-  }
+    if(current.state==='closed'||current.state==='failed')return {state:current.state,browserName:current.browserName,keptOpen:false,reason:current.reason||null};
+    const ready=Boolean(await safeCall(()=>current.page?.locator?.('#et_canvas').isVisible({timeout:500})));
+    current.state=ready?'ready':'awaiting_login';
+    return {state:current.state,browserName:current.browserName,keptOpen:true,reason:ready?null:'请在已打开的来源资料窗口完成登录或扫码'};
+  };
+  const close=async()=>{
+    const current=session;session=null;
+    await current?.context?.close?.().catch(()=>{});
+  };
+  const login=async(profile,url,{onProgress=()=>{}}={})=>{
+    if(session){
+      const state=await inspect();
+      if(state.state!=='closed'&&state.state!=='failed'){
+        await safeCall(()=>session.page?.bringToFront?.());
+        onProgress({stage:'KDocs登录',message:state.state==='ready'?'来源资料已登录，可以检测后同步':'来源资料登录窗口仍在等待扫码或账号登录'});
+        return {...state,reused:true};
+      }
+      await close();
+    }
+    const launch=await launchOptions(),context=await launchPersistentContext(profile,{...launch,...kdocsBrowserContextOptions()});
+    const page=activePage(context)||await context.newPage();
+    const current={context,page,browserName:launch.browserName,state:'opening',reason:null,contextClosed:false};session=current;
+    context.on?.('page',candidate=>attachPage(candidate,current));
+    context.on?.('close',()=>{if(session===current){current.contextClosed=true;current.state='closed';current.reason='浏览器窗口已关闭';}});
+    attachPage(page,current);
+    try{await page.goto(url,{waitUntil:'commit',timeout:15_000});}
+    catch(error){current.reason='登录页面尚未完全打开，请在来源资料窗口重试或稍候';}
+    await safeCall(()=>current.page?.bringToFront?.());
+    const state=await inspect();
+    onProgress({stage:'KDocs登录',message:state.state==='ready'?'来源资料已登录，可以检测后同步':'已打开受控来源资料窗口，请完成账号登录或二维码扫描；二维码刷新不会关闭窗口'});
+    return {...state,reused:false};
+  };
+  const openForCollection=async(profile,url,{onProgress=()=>{}}={})=>{
+    let state=await inspect();
+    if(state.state==='idle'||state.state==='closed'||state.state==='failed')state=await login(profile,url,{onProgress});
+    if(state.state!=='ready')throw new AppError('请先在已打开的来源资料窗口完成登录，再点击“检测登录状态”。',{stage:'KDocs采集',code:'KDOCS_LOGIN_REQUIRED'});
+    const current=session;onProgress({stage:'KDocs采集',message:'来源资料登录已确认，正在开始只读采集...'});
+    await current.context.addInitScript(installLayoutProbe);
+    // The user may have completed QR login before collection starts, so add the
+    // probe to the already-open document as well as future navigations.
+    await current.page.evaluate(installLayoutProbe);
+    return {context:current.context,page:current.page,browserName:current.browserName};
+  };
+  return {login,status:inspect,close,openForCollection};
 }
+
+const workspace=createKdocsWorkspaceManager();
+export const closeKdocsWorkspace=()=>workspace.close();
+export const kdocsWorkspaceStatus=()=>workspace.status();
+export const loginKdocs=(profile,url,options)=>workspace.login(profile,url,options);
+export const openKdocs=(profile,url,options)=>workspace.openForCollection(profile,url,options);
 export async function goTo(page,address){
   if(!/^[A-Z]{1,3}[1-9]\d{0,5}$/.test(address))throw new Error('单元格地址超出安全范围');
   const box=page.locator('input.edit-box');await box.fill(address);await box.press('Enter');await delay(450);

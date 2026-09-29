@@ -17,7 +17,21 @@ const orphanedProfileBrowsers=async profile=>{const {stdout}=await execFile('/bi
 const messageType=value=>String(value||'chat').toLowerCase();
 const systemMessageType=type=>['notification_template','e2e_notification','revoked'].includes(type);
 const systemMessageText=message=>messageType(message.type)==='revoked'?'此消息已撤回。':messageType(message.type)==='e2e_notification'?'WhatsApp 加密通知。':(message.subtype??message._data?.subtype)==='biz_account_type_changed_to_hosted'?'WhatsApp 商业账号类型已变更。':'WhatsApp 系统通知。';
+// A WhatsApp system notice does not itself need a merchant response. When it is
+// the latest row, inspect only a short recent window to find the last actual
+// customer/merchant message rather than treating the notice as customer text.
+const lastValidInboxDirection=async(chat,latest)=>{
+ const direction=message=>message&&typeof message.fromMe==='boolean'&&!systemMessageType(messageType(message.type))?(message.fromMe?'merchant':'customer'):null;
+ const direct=direction(latest);if(direct)return direct;
+ if(typeof chat?.fetchMessages!=='function')return null;
+ try{const messages=await bounded(chat.fetchMessages({limit:5}),10000);for(const message of [...(messages||[])].sort((a,b)=>Number(b?.timestamp||0)-Number(a?.timestamp||0))){const value=direction(message);if(value)return value;}}catch{/* A transient metadata read failure must not falsely mark a chat as unreplied. */}
+ return null;
+};
 const mediaKind=type=>({image:'image',sticker:'sticker',gif:'gif',video:'video'}[type]||null);
+const deliveryAck=message=>{
+ const value=Number(message?.ack);
+ return message?.fromMe===true&&Number.isInteger(value)&&value>=-1&&value<=4?value:null;
+};
 const mediaKindFor=(message,type=messageType(message?.type))=>mediaKind(type)||(/^image\/(?:png|jpeg|webp|gif)$/i.test(String(message?.mimetype||''))?'image':/^video\/mp4$/i.test(String(message?.mimetype||''))?'video':message?.hasMedia&&['unknown','oversized','album'].includes(type)?'image':null);
 const mediaLabel=type=>({image:'图片',sticker:'贴纸',gif:'GIF 动图',video:'视频',audio:'语音',ptt:'语音',document:'文件',location:'位置',vcard:'联系人',contact:'联系人',ciphertext:'等待 WhatsApp 解密',album:'媒体相册',unknown:'媒体附件',oversized:'超大媒体',product:'商品卡片',order:'订单卡片',reaction:'表情回应'}[type]||'未知类型消息');
 const messageFallback=(type,message)=>{if(type==='ciphertext')return '[等待 WhatsApp 解密的消息]';const label=mediaLabel(type),name=typeof message.filename==='string'&&message.filename.trim()?`：${message.filename.trim().slice(0,160)}`:'';return `[${label}${name}]`;};
@@ -90,7 +104,8 @@ export class WhatsAppWebClient {
    if(!Number.isFinite(stamp)||stamp<=0)continue;
    let preview='',name=typeof chat.name==='string'?chat.name:'',avatarUrl=null;
    if(latest&&systemMessageType(messageType(latest.type)))preview=systemMessageText(latest);else if(latest)preview=typeof latest.body==='string'&&latest.body.trim()?latest.body:latest.type==='image'?'[图片]':latest.type==='ciphertext'?'[等待 WhatsApp 解密的消息]':'[非文字消息]';
-   items.push({phone,chatId:'wa-phone:'+phone,name,avatarUrl,updatedAt:new Date(stamp*1000).toISOString(),preview,direction:latest?.fromMe?'merchant':'customer',unreadCount:Number(chat.unreadCount||0),binding:{accountId:this.accountId,chatId:'wa-phone:'+phone,accountPhone:number(this.accountId),targetPhone:phone,nativeRemote:remote,aliases:[remote,phone+'@c.us']},chat,remote});
+   const lastValidDirection=await lastValidInboxDirection(chat,latest);
+   items.push({phone,chatId:'wa-phone:'+phone,name,avatarUrl,updatedAt:new Date(stamp*1000).toISOString(),preview,direction:lastValidDirection||'unknown',lastValidDirection,unreadCount:Number(chat.unreadCount||0),binding:{accountId:this.accountId,chatId:'wa-phone:'+phone,accountPhone:number(this.accountId),targetPhone:phone,nativeRemote:remote,aliases:[remote,phone+'@c.us']},chat,remote});
   }
   const hidden=new Set(hiddenChatIds);items.sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt));const filtered=items.filter(item=>hidden.has(item.chatId)===hiddenOnly),page=filtered.slice(start,start+size);
   await Promise.all(page.map(async item=>{this.inboxRemotes.set(item.phone,item.remote);try{const contact=await bounded(item.chat.getContact(),8000);item.name=contact.pushname||contact.name||item.name;const photo=typeof contact.getProfilePicUrl==='function'?await bounded(contact.getProfilePicUrl(),8000):null;if(typeof photo==='string'&&/^https:\/\//.test(photo))item.avatarUrl=photo;}catch{/* No profile photo is treated as absent, never substituted with a fictional image. */}}));
@@ -158,7 +173,8 @@ export class WhatsAppWebClient {
   const media=cached?[{...cached}]:kind?[{type:kind,status:'unavailable',source:'attachment',mimetype:typeof message.mimetype==='string'?message.mimetype:null,filename:typeof message.filename==='string'?message.filename:null}]:type!=='chat'&&type!=='ciphertext'?[{type,status:'unavailable',source:'attachment',mimetype:typeof message.mimetype==='string'?message.mimetype:null,filename:typeof message.filename==='string'?message.filename:null}]:[];
   const note=incomplete?(kind?`${mediaLabel(displayType)}正在读取；暂时不能显示时请在 WhatsApp 查看。`:`${mediaLabel(displayType)}内容请在 WhatsApp 查看。`):null;
   const location=type==='location'?{description:locationDescription(message)}:undefined;
-  return {id,accountId:target.accountId,chatId:target.chatId,direction:message.fromMe?'merchant':'customer',sentAt,text,metadata:{source:'whatsapp-wwebjs',timePrecision:'second',messageType:displayType,media,incomplete,note,...(location?{location}:{})}};
+  const ack=deliveryAck(message);
+  return {id,accountId:target.accountId,chatId:target.chatId,direction:message.fromMe?'merchant':'customer',sentAt,text,metadata:{source:'whatsapp-wwebjs',timePrecision:'second',messageType:displayType,media,incomplete,note,...(location?{location}:{}),...(ack===null?{}:{deliveryAck:ack})}};
  }
  handleMessage(message,generation,edited=false){
   if(generation!==this.readyGeneration)return;const target=this.targetFor(message),captureInbox=this.events.listenerCount('inbox-message')>0;
@@ -183,12 +199,35 @@ export class WhatsAppWebClient {
    void (async()=>{const source=job.manual?await this.locateMediaMessage(job.input):{message:job.message,target:job.target};const key=source.target.accountId+':'+serialized(source.message.id),cached=this.mediaCache.get(key);if(cached&&!job.input?.force){this.mediaCache.delete(key);this.mediaCache.set(key,cached);return this.normalize(source.message,source.target);}return this.downloadImage(source.message,source.target,job.generation,{manual:job.manual,emit:!job.manual,trusted:job.trusted});})().then(value=>job.resolve?.(value),failure=>job.reject?.(failure)).finally(()=>{this.mediaActive--;this.drainMedia();});
   }
  }
+ async mediaTarget({accountId,chatId,binding}={}){
+  await this.resolve({accountId,chatId,binding});
+  const pn=number(chatId)+'@c.us',configured=this.targets.find(target=>target.accountId===accountId&&target.chatId===chatId);
+  const aliases=new Set([pn,...(configured?.aliases||[]),...(Array.isArray(binding?.aliases)?binding.aliases:[])]);
+  if(typeof binding?.nativeRemote==='string'&&binding.nativeRemote)aliases.add(binding.nativeRemote);
+  return {accountId,chatId,aliases};
+ }
  async locateMediaMessage(input){
-  const {target,messages}=await this.fetch({...input,limit:1});
-  let message=null;
-  if(typeof this.client.getMessageById==='function')try{message=await bounded(this.client.getMessageById(input.messageId),15000);}catch{/* The single recent row is still usable when direct lookup is unavailable. */}
+  const target=await this.mediaTarget(input);let message=null,directFailure=null,directTried=false;
+  // A historical image must not depend on loading the chat's newest row first:
+  // the maintained client can resolve the recorded native message ID directly.
+  if(typeof this.client.getMessageById==='function'){directTried=true;try{message=await bounded(this.client.getMessageById(input.messageId),15000);}catch(cause){directFailure=cause;}}
+  if(message){
+   if(canonicalMessageId(serialized(message.id))!==canonicalMessageId(input.messageId))throw error('图片标识与所选消息不一致，已停止读取','WHATSAPP_MEDIA_IDENTITY');
+   this.normalize(message,target);
+   if(!(mediaKindFor(message,messageType(message.type))||message.hasMedia))throw error('这条消息没有可读取的图片附件','WHATSAPP_MEDIA_UNAVAILABLE');
+   return {target,message};
+  }
+  let messages=[];
+  try{({messages}=await this.fetch({...input,limit:1}));}catch(cause){
+   if(directFailure)throw error('WhatsApp 未能按消息标识读取这张旧图片，当前会话也暂时无法读取；请待连接稳定后重试。','WHATSAPP_MEDIA_LOOKUP_UNAVAILABLE');
+   throw cause;
+  }
   message??=messages.find(row=>canonicalMessageId(serialized(row.id))===canonicalMessageId(input.messageId));
-  if(!message)throw error('WhatsApp 当前未返回这条图片；可在 WhatsApp 打开该聊天后重试','WHATSAPP_MEDIA_NOT_FOUND');
+  if(!message){
+   if(directFailure)throw error('WhatsApp 未能按消息标识读取这张旧图片；请在 WhatsApp 打开该聊天后重试。','WHATSAPP_MEDIA_LOOKUP_UNAVAILABLE');
+   if(directTried)throw error('WhatsApp 当前未返回这条图片；可在 WhatsApp 打开该聊天后重试','WHATSAPP_MEDIA_NOT_FOUND');
+   throw error('当前 WhatsApp 连接不支持按消息标识读取旧图片；请在 WhatsApp 打开该聊天后重试。','WHATSAPP_MEDIA_LOOKUP_UNAVAILABLE');
+  }
   if(canonicalMessageId(serialized(message.id))!==canonicalMessageId(input.messageId))throw error('图片标识与所选消息不一致，已停止读取','WHATSAPP_MEDIA_IDENTITY');
   this.normalize(message,target);
   if(!(mediaKindFor(message,messageType(message.type))||message.hasMedia))throw error('这条消息没有可读取的图片附件','WHATSAPP_MEDIA_UNAVAILABLE');
@@ -219,6 +258,14 @@ export class WhatsAppWebClient {
   const remote=number(binding.chatId)+'@c.us',chat=await bounded(client.getChatById(remote),10000);
   if(this.closed||this.generation!==generation||this.client!==client||this.state.status!=='online'||!binding.binding.aliases.includes(serialized(chat.id)))throw error('聊天身份或连接已变化，请重新核对');
   return {remote,client,generation};
+ }
+ async markSeen(binding){
+  const {remote,client,generation}=await this.verifyManualTarget(binding);
+  if(typeof client.sendSeen!=='function')throw error('当前 WhatsApp 连接不支持标记已读','WHATSAPP_SEEN_UNAVAILABLE');
+  const seen=await bounded(client.sendSeen(remote),15000);
+  if(seen!==true)throw error('WhatsApp 未确认当前会话已读','WHATSAPP_SEEN_UNCONFIRMED');
+  if(this.closed||generation!==this.generation||this.client!==client||this.state.status!=='online')throw error('连接已变化');
+  return {seen:true};
  }
  async sendVerified(binding,part){
   const {remote,client,generation}=await this.verifyManualTarget(binding);let content=part.text,sendMediaAsDocument=false;

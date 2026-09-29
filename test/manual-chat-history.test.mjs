@@ -9,13 +9,51 @@ import {WhatsAppWebClient} from '../src/orders/whatsapp-web-client.mjs';
 const accountId='wa-phone:971500000001',chatId='wa-phone:971500000002';
 const rows=[1,2,3].map(n=>({id:`true_971500000002@c.us_${n}`,accountId,chatId,direction:n===3?'customer':'merchant',sentAt:`2026-09-01T10:0${n}:00.000Z`,text:`real-read-${n}`,metadata:{messageType:n===2?'image':'chat',media:n===2?[{type:'image',status:'cached',dataUrl:'data:image/png;base64,eA=='}]:[]}}));
 const adapter=(messages)=>({status:()=>({status:'online'}),openInbox:async()=>({accountId,chatId,binding:{}}),resolve:async value=>value,recent:async()=>({messages,hasMore:false})});
-test('verified chat rows survive a browser returning only one message; attachment bytes are not saved',async t=>{
+test('verified chat rows survive a browser returning only one message; previously viewed image bytes remain local',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'verified-chat-history-'));t.after(()=>rm(directory,{recursive:true,force:true}));
  const first=new ManualChat({adapter:adapter(rows),directory});const initial=await first.openInbox({chatId,limit:20});assert.equal(initial.messages.length,3);
  const restarted=new ManualChat({adapter:adapter([rows[2]]),directory});const restored=await restarted.openInbox({chatId,limit:20});assert.deepEqual(restored.messages.map(x=>x.text),['real-read-1','real-read-2','real-read-3']);assert.equal(restored.historyPartial,true);
- const image=restored.messages[1].metadata.media[0];assert.equal(image.dataUrl,undefined);assert.equal(image.status,'unavailable');
+ const image=restored.messages[1].metadata.media[0];assert.equal(image.dataUrl,'data:image/png;base64,eA==');assert.equal(image.status,'cached');
  const old=await restarted.recent({token:restored.token,limit:20,before:rows[2].sentAt});assert.deepEqual(old.messages.map(x=>x.text),['real-read-1','real-read-2']);
  const other=new ManualChat({adapter:{...adapter([]),openInbox:async()=>({accountId,chatId:'wa-phone:971500000003',binding:{}})},directory});assert.deepEqual((await other.openInbox({chatId:'wa-phone:971500000003'})).messages,[]);
+});
+
+test('opening a previously viewed image again uses its local cache and does not ask WhatsApp again',async t=>{
+ const directory=await mkdtemp(path.join(os.tmpdir(),'verified-chat-media-cache-'));t.after(()=>rm(directory,{recursive:true,force:true}));
+ const image={id:'media-1',accountId,chatId,direction:'customer',sentAt:'2026-09-01T10:01:00.000Z',text:'[图片]',metadata:{messageType:'image',media:[{type:'image',status:'unavailable'}]}},dataUrl='data:image/png;base64,eA==';let downloads=0;
+ const live={status:()=>({status:'online'}),resolve:async value=>value,openInbox:async()=>({accountId,chatId,binding:{}}),recent:async()=>({messages:[image],hasMore:false}),retryMedia:async()=>{downloads++;return {...image,metadata:{...image.metadata,media:[{type:'image',status:'cached',dataUrl}]}};}};
+ const first=new ManualChat({adapter:live,directory});const opened=await first.openInbox({chatId});assert.equal(opened.messages[0].metadata.media[0].status,'unavailable');const downloaded=await first.media({token:opened.token,messageId:image.id});assert.equal(downloaded.metadata.media[0].status,'cached');assert.equal(downloads,1);
+ const restarted=new ManualChat({adapter:{...live,retryMedia:async()=>{throw Error('本机缓存命中时不应请求 WhatsApp');}},directory});const again=await restarted.openInbox({chatId});assert.equal(again.messages[0].metadata.media[0].status,'cached');const local=await restarted.media({token:again.token,messageId:image.id});assert.equal(local.metadata.media[0].dataUrl,dataUrl);assert.equal(downloads,1);
+});
+
+test('a failed old-image retry retains its safe failure stage for the next local view',async t=>{
+ const directory=await mkdtemp(path.join(os.tmpdir(),'verified-chat-media-failure-'));t.after(()=>rm(directory,{recursive:true,force:true}));
+ const image={id:'old-media',accountId,chatId,direction:'merchant',sentAt:'2026-08-24T05:11:31.000Z',text:'[图片]',metadata:{messageType:'image',media:[{type:'image',status:'unavailable'}]}};
+ const failure=Object.assign(Error('WhatsApp 未能按消息标识读取这张旧图片；请在 WhatsApp 打开该聊天后重试。'),{code:'WHATSAPP_MEDIA_LOOKUP_UNAVAILABLE'});
+ const live={status:()=>({status:'online'}),resolve:async value=>value,openInbox:async()=>({accountId,chatId,binding:{}}),recent:async()=>({messages:[image],hasMore:false}),retryMedia:async()=>{throw failure;}};
+ const first=new ManualChat({adapter:live,directory}),opened=await first.openInbox({chatId});await assert.rejects(first.media({token:opened.token,messageId:image.id}),/旧图片/);
+ const restarted=new ManualChat({adapter:live,directory}),again=await restarted.openInbox({chatId}),stored=again.messages.find(row=>row.id===image.id);
+ assert.equal(stored.metadata.mediaFailure.code,'WHATSAPP_MEDIA_LOOKUP_UNAVAILABLE');assert.match(stored.metadata.mediaFailure.message,/旧图片/);
+});
+
+test('an image over the original-cache limit saves only the generated thumbnail',async t=>{
+ const directory=await mkdtemp(path.join(os.tmpdir(),'verified-chat-thumbnail-cache-'));t.after(()=>rm(directory,{recursive:true,force:true}));
+ const raw='data:image/png;base64,eHh4',thumbnail='data:image/jpeg;base64,eA==',image={id:'large-media',accountId,chatId,direction:'customer',sentAt:'2026-09-01T10:01:00.000Z',text:'[图片]',metadata:{messageType:'image',media:[{type:'image',status:'unavailable'}]}};let downloads=0,encodes=0;
+ const live={status:()=>({status:'online'}),resolve:async value=>value,openInbox:async()=>({accountId,chatId,binding:{}}),recent:async()=>({messages:[image],hasMore:false}),retryMedia:async()=>{downloads++;return {...image,metadata:{...image.metadata,media:[{type:'image',status:'cached',dataUrl:raw}]}};}};
+ const first=new ManualChat({adapter:live,directory,thumbnailThresholdBytes:2,thumbnailEncoder:async value=>{encodes++;assert.equal(value,raw);return thumbnail;}}),opened=await first.openInbox({chatId}),shown=await first.media({token:opened.token,messageId:image.id});assert.equal(shown.metadata.media[0].dataUrl,thumbnail);assert.equal(shown.metadata.media[0].cacheKind,'thumbnail');assert.equal(encodes,1);assert.equal(downloads,1);
+ const restarted=new ManualChat({adapter:{...live,retryMedia:async()=>{throw Error('缩略图缓存命中时不应重新读取原图');}},directory}),again=await restarted.openInbox({chatId});assert.equal(again.messages[0].metadata.media[0].dataUrl,thumbnail);assert.equal(again.messages[0].metadata.media[0].sourceBytes,3);assert.equal(downloads,1);
+});
+
+test('local image cache clears expired or over-capacity bytes but retains the real message',async t=>{
+ const directory=await mkdtemp(path.join(os.tmpdir(),'verified-chat-media-cleanup-'));t.after(()=>rm(directory,{recursive:true,force:true}));let now=Date.parse('2026-09-01T00:00:00.000Z');const store=new ManualChatHistory(directory,{now:()=>now,maxMediaBytes:2,retentionDays:30}),dataUrl='data:image/png;base64,eA==';
+ const make=id=>({id,accountId,chatId,direction:'customer',sentAt:'2026-09-01T00:00:00.000Z',text:'[图片]',metadata:{messageType:'image',media:[{type:'image',status:'cached',dataUrl}]}});
+ await store.save(accountId,chatId,[make('one'),make('two'),make('three')]);let cached=await store.page(accountId,chatId,{limit:10});assert.equal(cached.messages.filter(row=>row.metadata.media[0].status==='cached').length,2);assert.equal(cached.messages[0].text,'[图片]');
+ now+=31*86400000;store.cleanupMediaCache();cached=await store.page(accountId,chatId,{limit:10});assert.equal(cached.messages.filter(row=>row.metadata.media[0].status==='cached').length,0);assert.ok(cached.messages.every(row=>row.text==='[图片]'&&row.metadata.note.includes('本机图片缓存已清理')));
+});
+
+test('the one-gigabyte policy evicts the least recently viewed cached image first',async t=>{
+ const directory=await mkdtemp(path.join(os.tmpdir(),'verified-chat-media-lru-'));t.after(()=>rm(directory,{recursive:true,force:true}));let now=Date.parse('2026-09-01T00:00:00.000Z');const store=new ManualChatHistory(directory,{now:()=>now,maxMediaBytes:2}),dataUrl='data:image/png;base64,eA==',make=id=>({id,accountId,chatId,direction:'customer',sentAt:'2026-09-01T00:00:00.000Z',text:'[图片]',metadata:{messageType:'image',media:[{type:'image',status:'cached',dataUrl}]}});
+ await store.save(accountId,chatId,[make('one')]);now+=1;await store.save(accountId,chatId,[make('two')]);now+=1;await store.message(accountId,chatId,'one');now+=1;await store.save(accountId,chatId,[make('three')]);const page=await store.page(accountId,chatId,{limit:10}),status=Object.fromEntries(page.messages.map(row=>[row.id,row.metadata.media[0].status]));assert.deepEqual(status,{one:'cached',two:'unavailable',three:'cached'});
 });
 
 test('pagination preserves separate messages sharing the same timestamp',async t=>{const directory=await mkdtemp(path.join(os.tmpdir(),'verified-chat-same-second-'));t.after(()=>rm(directory,{recursive:true,force:true}));const store=new ManualChatHistory(directory),same='2026-09-01T10:00:00.000Z';await store.save(accountId,chatId,['a','b','c'].map(id=>({id,direction:'customer',sentAt:same,text:id,metadata:{media:[]}})));const page=await store.page(accountId,chatId,{limit:1,before:same,beforeId:'c'});assert.deepEqual(page.messages.map(x=>x.id),['b']);assert.equal(page.hasMore,true);});

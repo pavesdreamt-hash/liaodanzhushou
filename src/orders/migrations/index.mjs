@@ -1,5 +1,6 @@
 import {migration024} from './024-assistant-online-sync.mjs';
 import {migration025} from './025-business-dashboard.mjs';
+import {migration026} from './026-order-sync-attention.mjs';
 import {migration023} from './023-assistant-stages.mjs';
 import {migration022} from './022-assistant-policy-history.mjs';
 import {migration021} from './021-assistant-ai-cache.mjs';
@@ -24,5 +25,5 @@ import {migration014} from './014-order-settlement-and-discount-inputs.mjs';
 import {migration015} from './015-package-report-workflow.mjs';
 import {migration016} from './016-order-level-reports.mjs';
 
-export const ORDER_MIGRATIONS=Object.freeze([migration001,migration002,migration003,migration004,migration005,migration006,migration007,migration008,migration009,migration010,migration011,migration012,migration013,migration014,migration015,migration016,migration017,migration018,migration019,migration020,migration021,migration022,migration023,migration024,migration025]);
+export const ORDER_MIGRATIONS=Object.freeze([migration001,migration002,migration003,migration004,migration005,migration006,migration007,migration008,migration009,migration010,migration011,migration012,migration013,migration014,migration015,migration016,migration017,migration018,migration019,migration020,migration021,migration022,migration023,migration024,migration025,migration026]);
 export const CURRENT_ORDER_SCHEMA_VERSION=ORDER_MIGRATIONS.at(-1).version;

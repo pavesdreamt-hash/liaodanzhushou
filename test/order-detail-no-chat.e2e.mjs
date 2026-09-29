@@ -47,5 +47,5 @@ test('订单详情恢复确认稿业务卡，同时保持快捷回复和客户�
     await application.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].setSize(1440,1000));await page.mouse.move(6,6);await page.waitForTimeout(350);await assertCardsSideBySide('1440×1000');await page.screenshot({path:path.join(artifacts,'order-detail-1440x1000.png')});
 
     await frame.getByRole('button',{name:'聊单工作台',exact:true}).click();await frame.locator('#chat-workbench-desktop').waitFor();assert.equal(await frame.locator('.cwb-chat').count(),1,'工作台聊天区不受影响');assert.equal(await frame.locator('.cwb-composer').count(),1,'工作台输入区不受影响');assert.equal(await frame.locator('.cwb-quick').count(),1,'工作台快捷回复入口不受影响');
-  }finally{if(database)database.close();if(application){await Promise.race([application.close().catch(()=>{}),new Promise(resolve=>setTimeout(resolve,3000))]);if(application.process().exitCode===null)application.process().kill('SIGKILL');}await rm(directory,{recursive:true,force:true});}
+  }finally{if(database)database.close();if(application){let process;try{process=application.process();}catch{}await Promise.race([application.close().catch(()=>{}),new Promise(resolve=>setTimeout(resolve,3000))]);try{if(process?.exitCode===null)process.kill('SIGKILL');}catch{}}await rm(directory,{recursive:true,force:true});}
 });

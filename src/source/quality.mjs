@@ -3,6 +3,8 @@ import {columnNumber} from '../../shared/reconstruct.mjs';
 import {SOURCE_RULES,SOURCE_URL,SOURCE_SHEET,CORE_COLUMNS} from '../config.mjs';
 import {AppError} from '../core/errors.mjs';
 const countNames=records=>{const map=new Map();for(const r of records)map.set(coreText(r.sourceName),(map.get(coreText(r.sourceName))||0)+1);return map;};
+const sourceNameGroup=value=>coreText(value).normalize('NFKC').replace(/\s+/g,' ').toLocaleLowerCase('zh-CN');
+const businessSignature=record=>['cost','suggestedPrice','stock','additionalInfo'].map(field=>coreText(record?.[field])).join('\u0000');
 function mergedNames(result){
   const inherited=new Map();for(const merge of result.coverage?.mergeCandidates||[]){
     const match=/^A(\d+):A(\d+)$/.exec(merge.range||'');if(!match)continue;
@@ -17,10 +19,22 @@ export function sourceRecords(result){
         additionalInfo:cleanDisplay(r.cells.G),imageFingerprint,nameInheritedFromMerge:!!merge&&r.row!==merge.anchorRow,mergeRange:merge?.range||'',
         incomplete:!coreText(sourceName)||!coreText(r.cells.D)||!coreText(r.cells.E)||!coreText(r.cells.F)};});
 }
+// Several source rows can describe one named source product (for example, one
+// product with several pictures). Keep those original rows for traceability,
+// but produce one candidate for the current one-to-one mapping stage.
+export function sourceProducts(recordsOrResult){
+  const records=Array.isArray(recordsOrResult)?recordsOrResult:sourceRecords(recordsOrResult),groups=new Map();
+  for(const record of records.filter(record=>coreText(record.sourceName))){const key=sourceNameGroup(record.sourceName);if(!groups.has(key))groups.set(key,[]);groups.get(key).push(record);}
+  return [...groups.values()].map(group=>{
+    const rows=[...group].sort((a,b)=>a.sourceRow-b.sourceRow),first=rows[0],signatures=new Set(rows.map(businessSignature));
+    return {...first,sourceRows:rows.map(row=>({sourceRow:row.sourceRow,sourceName:row.sourceName,cost:row.cost,suggestedPrice:row.suggestedPrice,stock:row.stock,additionalInfo:row.additionalInfo,imageFingerprint:row.imageFingerprint||''})),
+      sourceRowCount:rows.length,imageFingerprints:rows.map(row=>row.imageFingerprint).filter(Boolean),hasConflictingBusinessFields:signatures.size>1};
+  }).sort((a,b)=>a.sourceRow-b.sourceRow);
+}
 export function validateCollection(collection,previous=null,rules=SOURCE_RULES){
   const {manifest,result}=collection||{},failures=[],warnings=[];const fail=(bad,text)=>{if(bad)failures.push(text);};
   if(!manifest||!result?.coverage||!Array.isArray(result.rows))throw new AppError('KDocs采集结构不完整',{stage:'KDocs采集校验',code:'SOURCE_STRUCTURE_INVALID'});
-  const c=result.coverage,header=result.rows.find(r=>r.row===rules.headerRow)?.cells,records=sourceRecords(result),named=records.filter(r=>coreText(r.sourceName));
+  const c=result.coverage,header=result.rows.find(r=>r.row===rules.headerRow)?.cells,records=sourceRecords(result),named=records.filter(r=>coreText(r.sourceName)),products=sourceProducts(records),conflicting=products.filter(product=>product.hasConflictingBusinessFields);
   fail(manifest.sourceUrl!==SOURCE_URL||manifest.sheet!==SOURCE_SHEET,'来源页面或Sheet不正确');
   fail(!header||coreText(header.A)!=='名称'||coreText(header.D).replaceAll(' ','')!=='成本AED'||coreText(header.E).replaceAll(' ','')!=='建议售价AED'||coreText(header.F)!=='库存','A/D/E/F表头或列位置不正确');
   fail(manifest.reachedEnd!==true||manifest.endpointVerified!==true,'没有扫描并独立验证正常末端');
@@ -31,14 +45,15 @@ export function validateCollection(collection,previous=null,rules=SOURCE_RULES){
   fail(c.missing.some(coreAddress),`关键单元格未完整绘制：${c.missing.filter(coreAddress).slice(0,12).join('、')}`);
   fail(c.conflicts.some(x=>coreAddress(x.address)&&new Set(x.variants.map(v=>coreText(v.text))).size>1),'关键单元格出现冲突，可能采集期间来源变化');
   fail(c.clipped.some(coreAddress),'A/D/E/F/G存在文字裁剪风险');fail(c.dropped>0,`Canvas事件溢出：${c.dropped}`);
-  fail(named.length<rules.minimumNamedProducts,`有效来源商品仅${named.length}条，低于首次安全门限${rules.minimumNamedProducts}`);
+  fail(named.length<rules.minimumNamedProducts,`有效来源资料行仅${named.length}条，低于首次安全门限${rules.minimumNamedProducts}`);
+  if(Number.isSafeInteger(rules.expectedRawRows)&&rules.expectedRawRows>0)fail(named.length!==rules.expectedRawRows,`来源表原始资料行异常：应为${rules.expectedRawRows}行，实际${named.length}行`);
+  if(rules.rejectConflictingDuplicateNames)fail(conflicting.length>0,`同名来源资料的核心字段不一致：${conflicting.slice(0,8).map(product=>product.sourceName).join('、')}`);
   for(const field of ['cost','suggestedPrice','stock'])fail(!named.length||named.filter(r=>!coreText(r[field])).length/named.length>rules.maximumEmptyRatio,`${field}大量为空`);
   fail(!named.length||named.filter(r=>/^[-+]?\d/.test(coreText(r.cost))).length/named.length<0.8,'成本列大多不是正常显示数值，可能列错位');
   fail(!named.length||named.filter(r=>['有货','无货'].includes(coreText(r.stock))).length/named.length<0.8,'库存列大多不是有货/无货，可能列错位');
   fail(!Array.isArray(manifest.sampleChecks)||manifest.sampleChecks.length<20||new Set(manifest.sampleChecks.map(x=>x.row)).size<20||manifest.sampleChecks.some(x=>x.passed!==true),'独立复访不足20行或值不一致');
   const duplicateGroups=[...countNames(named)].filter(([,count])=>count>1);
-  if(Array.isArray(manifest.imageChecks))for(const [name,count] of duplicateGroups){const group=named.filter(r=>coreText(r.sourceName)===name);fail(group.some(r=>!r.imageFingerprint),`同名商品缺少图片指纹：${name}`);fail(new Set(group.map(r=>r.imageFingerprint)).size!==count,`同名商品图片指纹不能唯一拆分：${name}`);}
-  else if(duplicateGroups.length)warnings.push('旧采集证据没有图片指纹；仅用于历史回归，不用于本次商品映射重建');
+  if(duplicateGroups.length)warnings.push(`已按名称合并${duplicateGroups.length}组同名来源资料；原始行与图片仍保留在本机快照中`);
   if(previous?.products?.length){
     const old=previous.products.filter(r=>coreText(r.sourceName)),oldCounts=countNames(old),nowCounts=countNames(named);
     const retained=[...oldCounts].reduce((n,[name,count])=>n+Math.min(count,nowCounts.get(name)||0),0);
@@ -48,17 +63,15 @@ export function validateCollection(collection,previous=null,rules=SOURCE_RULES){
       const newlyEmpty=named.filter(r=>!coreText(r[field])).length-old.filter(r=>!coreText(r[field])).length;
       fail(newlyEmpty/old.length>rules.maximumNewEmptyRatio,`${field}较上次大量变空`);
     }
-    const oldDup=[...oldCounts].filter(([,n])=>n>1).length,nowDup=[...nowCounts].filter(([,n])=>n>1).length;
-    fail(nowDup>Math.max(oldDup+5,oldDup*2+1),'重复来源名称组异常增加');
   }
   const unnamed=records.filter(r=>!coreText(r.sourceName));if(unnamed.length)warnings.push(`${unnamed.length}行A列为空但含业务字段，保留诊断但不参与映射`);
-  if(failures.length)throw new AppError(`采集异常：${failures.join('；')}`,{stage:'KDocs采集校验',code:'SOURCE_QUALITY_FAILED',details:{failures,warnings,named:named.length,endpoint:c.endpoint}});
-  return {passed:true,namedProducts:named.length,totalBusinessRows:records.length,endpoint:c.endpoint,empty:{cost:named.filter(r=>!coreText(r.cost)).length,
+  if(failures.length)throw new AppError(`采集异常：${failures.join('；')}`,{stage:'KDocs采集校验',code:'SOURCE_QUALITY_FAILED',details:{failures,warnings,rawNamedRows:named.length,namedProducts:products.length,conflictingNames:conflicting.map(product=>product.sourceName),endpoint:c.endpoint}});
+  return {passed:true,namedProducts:products.length,rawNamedRows:named.length,totalBusinessRows:records.length,mergedDuplicateGroups:duplicateGroups.length,endpoint:c.endpoint,empty:{cost:named.filter(r=>!coreText(r.cost)).length,
     suggestedPrice:named.filter(r=>!coreText(r.suggestedPrice)).length,stock:named.filter(r=>!coreText(r.stock)).length},inStock:named.filter(r=>coreText(r.stock)==='有货').length,
     outOfStock:named.filter(r=>coreText(r.stock)==='无货').length,warnings};
 }
 export function makeSourceSnapshot(collection,quality,{capturedAt=new Date().toISOString()}={}){
-  const products=sourceRecords(collection.result);return {schemaVersion:2,status:'collected',capturedAt,sourceUrl:SOURCE_URL,sheet:SOURCE_SHEET,
+  const products=sourceProducts(collection.result);return {schemaVersion:3,status:'collected',capturedAt,sourceUrl:SOURCE_URL,sheet:SOURCE_SHEET,
     range:`A1:${collection.result.coverage.endpoint}`,products,quality,manifest:{initialEnd:collection.manifest.initialEnd,finalEnd:collection.manifest.finalEnd,
       reachedEnd:collection.manifest.reachedEnd,endpointVerified:collection.manifest.endpointVerified,scrollSteps:collection.manifest.scrollSteps,
       sampleChecks:collection.manifest.sampleChecks,imageChecks:collection.manifest.imageChecks||[]}};

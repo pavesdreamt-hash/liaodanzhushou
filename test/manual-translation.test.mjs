@@ -1,5 +1,5 @@
 import test from 'node:test';import assert from 'node:assert/strict';import {mkdtemp,rm} from 'node:fs/promises';import os from 'node:os';import path from 'node:path';
-import {translateManualReply,generateManualAssistantDraft,recognizeImageText} from '../src/manual-translation.mjs';import {AssistantSettings} from '../src/orders/assistant-settings.mjs';
+import {translateManualReply,backTranslateManualReply,generateManualAssistantDraft,recognizeImageText} from '../src/manual-translation.mjs';import {AssistantSettings} from '../src/orders/assistant-settings.mjs';
 test('manual translation submits only the typed Chinese using the existing translation purpose and preserves emoji counts',async()=>{
  let request;const service={configuration:async()=>({model:'fictional'}),complete:async value=>{request=value;return {text:'Thank you 😊',chinese:'感谢你'};}};
  const result=await translateManualReply(service,{text:'感谢你的支持😊😊🙏',customer:'must not be sent'});
@@ -8,6 +8,15 @@ test('manual translation submits only the typed Chinese using the existing trans
 test('invalid input and incomplete output never become translated drafts',async()=>{
  let calls=0;const service={configuration:async()=>({}),complete:async()=>{calls++;return {text:'',chinese:'中文'};}};
  await assert.rejects(translateManualReply(service,{text:''}),/输入/);await assert.rejects(translateManualReply(service,{text:'x'.repeat(6001)}),/6000/);assert.equal(calls,0);await assert.rejects(translateManualReply(service,{text:'感谢你的支持'}),/不完整/);assert.equal(calls,1);
+});
+test('manual back translation sends only the current English for a non-sending Chinese check',async()=>{
+ let request;const service={configuration:async()=>({model:'fictional'}),complete:async value=>{request=value;return {text:value.input.english,chinese:'请确认虚构地址。'};}};
+ const english='Please confirm the fictional address.';
+ assert.deepEqual(await backTranslateManualReply(service,{text:english,customer:'must not be sent'}),{text:english,chinese:'请确认虚构地址。'});
+ assert.deepEqual(request,{configuration:{model:'fictional'},purpose:'translate-draft',input:{english}});
+ await assert.rejects(backTranslateManualReply(service,{text:''}),/英文/);
+ service.complete=async()=>({text:'Changed English',chinese:'不应接受'});
+ await assert.rejects(backTranslateManualReply(service,{text:english}),/不完整/);
 });
 test('AI reply draft uses only a bounded verified conversation and never sends a message',async()=>{
  let request,calls=0;const service={configuration:async()=>({provider:'fictional',model:'fictional-model',configRevision:3}),complete:async value=>{calls++;request=value;return {text:'Please confirm the fictional delivery address.',chinese:'请确认虚构收货地址。'};}};

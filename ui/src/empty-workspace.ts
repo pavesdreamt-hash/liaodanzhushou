@@ -6,7 +6,7 @@ const titles:Record<Exclude<Page,'workbench'|'order'>,string>={
 };
 
 export function installEmptyWorkspace(doc:Document,page:Page){
-  const root=doc.querySelector<HTMLElement>('#chat-workbench-aligned,#ui008-order-detail')||doc.querySelector<HTMLElement>('.app')!;
+  const root=doc.querySelector<HTMLElement>('#ui008-order-detail')||doc.querySelector<HTMLElement>('.app')!;
   root.dataset.emptyData='true';
   if(page==='workbench')return;
   if(page==='order'){

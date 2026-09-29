@@ -40,3 +40,9 @@ whatsapp-live-auth/
 renderer/
 dist/
 artifacts/
+
+# Legacy root-level generated renderer/preload copies. The packaged application
+# uses src/main.mjs and src/preload.cjs, so these local build by-products must
+# not be treated as source files.
+/app.js
+/preload.cjs
