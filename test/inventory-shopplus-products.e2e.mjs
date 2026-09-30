@@ -19,12 +19,15 @@ test('商品库存页仅在明确操作后读取全部已上架有货目录，�
   const page=await application.firstWindow({timeout:30000});page.setDefaultTimeout(15000);const errors=[];page.on('pageerror',error=>errors.push(error.message));
   await application.evaluate(({ipcMain})=>{
    const smallImage='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9hK3sAAAAASUVORK5CYII=';
-   globalThis.__inventoryPilotCalls=0;globalThis.__inventoryPilotScopes=[];globalThis.__inventoryPilotRefreshCalls=0;globalThis.__inventoryPilotMediaCalls=0;globalThis.__inventoryPilotSourcePricingCalls=0;globalThis.__inventoryPilotReconciliationCalls=0;globalThis.__inventoryPilotMappingCatalogCalls=0;globalThis.__inventoryPilotMappingCatalog=[];globalThis.__inventoryPilotMappingCatalogRun=null;globalThis.__inventoryPilotReconciliation=null;globalThis.__inventoryPilotMediaRun=null;globalThis.__inventoryPilotSourcePricingRun=null;globalThis.__inventoryPilotRefreshRun=null;
+   globalThis.__inventoryPilotCalls=0;globalThis.__inventoryPilotScopes=[];globalThis.__inventoryPilotRefreshCalls=0;globalThis.__inventoryPilotMediaCalls=0;globalThis.__inventoryPilotMediaScopes=[];globalThis.__inventoryPilotSourcePricingCalls=0;globalThis.__inventoryPilotReconciliationCalls=0;globalThis.__inventoryPilotMappingCatalogCalls=0;globalThis.__inventoryPilotMappingCatalog=[];globalThis.__inventoryPilotMappingCatalogRun=null;globalThis.__inventoryPilotReconciliation=null;globalThis.__inventoryPilotMediaRun=null;globalThis.__inventoryPilotSourcePricingRun=null;globalThis.__inventoryPilotRefreshRun=null;
    globalThis.__inventoryPilotProducts=[];globalThis.__inventoryPilotLastTarget=2;
    globalThis.__inventoryPilotStatus={configured:true,productTest:null};
-   const view=()=>({products:globalThis.__inventoryPilotProducts,archivedProducts:[],mappingCatalog:globalThis.__inventoryPilotMappingCatalog,mappingCatalogRun:globalThis.__inventoryPilotMappingCatalogRun,reconciliation:globalThis.__inventoryPilotReconciliation,listingHistory:[{at:'2026-09-26T11:00:00.000Z',remoteProductId:'fictional-stock-small',type:'variant_inventory',afterStockQuantity:20,result:'verified'}],limit:100,defaultTarget:2,imageMaxBytes:500*1024,canCollect:true,lastRun:globalThis.__inventoryPilotProducts.length?{at:'2026-09-25T10:00:00.000Z',target:globalThis.__inventoryPilotLastTarget,captured:globalThis.__inventoryPilotProducts.length,added:2,skippedOutOfStock:1,imageManualReview:globalThis.__inventoryPilotProducts.filter(product=>product.image?.status==='manual_review').length,limit:100}:null,refreshRun:globalThis.__inventoryPilotRefreshRun,mediaRun:globalThis.__inventoryPilotMediaRun,sourcePricingRun:globalThis.__inventoryPilotSourcePricingRun,batch:{status:'ready',captured:globalThis.__inventoryPilotProducts.length}});
+   globalThis.__inventoryPilotDailyPending=[];globalThis.__inventoryPilotDailySyncCalls=0;
+   const view=()=>({products:globalThis.__inventoryPilotProducts,archivedProducts:[],dailyPending:globalThis.__inventoryPilotDailyPending,mappingCatalog:globalThis.__inventoryPilotMappingCatalog,mappingCatalogRun:globalThis.__inventoryPilotMappingCatalogRun,reconciliation:globalThis.__inventoryPilotReconciliation,listingHistory:[{at:'2026-09-26T11:00:00.000Z',remoteProductId:'fictional-stock-small',type:'variant_inventory',afterStockQuantity:20,result:'verified'}],limit:100,defaultTarget:2,imageMaxBytes:500*1024,canCollect:true,lastRun:globalThis.__inventoryPilotProducts.length?{at:'2026-09-25T10:00:00.000Z',target:globalThis.__inventoryPilotLastTarget,captured:globalThis.__inventoryPilotProducts.length,added:2,skippedOutOfStock:1,imageManualReview:globalThis.__inventoryPilotProducts.filter(product=>product.image?.status==='manual_review').length,limit:100}:null,refreshRun:globalThis.__inventoryPilotRefreshRun,mediaRun:globalThis.__inventoryPilotMediaRun,sourcePricingRun:globalThis.__inventoryPilotSourcePricingRun,batch:{status:'ready',captured:globalThis.__inventoryPilotProducts.length}});
    ipcMain.removeHandler('orders:shopplus-product-catalog');
    ipcMain.handle('orders:shopplus-product-catalog',async()=>({ok:true,data:{catalog:view(),status:globalThis.__inventoryPilotStatus}}));
+   ipcMain.removeHandler('inventory:daily-source-sync');
+   ipcMain.handle('inventory:daily-source-sync',async event=>{globalThis.__inventoryPilotDailySyncCalls++;event.sender.send('app:progress',{stage:'来源登录',message:'来源资料登录已确认，正在同步来源资料…'});await new Promise(resolve=>setTimeout(resolve,180));event.sender.send('app:progress',{stage:'一键同步',message:'正在核对已确认商品并更新本机库存状态…'});globalThis.__inventoryPilotDailyPending=[{remoteProductId:'fictional-unlisted',name:'037（虚构下架）',label:'补网站库存',reason:'来源有货，但网站库存为 0；请先人工调整明确的网站变体库存。'}];return {ok:true,data:{outcome:'complete',catalog:view(),status:globalThis.__inventoryPilotStatus,pendingSummary:{replenish:1,publish:0,unpublish:0}}};});
    ipcMain.removeHandler('orders:sync-shopplus-products');
    ipcMain.handle('orders:sync-shopplus-products',async(_event,payload)=>{
     globalThis.__inventoryPilotCalls++;globalThis.__inventoryPilotScopes.push(payload?.scope||null);globalThis.__inventoryPilotLastTarget=payload?.scope==='published-in-stock'?'published-in-stock':payload?.target||2;
@@ -43,8 +46,9 @@ test('商品库存页仅在明确操作后读取全部已上架有货目录，�
     globalThis.__inventoryPilotRefreshCalls++;const first=globalThis.__inventoryPilotProducts[0];first.websitePriceAed=301;first.refresh={status:'refreshed',at:'2026-09-26T10:30:00.000Z'};globalThis.__inventoryPilotRefreshRun={at:'2026-09-26T10:30:00.000Z',received:2,pages:1,totalCount:2,requestedProducts:2,refreshed:2,missing:0};return {ok:true,data:{catalog:view(),status:globalThis.__inventoryPilotStatus,refreshed:true}};
    });
    ipcMain.removeHandler('orders:sync-shopplus-product-media');
-   ipcMain.handle('orders:sync-shopplus-product-media',async()=>{
+   ipcMain.handle('orders:sync-shopplus-product-media',async(_event,payload)=>{
     globalThis.__inventoryPilotMediaCalls++;
+    globalThis.__inventoryPilotMediaScopes.push(payload?.remoteProductIds||null);
     const first=globalThis.__inventoryPilotProducts[0],second=globalThis.__inventoryPilotProducts[1];
     first.images=[first.image,{status:'cached',dataUrl:smallImage,byteLength:400*1024,mimeType:'image/png'},{status:'manual_review',dataUrl:null,byteLength:500*1024,reviewReason:'图片达到或超过 500 KiB，未缓存，待人工确认'}];first.image=first.images[0];first.media={status:'completed',sourceImageCount:3,cachedImageCount:2,manualReviewImageCount:1,unavailableImageCount:0};
     second.images=[second.image];second.media={status:'completed',sourceImageCount:1,cachedImageCount:0,manualReviewImageCount:1,unavailableImageCount:0};
@@ -64,6 +68,25 @@ test('商品库存页仅在明确操作后读取全部已上架有货目录，�
    ipcMain.handle('orders:reconcile-shopplus-source-data',async()=>{globalThis.__inventoryPilotReconciliationCalls++;globalThis.__inventoryPilotReconciliation={status:'pending',at:'2026-09-27T10:00:00.000Z',summary:{mapped:1,changed:1,sourceChanged:1,websiteChanged:1,conflicts:1,sourceMissing:0,websiteMissing:0,newSource:0,removedSource:0,firstBaseline:true},rows:[{remoteProductId:'fictional-stock-small',name:'KY40 黑色（虚构）',source:{costPriceAed:110,suggestedPriceAed:220,sourceStock:'无货'},website:{websitePriceAed:333,stockKnown:true,stockQuantity:0,publishStatus:0,variants:[{id:'fictional-variant-black',stockQuantity:0}]},before:{source:{costPriceAed:100,suggestedPriceAed:200,sourceStock:'有货'},website:{websitePriceAed:300,stockKnown:true,stockQuantity:20,publishStatus:1}},changes:['来源成本发生变化','网站库存数量发生变化','状态不一致：来源无货，但网站仍上架且有库存']} ]};return {ok:true,data:{catalog:view(),status:globalThis.__inventoryPilotStatus,reconciled:true}};});
    ipcMain.removeHandler('orders:apply-shopplus-source-reconciliation');
    ipcMain.handle('orders:apply-shopplus-source-reconciliation',async()=>{globalThis.__inventoryPilotReconciliation={...globalThis.__inventoryPilotReconciliation,status:'applied',appliedAt:'2026-09-27T10:01:00.000Z'};return {ok:true,data:{catalog:view(),status:globalThis.__inventoryPilotStatus,applied:true}};});
+   globalThis.__listingReviewCalls=0;globalThis.__listingReviewVerified=false;globalThis.__listingReviewApplied=false;
+   ipcMain.removeHandler('orders:shopplus-listing-review');
+   ipcMain.handle('orders:shopplus-listing-review',async()=>{globalThis.__listingReviewCalls++;const applied=globalThis.__listingReviewApplied;return {ok:true,data:{review:{at:new Date().toISOString(),stateAt:new Date().toISOString(),suggested:applied?0:1,locked:0,operations:[{remoteProductId:'fictional-stock-small',name:'KY40 黑色（虚构）',sourceStock:'有货',publishStatus:1,targetPublishStatus:1,state:'aligned',reason:'来源有货，网站已上架'},{remoteProductId:'fictional-unlisted',name:'037（虚构下架）',sourceStock:'有货',publishStatus:applied?1:0,targetPublishStatus:1,state:applied?'aligned':'suggested',reason:applied?'来源有货，网站已上架':'来源有货但网站已下架，建议上架'}]}}};});
+   ipcMain.removeHandler('orders:verify-shopplus-listing-review');
+   ipcMain.handle('orders:verify-shopplus-listing-review',async event=>{
+    event.sender.send('app:progress',{stage:'建议中心核对',message:'正在核对 1/1：037（虚构下架）',current:1,total:1});globalThis.__listingReviewVerified=true;
+    return {
+      ok:true,
+      data:{
+        review:{
+          at:new Date().toISOString(),stateAt:new Date().toISOString(),suggested:1,locked:0,
+          operations:[{remoteProductId:'fictional-unlisted',name:'037（虚构下架）',sourceStock:'有货',publishStatus:0,targetPublishStatus:1,state:'suggested',reason:'来源有货但网站已下架，建议上架'}]
+        },
+        results:[{remoteProductId:'fictional-unlisted',ok:true}]
+      }
+    };
+   });
+   ipcMain.removeHandler('orders:apply-shopplus-listing-review');
+   ipcMain.handle('orders:apply-shopplus-listing-review',async(event,payload)=>{globalThis.__listingReviewApplyPayload=payload;event.sender.send('app:progress',{stage:'网站上下架',message:'正在执行 1/1：037（虚构下架）（提交上架）',current:1,total:1});globalThis.__listingReviewApplied=true;event.sender.send('app:progress',{stage:'网站上下架',message:'正在执行 1/1：037（虚构下架）（回读确认）',current:1,total:1});return {ok:true,data:{results:[{remoteProductId:'fictional-unlisted',ok:true}],catalog:view()}};});
    ipcMain.removeHandler('inventory:local');
    ipcMain.handle('inventory:local',async()=>({ok:true,data:{updatedAt:'2026-09-26T10:00:00.000Z',latestCollection:{capturedAt:'2026-09-26T09:55:00.000Z',products:[{sourceName:'KY40 黑色来源资料'},{sourceName:'KY40 白色来源资料'},{sourceName:'尚未编号的虚构来源资料'}]},current:{capturedAt:'2026-09-26T09:55:00.000Z',savedAt:'2026-09-26T10:00:00.000Z',products:[{businessId:'SP-KY40-BLK-000001',sourceName:'KY40 黑色（虚构）',cost:'100',suggestedPrice:'200',stock:'有货'}]}}}));
    globalThis.__sourceLoginState='idle';globalThis.__sourceLoginCalls=0;globalThis.__sourceSyncCalls=0;
@@ -93,29 +116,54 @@ test('商品库存页仅在明确操作后读取全部已上架有货目录，�
   const frame=page.frameLocator('iframe.confirmed-frame');
   await frame.getByRole('button',{name:'商品库存',exact:true}).click();
   await frame.locator('#ui011-inventory').waitFor();
-  const bridgeState=await frame.locator('#ui011-inventory').evaluate(()=>({selfPilot:typeof window.shopPlusProductPilot?.catalog,parentPilot:typeof window.parent?.shopPlusProductPilot?.catalog,selfInventory:typeof window.inventoryApp?.status,parentInventory:typeof window.parent?.inventoryApp?.status}));
-  assert.deepEqual(bridgeState,{selfPilot:'undefined',parentPilot:'function',selfInventory:'undefined',parentInventory:'function'});
-  assert.equal(await frame.locator('#ui011-connection-label').textContent(),'ShopPlus 商品读取待验证');
+  const bridgeState=await frame.locator('#ui011-inventory').evaluate(()=>({selfPilot:typeof window.shopPlusProductPilot?.catalog,parentPilot:typeof window.parent?.shopPlusProductPilot?.catalog,parentReviewVerify:typeof window.parent?.shopPlusProductPilot?.verifyListingReview,selfInventory:typeof window.inventoryApp?.status,parentInventory:typeof window.parent?.inventoryApp?.status}));
+  assert.deepEqual(bridgeState,{selfPilot:'undefined',parentPilot:'function',parentReviewVerify:'undefined',selfInventory:'undefined',parentInventory:'function'});
+  assert.equal(await frame.locator('#ui011-connection-label').textContent(),'ShopPlus 待验证');
+  assert.deepEqual(await frame.locator('#ui011-connection').evaluate(node=>({tag:node.tagName,clickable:node.matches('button'),border:getComputedStyle(node).borderStyle,background:getComputedStyle(node).backgroundColor})),{tag:'SPAN',clickable:false,border:'none',background:'rgba(0, 0, 0, 0)'},'ShopPlus 状态紧随标题且不是按钮式容器');
   await frame.locator('#ui011-page-help').click();
   await frame.locator('#ui011-popover').waitFor({state:'visible'});
-  assert.match(await frame.locator('#ui011-popover').textContent()||'',/网站库存大于等于 2/);
-  assert.match(await frame.locator('#ui011-popover').textContent()||'',/不再有 100 款截断/);
-  assert.match(await frame.locator('#ui011-popover').textContent()||'',/500 KiB/);
+  assert.match(await frame.locator('#ui011-popover').textContent()||'',/网站库存大于 0/);
+  assert.match(await frame.locator('#ui011-popover').textContent()||'',/来源待处理/);
+  assert.match(await frame.locator('#ui011-popover').textContent()||'',/人工处理/);
   await frame.locator('#ui011-close-popover').click();
+  await application.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().find(window=>window.isVisible())?.setContentSize(1280,820));
+  await page.waitForTimeout(180);
   await frame.locator('#ui011-product-manager').click();
-  const manager=frame.locator('dialog.shared-dialog').filter({hasText:'采集与更新商品'});
+  const manager=frame.locator('dialog.product-sync-dialog').filter({hasText:'商品同步与更新'});
   await manager.waitFor({state:'visible'});
+  const dialogLayout=await manager.evaluate(node=>{const rect=node.getBoundingClientRect(),style=getComputedStyle(node),rules=[...document.styleSheets].flatMap(sheet=>{try{return [...sheet.cssRules];}catch{return [];}}).filter(rule=>rule.selectorText&&rule.style.maxWidth&&node.matches(rule.selectorText)).map(rule=>({selector:rule.selectorText,maxWidth:rule.style.maxWidth}));return {width:Math.round(rect.width),viewport:window.innerWidth,computedWidth:style.width,computedMaxWidth:style.maxWidth,inlineWidth:node.style.width,inlineMaxWidth:node.style.maxWidth,rules};});
+  assert.ok(Math.abs(dialogLayout.width-Math.min(880,dialogLayout.viewport-32))<=1,`同步弹窗应实际横向扩大至最多 880px，而不是仍被 760px 基础样式覆盖：${JSON.stringify(dialogLayout)}`);
+  assert.equal(await manager.locator('h2').textContent(),'商品同步与更新');
+  assert.match(await manager.locator('.product-sync-summary').textContent()||'',/当前正常商品库存 0 款 · 待处理 0 项/);
+  assert.deepEqual(await manager.locator('.product-sync-option h3').allTextContents(),['日常同步','首次采集','局部刷新'],'三个动作使用并列卡片，避免长段落和分隔线堆叠');
+  assert.deepEqual(await manager.locator('.product-sync-option > button').allTextContents(),['一键同步','开始采集','刷新资料']);
+  const cardLayout=await manager.locator('.product-sync-option').evaluateAll(cards=>cards.map(card=>{const rect=card.getBoundingClientRect();return {x:Math.round(rect.x),y:Math.round(rect.y),width:Math.round(rect.width)};}));
+  assert.equal(new Set(cardLayout.map(card=>card.y)).size,1,`1280px 宽度下三张同步卡片应并列：${JSON.stringify(cardLayout)}`);
+  assert.ok(cardLayout.every(card=>card.width>=145),`同步卡片应保有可读宽度：${JSON.stringify(cardLayout)}`);
+  if(process.env.KDOCS_PRODUCT_SYNC_DIALOG_SCREENSHOT){await manager.screenshot({path:process.env.KDOCS_PRODUCT_SYNC_DIALOG_SCREENSHOT});}
   assert.equal(await manager.locator('#ui011-manager-refresh').isDisabled(),true,'未采集商品前不能伪造网站资料更新');
-  assert.match(await manager.textContent()||'',/上架／下架请进入“来源资料”/);
+  assert.match(await manager.textContent()||'',/商品详情逐件确认/);
   await manager.locator('#ui011-manager-collect').click();
   await waitFor(async()=>await frame.locator('#ui011-rows tr').count()===2);
   assert.equal(await application.evaluate(()=>globalThis.__inventoryPilotCalls),1,'仅通过明确按钮触发一次虚构商品读取');
   assert.deepEqual(await application.evaluate(()=>globalThis.__inventoryPilotScopes),['published-in-stock']);
   await manager.locator('#ui011-manager-close').click();
-  assert.equal(await frame.locator('#ui011-connection-label').textContent(),'ShopPlus 商品读取已验证');
+  assert.equal(await frame.locator('#ui011-connection-label').textContent(),'ShopPlus 已验证');
+  await frame.locator('#ui011-product-manager').click();
+  await manager.waitFor({state:'visible'});
+  await manager.getByRole('button',{name:'一键同步',exact:true}).click();
+  await waitFor(async()=>await application.evaluate(()=>globalThis.__inventoryPilotDailySyncCalls)===1);
+  assert.equal(await manager.locator('.daily-sync-running').isVisible(),true,'一键同步期间显示等待进度，不要求用户再点登录或检测按钮');
+  await waitFor(async()=>/无需额外重新读取上架商品/.test(await manager.locator('output').textContent()||''));
+  assert.match(await manager.locator('output').textContent()||'',/补网站库存 1、手动上架 0、手动下架 0/,'完成弹窗明确给出待处理分类数量');
+  assert.equal(await frame.locator('#ui011-source-pending').isVisible(),true,'一键同步后在库存首页集中展示人工待处理项');
+  assert.match(await frame.locator('#ui011-source-pending').textContent()||'',/037（虚构下架）.*补网站库存/,'待处理项明确说明人工动作');
+  assert.equal(await frame.locator('#ui011-source-pending button').allTextContents().then(items=>items.join(',')),'补网站库存');
+  await manager.getByRole('button',{name:'关闭',exact:true}).click();
   assert.deepEqual(await frame.locator('#ui011-inventory thead th').allTextContents(),['序号','商品名称','网站售价（AED）','网站库存','上架状态','操作']);
   assert.deepEqual(await frame.locator('#ui011-rows tr').allTextContents(),['1KY40 黑色（虚构）AED 300.00有库存 · 20已上架商品操作','2KY40 白色（虚构）AED 320.00有库存 · 8待同步商品操作']);
-  assert.equal(await frame.locator('#ui011-product-manager').innerText(),'采集与更新商品','顶部入口明确用于全量采集与刷新已有资料');
+  assert.equal(await frame.locator('#ui011-product-manager').innerText(),'商品同步与更新','顶部入口覆盖日常同步、首次采集和局部刷新');
+  assert.equal(await frame.locator('#ui011-source-library').innerText(),'来源同步与核对','来源入口明确包含同步和人工核对');
   assert.equal(await frame.locator('#ui011-rows tr').first().getByRole('button',{name:'商品操作',exact:true}).count(),1,'单商品操作不再与顶部批量入口同名');
   const actionDialog=frame.locator('dialog.shared-dialog').filter({hasText:'商品操作 · KY40 黑色（虚构）'});
   await frame.locator('#ui011-rows tr').first().getByRole('button',{name:'商品操作',exact:true}).click();
@@ -133,7 +181,8 @@ test('商品库存页仅在明确操作后读取全部已上架有货目录，�
   await page.waitForTimeout(180);
   await frame.locator('#ui011-source-library').click();
   await frame.locator('#ui-source-library').waitFor();
-  assert.deepEqual(await frame.locator('#ui-source-library header .actions button').allTextContents(),['← 返回商品库存','查看来源表']);
+  assert.equal(await frame.locator('#ui-source-library h1').textContent(),'来源同步与核对');
+  assert.deepEqual(await frame.locator('#ui-source-library header .actions button').allTextContents(),['← 返回商品库存','查看来源表','一键同步并核对']);
   assert.equal(await frame.locator('#source-workflow li').count(),6,'来源资料页按六步展示顺序与操作');
   assert.equal(await frame.locator('#source-source-snapshot').evaluate(node=>node.open),false,'详细快照卡默认收起');
   assert.equal(await frame.locator('#source-mapping-card').evaluate(node=>node.open),false,'人工对应卡默认收起');
@@ -236,12 +285,13 @@ test('商品库存页仅在明确操作后读取全部已上架有货目录，�
   await frame.locator('#source-login-check').click();
   assert.match(await frame.locator('#source-login-state').textContent()||'',/登录已确认/);
   assert.equal(await frame.locator('#source-sync').isDisabled(),false,'检测确认登录后才解锁同步');
+  assert.equal(await frame.locator('#source-one-click').isDisabled(),false,'来源资料页保留返回商品库存日常同步的入口');
   const syncClick=frame.locator('#source-sync').click();
   await waitFor(async()=>/86\/200 行/.test(await frame.locator('#source-sync-progress').textContent()||''));
   assert.equal(await frame.locator('#source-login').isDisabled(),true,'同步中锁定登录入口，避免改变同步前提');
   assert.equal(await frame.locator('#source-login-check').isDisabled(),true,'同步中锁定登录检测，避免改变同步前提');
   await syncClick;
-  assert.equal(await application.evaluate(()=>globalThis.__sourceSyncCalls),1,'登录确认后仍须用户明确点击才开始来源同步');
+  assert.equal(await application.evaluate(()=>globalThis.__sourceSyncCalls),1,'来源资料页的明确同步只在用户点击后读取来源资料');
   await waitFor(async()=>!(await frame.locator('#source-sync').isDisabled()));
   assert.equal(await frame.locator('#source-source-snapshot').evaluate(node=>node.open),true,'来源同步完成后自动展开来源快照');
   assert.match(await frame.locator('#source-source-snapshot-table').textContent()||'',/当前显示 3 个来源商品；来源表原始资料 3 行（应为 199 行，异常）/,'来源快照表尾应区分筛选后的来源商品数与原始资料行数，并明确提示总行数异常');
@@ -282,13 +332,17 @@ test('商品库存页仅在明确操作后读取全部已上架有货目录，�
   const reconciliationDialog=frame.locator('dialog.shared-dialog').filter({hasText:'确认更新本机平台资料'});await reconciliationDialog.waitFor({state:'visible'});
   await reconciliationDialog.getByRole('button',{name:'确认更新本机资料',exact:true}).click();
   await waitFor(async()=>/已于/.test(await frame.locator('#source-reconciliation').textContent()||''));
+  await frame.locator('#source-review-card > summary').click();
+  assert.match(await frame.locator('#source-review-card').textContent()||'',/不再执行网站上架、下架或库存修改/,'来源资料页明确不提供网站自动写入');
+  assert.equal(await frame.locator('#source-review-apply').count(),0,'来源资料页已移除批量执行入口');
+  assert.deepEqual(await frame.locator('.review-actions > button').allTextContents(),['查看商品库存待处理'],'来源资料页只保留进入人工待处理区的入口');
   await frame.locator('#source-back').click();
   await frame.locator('#ui011-inventory').waitFor();
   assert.equal(await frame.getByText('Must Not Be Collected',{exact:true}).count(),0);
   assert.equal(await frame.getByText('无货',{exact:true}).count(),0);
   assert.equal(await frame.locator('#ui011-overview-photo img').count(),1,'小于 500 KiB 的主图可作为缩略图显示');
   assert.equal(await frame.locator('#ui011-edit').count(),0,'库存概览不提供编辑入口，编辑只在产品详情页进行');
-  assert.equal(await frame.locator('.product-images-button').count(),0,'库存页不提供添加、删除或管理商品图片的入口');
+  assert.equal(await frame.locator('#ui011-image-manager').innerText(),'图片管理','库存页提供独立图片管理入口');
   const preview=await frame.locator('#ui011-overview-photo').evaluate(node=>{const image=node.querySelector('img');if(!image)throw new Error('missing fictional product image');const style=getComputedStyle(image),rect=node.getBoundingClientRect();return {width:rect.width,height:rect.height,objectFit:style.objectFit};});
   assert.ok(Math.abs(preview.width-preview.height)<2,'商品概览预览框保持正方形');
   assert.equal(preview.objectFit,'contain','商品图片完整显示，不裁切填满预览框');
@@ -299,9 +353,9 @@ test('商品库存页仅在明确操作后读取全部已上架有货目录，�
   await frame.getByText('图片待人工确认',{exact:true}).waitFor();
   assert.equal(await frame.locator('#ui011-overview-photo img').count(),0,'达到 500 KiB 的图片不能显示为缓存缩略图');
   assert.match(await frame.locator('#ui011-review-copy').textContent()||'',/500 KiB/);
-  await frame.locator('#ui011-connection-help').click();
-  assert.match(await frame.locator('#ui011-popover').textContent()||'',/已保存 2 款/);
-  assert.match(await frame.locator('#ui011-popover').textContent()||'',/图片待确认/);
+  await frame.locator('#ui011-page-help').click();
+  assert.match(await frame.locator('#ui011-popover').textContent()||'',/商品同步与更新/);
+  assert.match(await frame.locator('#ui011-popover').textContent()||'',/来源同步与核对/);
   await frame.locator('#ui011-close-popover').click();
   await frame.locator('#ui011-rows tr').first().click();
   await frame.locator('#ui011-full-details').click();
@@ -327,7 +381,9 @@ test('商品库存页仅在明确操作后读取全部已上架有货目录，�
   await frame.locator('#u32-collect-media').click();
   await waitFor(async()=>await frame.locator('#ui032 .thumbs .thumb').count()===3);
   assert.equal(await application.evaluate(()=>globalThis.__inventoryPilotMediaCalls),1,'补采只由明确按钮触发一次');
-  assert.equal(await frame.locator('#u32-collect-media').isHidden(),true,'网站图片列表已读取后不再重复显示补采入口');
+  assert.equal(await frame.locator('#u32-collect-media').isVisible(),true,'网站图片列表已读取后仍保留更新入口');
+  assert.equal(await frame.locator('#u32-collect-media span').textContent(),'更新图片','已读取图片后入口明确改为更新图片');
+  assert.equal(await frame.locator('#u32-import-media').isVisible(),true,'商品详情提供从电脑导入图片入口');
   assert.match(await frame.locator('#ui032 .gallery-note').textContent()||'',/网站返回 3 张；已缓存 2 张，1 张待确认/);
   assert.equal(await frame.locator('#ui032 .thumbs .thumb.active').count(),1);
   await frame.locator('#u32-gallery-next').click();
@@ -340,15 +396,35 @@ test('商品库存页仅在明确操作后读取全部已上架有货目录，�
   assert.ok(narrowDetailHero.width>=238&&narrowDetailHero.width<=242&&narrowDetailHero.height>=238&&narrowDetailHero.height<=242,`窄窗口详情主图仍维持 240px 完整显示预览：${JSON.stringify(narrowDetailHero)}`);
   const narrowBreadcrumb=await frame.locator('#ui032 .crumb').evaluate(node=>({clientWidth:node.clientWidth,scrollWidth:node.scrollWidth}));
   assert.ok(narrowBreadcrumb.scrollWidth<=narrowBreadcrumb.clientWidth,`820×640 面包屑返回入口不横向溢出：${JSON.stringify(narrowBreadcrumb)}`);
-  assert.equal(await frame.locator('#u32-availability-status').textContent(),'有库存 · 可人工介绍','聊单可介绍状态收为顶部简洁标签');
+  assert.equal(await frame.locator('#u32-availability-status').textContent(),'来源有货 · 可人工介绍','聊单可介绍状态同时要求来源有货、网站上架和网站库存正常');
   assert.equal(await frame.locator('#u32-availability-status').evaluate(node=>node.classList.contains('is-in')),true);
   assert.equal(await frame.locator('#ui032 .availability').count(),0,'底部重复的聊单状态卡片已移除');
   assert.equal(await frame.locator('.product-images-button').count(),0,'ShopPlus 试采集详情不会混入旧的本机图片库入口');
   await frame.locator('#u32-back').click();
   await frame.locator('#ui011-inventory').waitFor();
+  await frame.locator('#ui011-image-manager').click();
+  const imageManager=frame.locator('dialog.image-manager-dialog');
+  await imageManager.waitFor({state:'visible'});
+  assert.equal(await imageManager.locator('.image-manager-row').count(),2,'图片管理列出当前已采集商品');
+  await imageManager.getByRole('button',{name:'全选待更新',exact:true}).click();
+  await imageManager.getByRole('button',{name:'采集已勾选图片',exact:true}).click();
+  await waitFor(async()=>await application.evaluate(()=>globalThis.__inventoryPilotMediaCalls)===2);
+  assert.deepEqual(await application.evaluate(()=>globalThis.__inventoryPilotMediaScopes.at(-1)),['fictional-stock-small','fictional-stock-large'],'图片管理仅向网站请求用户勾选的商品');
+  await imageManager.getByRole('button',{name:'关闭',exact:true}).click();
+  await application.evaluate(()=>{const product=globalThis.__inventoryPilotProducts.find(item=>item.remoteProductId==='fictional-stock-small');product.sourcePricing={...product.sourcePricing,sourceStock:'无货'};});
+  await frame.locator('#ui011-full-details').click();
+  await frame.locator('#ui032').waitFor();
+  assert.equal(await frame.locator('#u32-availability-status').textContent(),'来源无货 · 待人工下架','来源无货时网站有库存不得再显示为可人工介绍');
+  assert.equal(await frame.locator('#u32-availability-status').evaluate(node=>node.classList.contains('is-pending')),true,'来源无货但网站仍上架使用待处理色调');
+  assert.equal(await frame.locator('#ui032 .stock-badge').textContent(),'网站有库存','库存徽章明确这是网站事实，不冒充来源可售');
+  assert.equal(await frame.locator('#ui032 .stock-badge').evaluate(node=>node.classList.contains('is-pending')),true,'来源无货时网站库存徽章也呈待处理色调');
+  assert.deepEqual(await frame.locator('#ui032 .source-item').allTextContents(),['成本价—商品编号精确匹配','建议售价—商品编号精确匹配','网站库存20 件ShopPlus 只读','来源状态无货来源资料 · 只读','网站上架已上架ShopPlus 回读'],'来源状态、网站库存和网站上架状态仍分开呈现');
+  assert.equal(await frame.locator('#u32-listing').textContent(),'下架网站商品','待人工下架仍保留既有人工确认入口');
+  await frame.locator('#u32-back').click();
+  await frame.locator('#ui011-inventory').waitFor();
   assert.equal(await frame.locator('#ui011-rows tr').count(),2,'返回库存后仍保留同一批虚构试采集记录');
   await frame.locator('#ui011-product-manager').click();
-  const refreshManager=frame.locator('dialog.shared-dialog').filter({hasText:'采集与更新商品'});
+  const refreshManager=frame.locator('dialog.product-sync-dialog').filter({hasText:'商品同步与更新'});
   await refreshManager.locator('#ui011-manager-refresh').click();
   await waitFor(async()=>await application.evaluate(()=>globalThis.__inventoryPilotRefreshCalls)===1);
   assert.match(await refreshManager.locator('output').textContent()||'',/已更新 2 款/,'明确点击后才执行已采集商品资料更新');

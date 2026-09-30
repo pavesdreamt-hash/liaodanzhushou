@@ -43,7 +43,12 @@ export function buildSyncPlan({sourceSnapshot,mappingState,inventoryValues,mappi
     const old=oldById.get(oldIdForNewId.get(p.businessId)||p.businessId)||[];return [p.businessId,p.sourceName,p.change.costChange,p.change.priceChange,p.change.stockChange,p.change.additionalInfoChange,
       p.cost,p.suggestedPrice,p.stock,p.additionalInfo,...old.slice(6)];})]:remappedInventory;
   const mappingAfter=mappingValues(mappingState.rows),mappingChanged=!equal(mappingAfter,(mappingValuesBefore||[]).map(r=>r.map(coreText)));
-  const requiresInput=counts.ambiguous>0;
+  // A source item without a selected website product is just as unresolved as
+  // a system suggestion awaiting confirmation.  Treating only suggestions as
+  // input-required let a local source sync complete while `待编号` rows still
+  // existed.  A later status refresh then rebuilt those rows from the old
+  // mapping, making an explicit picker choice appear not to save.
+  const requiresInput=counts.ambiguous>0||counts.pendingNumber>0;
   const fingerprint=stableHash({sheets:metadata.sheets.map(s=>s.properties),inventory:trimMatrix(inventory.raw),mapping:trimMatrix(mappingValuesBefore||[])});
   return {schemaVersion:1,createdAt:now.toISOString(),sourceSnapshot:sourceSnapshot.capturedAt,counts,formalChanged,mappingChanged,requiresInput,firstSync:inventory.historyHeaders.length===0,
     historyHeaders:newHistoryHeaders,detail,inventoryBefore:inventory.raw,mappingBefore:(mappingValuesBefore||[]).map(r=>r.map(coreText)),inventoryAfter,mappingAfter,fingerprint,

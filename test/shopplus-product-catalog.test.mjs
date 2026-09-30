@@ -8,7 +8,7 @@ import {ShopPlusProductCatalog,SHOPPLUS_PRODUCT_ACTIVE_CATALOG_PAGE_SIZE,SHOPPLU
 const product=({id,title,stock,price=300,publishStatus=1,imageUrl,imageUrls,description=`Fictional description for ${title}`})=>({id,title,spuCode:`SPU-${id}`,publishStatus,productLongDesc:description,productImgDTOs:(imageUrls|| (imageUrl?[imageUrl]:[])).map(imgUrl=>({imgUrl})),productVariantDTOs:[{salePrice:String(price),productVariantInventoryDTO:{availableStockQuantity:stock}}]});
 const headers=values=>({get:key=>values[String(key).toLowerCase()]??null});
 
-test('ShopPlus 商品试采集只保存两款有库存商品，图片严格小于 500 KiB',async()=>{
+test('ShopPlus 商品试采集只保存两款有库存商品，超过 3 MB 的图片不保存原图',async()=>{
   const directory=await mkdtemp(path.join(os.tmpdir(),'shopplus-product-catalog-'));
   let imageReads=0,bigBodyRead=false,requested=[];
   const fetchImpl=async url=>{
@@ -32,9 +32,9 @@ test('ShopPlus 商品试采集只保存两款有库存商品，图片严格小�
     assert.match(first.products[0].image.dataUrl,/^data:image\/jpeg;base64,/);
     assert.equal(first.products[1].image.status,'manual_review');
     assert.equal(first.products[1].image.byteLength,SHOPPLUS_PRODUCT_IMAGE_MAX_BYTES);
-    assert.match(first.products[1].image.reviewReason,/500 KiB/);
+    assert.match(first.products[1].image.reviewReason,/3 MB/);
     assert.equal(bigBodyRead,false,'Content-Length 达到上限时不得读取图片正文');
-    assert.equal((await readdir(path.join(directory,'media'))).length,1,'仅缓存小于 500 KiB 的一张图片');
+    assert.equal((await readdir(path.join(directory,'media'))).length,1,'仅缓存小于 3 MB 的一张图片');
     assert.equal(imageReads,2);
     await catalog.update({remoteProductId:'fictional-small',name:'Fictional Small Edited',floorPrice:'180',description:'Local fictional description'});
     const second=await catalog.collect({listPage});
@@ -200,7 +200,7 @@ test('ShopPlus 格式化介绍保留原始资料，并以可阅读的段落和�
   }finally{await rm(directory,{recursive:true,force:true});}
 });
 
-test('没有 Content-Length 的图片达到 500 KiB 时中止读取且不落盘',async()=>{
+test('没有 Content-Length 的图片达到 3 MB 时中止读取且不落盘',async()=>{
   const directory=await mkdtemp(path.join(os.tmpdir(),'shopplus-product-stream-limit-'));
   try{
     const catalog=new ShopPlusProductCatalog({directory,fetchImpl:async()=>new Response(Buffer.alloc(SHOPPLUS_PRODUCT_IMAGE_MAX_BYTES),{status:200,headers:{'content-type':'image/png'}}),now:()=>new Date('2026-09-25T12:00:00.000Z')});
@@ -211,7 +211,7 @@ test('没有 Content-Length 的图片达到 500 KiB 时中止读取且不落盘'
   }finally{await rm(directory,{recursive:true,force:true});}
 });
 
-test('补采图片只读取已保存的两款商品，保留主图并逐张执行 500 KiB 限制',async()=>{
+test('补采图片只读取已保存的两款商品，保留主图并逐张执行 3 MB 限制',async()=>{
   const directory=await mkdtemp(path.join(os.tmpdir(),'shopplus-product-media-'));
   const main='https://images.example.invalid/main.jpg',second='https://images.example.invalid/second.jpg',oversize='https://images.example.invalid/oversize.jpg';let reads=0,requests=[];
   const fetchImpl=async url=>{
@@ -240,7 +240,7 @@ test('补采图片只读取已保存的两款商品，保留主图并逐张执�
     assert.equal(result.mediaRun.cachedImages,4);
     assert.equal(result.mediaRun.manualReviewImages,1);
     assert.equal(reads,5,'已缓存主图不重复下载；仅补读新图片并检查一张超限图片的响应头');
-    assert.equal((await readdir(path.join(directory,'media'))).length,4,'只缓存四张严格小于 500 KiB 的虚构图片');
+    assert.equal((await readdir(path.join(directory,'media'))).length,4,'只缓存四张严格小于 3 MB 的虚构图片');
   }finally{await rm(directory,{recursive:true,force:true});}
 });
 
@@ -275,17 +275,19 @@ test('来源库存资料只按唯一精确编号或唯一同名商品融入本�
   }finally{await rm(directory,{recursive:true,force:true});}
 });
 
-test('来源有货无货只形成受控上下架建议，人工锁定不会被来源覆盖',async()=>{
+test('来源状态待处理只留给人工操作，网站回读后会重新归入正常库存',async()=>{
   const directory=await mkdtemp(path.join(os.tmpdir(),'shopplus-listing-review-'));
   try{
     const catalog=new ShopPlusProductCatalog({directory,now:()=>new Date('2026-09-26T12:30:00.000Z')});
     const raw={id:'101',title:'Fictional Listing Product',spuCode:'LIST-101',publishStatus:1,productVariantDTOs:[{id:'202',salePrice:'300',productVariantInventoryDTO:{availableStockQuantity:1}}]};
     const first=await catalog.collect({listPage:async()=>({products:[raw]})}),item=first.products[0];
     await catalog.integrateSourcePricing({sourceProducts:[{businessId:item.productNumber,sourceName:item.sourceName,cost:'10',suggestedPrice:'20',stock:'无货'}]});
-    let review=await catalog.listingReview();assert.deepEqual(review.operations.map(item=>({state:item.state,target:item.targetPublishStatus,source:item.sourceStock})),[{state:'suggested',target:0,source:'无货'}]);
-    const after={...raw,publishStatus:0};await catalog.recordWebsiteUpdate({remoteProductId:'101',raw:after,manualLock:false,action:{type:'source-review',beforePublishStatus:1,targetPublishStatus:0}});
-    review=await catalog.listingReview();assert.equal(review.operations[0].state,'aligned');
-    await catalog.setManualListingLock({remoteProductId:'101',locked:true});await catalog.integrateSourcePricing({sourceProducts:[{businessId:item.productNumber,sourceName:item.sourceName,cost:'10',suggestedPrice:'20',stock:'有货'}]});review=await catalog.listingReview();assert.equal(review.operations[0].state,'locked');assert.equal(review.operations[0].targetPublishStatus,null);
+    let view=await catalog.getView();assert.equal(view.dailyPending[0].kind,'unpublish');assert.equal(view.dailyPending[0].remoteProductId,'101');
+    const after={...raw,publishStatus:0};await catalog.recordWebsiteUpdate({remoteProductId:'101',raw:after,manualLock:false,action:{type:'unpublish',beforePublishStatus:1,targetPublishStatus:0}});
+    view=await catalog.getView();assert.equal(view.dailyPending.length,0);assert.equal(view.archivedProducts.find(product=>product.remoteProductId==='101')?.publishStatus,0);
+    await catalog.integrateSourcePricing({sourceProducts:[{businessId:item.productNumber,sourceName:item.sourceName,cost:'10',suggestedPrice:'20',stock:'有货'}]});
+    const replenished={...raw,publishStatus:1};await catalog.recordWebsiteUpdate({remoteProductId:'101',raw:replenished,action:{type:'publish',targetPublishStatus:1}});
+    view=await catalog.getView();assert.equal(view.products.find(product=>product.remoteProductId==='101')?.publishStatus,1,'人工上架且库存仍存在后立即回到正常库存');
   }finally{await rm(directory,{recursive:true,force:true});}
 });
 
@@ -300,11 +302,28 @@ test('来源与网站变化先形成待确认差异，确认后才更新本机�
     assert.equal(pending.reconciliation.status,'pending');
     assert.deepEqual(pending.reconciliation.summary,{mapped:2,changed:2,sourceChanged:1,websiteChanged:1,conflicts:0,sourceMissing:1,websiteMissing:1,newSource:0,removedSource:0,firstBaseline:true});
     assert.equal(pending.products.find(item=>item.remoteProductId===one.remoteProductId).websitePriceAed,300,'生成差异时不得覆盖已应用的网站售价');
-    const applied=await catalog.applyReconciliation(),appliedOne=applied.products.find(item=>item.remoteProductId===one.remoteProductId),appliedTwo=applied.products.find(item=>item.remoteProductId===two.remoteProductId);
+    const applied=await catalog.applyReconciliation(),appliedOne=applied.archivedProducts.find(item=>item.remoteProductId===one.remoteProductId),appliedTwo=applied.products.find(item=>item.remoteProductId===two.remoteProductId);
     assert.equal(applied.reconciliation.status,'applied');
     assert.equal(appliedOne.costPriceAed,110);assert.equal(appliedOne.suggestedPriceAed,220);assert.equal(appliedOne.sourcePricing.sourceStock,'无货');assert.equal(appliedOne.websitePriceAed,333);assert.equal(appliedOne.stockQuantity,0);assert.equal(appliedOne.publishStatus,0);
     assert.equal(appliedTwo.websitePriceAed,320,'网站未返回时保留已应用的网站资料');assert.equal(appliedTwo.sourcePricing.status,'source_removed','来源消失时保留旧来源值并标记提醒');
     const next=await catalog.reconcileSourceAndWebsite({sourceProducts:latestSource,sourceSnapshotProducts:[{sourceKey:'MODEL:ONE'},{sourceKey:'MODEL:NEW'}],listPage:async()=>({products:[changed],totalCount:1})});
     assert.equal(next.reconciliation.summary.newSource,1);assert.equal(next.reconciliation.summary.removedSource,1,'首次应用后的后续核对才提示来源新增／消失');
+  }finally{await rm(directory,{recursive:true,force:true});}
+});
+
+test('本机导入图片只追加到指定商品，不改变网站资料',async()=>{
+  const directory=await mkdtemp(path.join(os.tmpdir(),'shopplus-local-media-'));
+  try{
+    const catalog=new ShopPlusProductCatalog({directory,now:()=>new Date('2026-09-30T09:00:00.000Z')}),raw={id:'fictional-local-media',title:'Local Media Product',spuCode:'LOCAL-MEDIA',publishStatus:1,productVariantDTOs:[{id:'variant-local-media',salePrice:'120',productVariantInventoryDTO:{availableStockQuantity:2}}]};
+    const initial=await catalog.collect({listPage:async()=>({products:[raw]})}),product=initial.products[0],imported=await catalog.importLocalMedia({remoteProductId:product.remoteProductId,images:[{sourceName:'manual.png',originalByteLength:4,thumbnail:false,data:Buffer.from('test').toString('base64')}]});
+    const after=imported.products[0];assert.equal(after.images.at(-1).origin,'local');assert.equal(after.images.at(-1).sourceName,'manual.png');assert.equal(after.websitePriceAed,120);assert.equal(await readdir(path.join(directory,'media')).then(files=>files.length),1,'本机导入只写入受限的图片缓存目录');
+  }finally{await rm(directory,{recursive:true,force:true});}
+});
+
+test('超过 3 MB 的网站图片只保存缩略图，不保存原图',async()=>{
+  const directory=await mkdtemp(path.join(os.tmpdir(),'shopplus-thumbnail-media-'));
+  try{
+    let originalRead=false;const catalog=new ShopPlusProductCatalog({directory,now:()=>new Date('2026-09-30T10:00:00.000Z'),thumbnailEncoder:async({bytes})=>{originalRead=bytes.length===SHOPPLUS_PRODUCT_IMAGE_MAX_BYTES;return {bytes:Buffer.alloc(1200,7)};},fetchImpl:async()=>new Response(Buffer.alloc(SHOPPLUS_PRODUCT_IMAGE_MAX_BYTES),{status:200,headers:{'content-type':'image/jpeg','content-length':String(SHOPPLUS_PRODUCT_IMAGE_MAX_BYTES)}})}),raw=product({id:'fictional-thumbnail',title:'Thumbnail Product',stock:3,imageUrl:'https://images.example.invalid/thumbnail.jpg'});
+    const result=await catalog.collect({listPage:async()=>({products:[raw]})}),image=result.products[0].image;assert.equal(originalRead,true);assert.equal(image.status,'cached');assert.equal(image.thumbnail,true);assert.equal(image.originalByteLength,SHOPPLUS_PRODUCT_IMAGE_MAX_BYTES);assert.equal(image.byteLength,1200);assert.equal((await readdir(path.join(directory,'media'))).length,1);
   }finally{await rm(directory,{recursive:true,force:true});}
 });

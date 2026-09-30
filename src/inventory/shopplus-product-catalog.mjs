@@ -12,11 +12,13 @@ export const SHOPPLUS_PRODUCT_COLLECTION_LIMIT=100;
 // the API's technical maximum so a normal real catalogue read does not exhaust
 // the single-request timeout; this is a page size, never a catalogue cap.
 export const SHOPPLUS_PRODUCT_ACTIVE_CATALOG_PAGE_SIZE=50;
-export const SHOPPLUS_PRODUCT_IMAGE_MAX_BYTES=500*1024;
+export const SHOPPLUS_PRODUCT_IMAGE_MAX_BYTES=3*1024*1024;
+const SHOPPLUS_PRODUCT_IMAGE_READ_HARD_MAX_BYTES=16*1024*1024;
+const SHOPPLUS_PRODUCT_MEDIA_CACHE_MAX_BYTES=1000*1024*1024;
 
 const SHOPPLUS_PRODUCT_LOCAL_RECORD_LIMIT=5000;
 const SHOPPLUS_PRODUCT_ARCHIVE_LIMIT=5000;
-const initial=()=>({version:3,products:[],archivedProducts:[],mappingCatalog:[],mappingCatalogRun:null,lastRun:null,refreshRun:null,mediaRun:null,sourcePricingRun:null,listingHistory:[],lastSuccessfulReadAt:null,batch:{status:'ready',captured:0}});
+const initial=()=>({version:3,products:[],archivedProducts:[],mappingCatalog:[],mappingCatalogRun:null,lastRun:null,refreshRun:null,mediaRun:null,sourcePricingRun:null,listingHistory:[],listingReviewCheckedAt:null,lastSuccessfulReadAt:null,batch:{status:'ready',captured:0}});
 const text=(value,max=1000)=>typeof value==='string'?value.trim().slice(0,max):value===null||value===undefined?'':String(value).trim().slice(0,max);
 const number=value=>{const parsed=typeof value==='number'?value:Number(String(value??'').trim());return Number.isFinite(parsed)?parsed:null;};
 const aedAmount=value=>{
@@ -61,6 +63,17 @@ const extensionForUrl=value=>{try{const pathname=new URL(value).pathname.toLower
 const copied=value=>JSON.parse(JSON.stringify(value));
 const same=(left,right)=>JSON.stringify(left??null)===JSON.stringify(right??null);
 const sourceStock=value=>['有货','无货'].includes(text(value,40))?text(value,40):null;
+const normalInventoryProduct=product=>{
+  const source=sourceStock(product?.sourcePricing?.sourceStock),listed=product?.publishStatus===1,stocked=Boolean(product?.stockKnown)&&Number(product?.stockQuantity)>0;
+  return source?source==='有货'&&listed&&stocked:listed&&stocked;
+};
+const pendingInventoryAction=product=>{
+  const source=sourceStock(product?.sourcePricing?.sourceStock),listed=product?.publishStatus===1,stocked=Boolean(product?.stockKnown)&&Number(product?.stockQuantity)>0;
+  if(source==='有货'&&(!product?.stockKnown||!stocked))return {kind:'replenish',label:'补网站库存',reason:product?.stockKnown?'来源有货，但网站库存为 0；请先补具体变体库存。':'来源有货，但网站库存未返回；请先核对并补具体变体库存。'};
+  if(source==='有货'&&!listed)return {kind:'publish',label:'手动上架',reason:'来源有货、网站库存已大于 0，但网站当前已下架。'};
+  if(source==='无货'&&listed)return {kind:'unpublish',label:'手动下架',reason:'来源无货，但网站当前仍处于上架状态。'};
+  return null;
+};
 const sourceKey=value=>text(value?.sourceKey??value?.businessId??value?.sourceName,300).normalize('NFKC').toLocaleUpperCase('en-US').replace(/\s+/gu,' ');
 const websiteFields=product=>({websitePriceAed:product?.websitePriceAed??null,stockKnown:Boolean(product?.stockKnown),stockQuantity:product?.stockKnown?Number(product?.stockQuantity??0):null,publishStatus:[0,1].includes(product?.publishStatus)?product.publishStatus:null,variants:Array.isArray(product?.variants)?product.variants:[]});
 const sourceFields=row=>({businessId:text(row?.businessId,160)||null,sourceName:text(row?.sourceName,240)||null,costPriceAed:aedAmount(row?.cost),suggestedPriceAed:aedAmount(row?.suggestedPrice),sourceStock:sourceStock(row?.stock),removed:Boolean(row?.removed)||text(row?.stock,40)==='来源已移除'});
@@ -193,9 +206,9 @@ function collectionTarget(value){
 function pageSizeFor(target){return Math.max(2,Math.min(SHOPPLUS_PRODUCT_COLLECTION_LIMIT,target));}
 
 export class ShopPlusProductCatalog {
-  constructor({directory,fetchImpl=globalThis.fetch,now=()=>new Date()}={}){
+  constructor({directory,fetchImpl=globalThis.fetch,now=()=>new Date(),thumbnailEncoder=null}={}){
     if(!directory)throw new TypeError('商品试采集目录不能为空');
-    this.directory=directory;this.mediaDirectory=path.join(directory,'media');this.file=path.join(directory,'shopplus-product-pilot.json');this.fetchImpl=fetchImpl;this.now=now;this.state=null;this.queue=Promise.resolve();
+    this.directory=directory;this.mediaDirectory=path.join(directory,'media');this.file=path.join(directory,'shopplus-product-pilot.json');this.fetchImpl=fetchImpl;this.now=now;this.thumbnailEncoder=thumbnailEncoder;this.state=null;this.queue=Promise.resolve();
   }
   serial(operation){const result=this.queue.then(operation);this.queue=result.catch(()=>{});return result;}
   async load(){
@@ -216,9 +229,16 @@ export class ShopPlusProductCatalog {
     this.state={...initial(),...parsed,version:3,listingHistory:Array.isArray(parsed.listingHistory)?parsed.listingHistory.slice(0,200):[],products,archivedProducts,mappingCatalog};return this.state;
   }
   async persist(){
+    await this.pruneMediaCache();
     const next={...this.state,version:3,products:this.state.products.slice(0,SHOPPLUS_PRODUCT_LOCAL_RECORD_LIMIT),archivedProducts:(this.state.archivedProducts||[]).slice(0,SHOPPLUS_PRODUCT_ARCHIVE_LIMIT),mappingCatalog:(this.state.mappingCatalog||[]).slice(0,SHOPPLUS_PRODUCT_LOCAL_RECORD_LIMIT)},temporary=`${this.file}.${Date.now()}.pending`;
     try{await mkdir(this.mediaDirectory,{recursive:true,mode:0o700});await writeFile(temporary,JSON.stringify(next,null,2),{encoding:'utf8',mode:0o600,flag:'wx'});await rename(temporary,this.file);this.state=next;}
     catch(error){await unlink(temporary).catch(()=>{});throw catalogError(`商品试采集记录保存失败：${String(error?.message||error).slice(0,160)}`,'SHOPPLUS_PRODUCT_STORE_WRITE');}
+  }
+  async pruneMediaCache(){
+    const candidates=[];let total=0;
+    for(const product of [...(this.state?.products||[]),...(this.state?.archivedProducts||[])])for(const image of imageRecords(product))if(image?.status==='cached'&&safeFile(image.file)){const size=Math.max(0,Number(image.byteLength)||0);total+=size;candidates.push({image,size,at:Date.parse(image.cachedAt||product.updatedAt||product.capturedAt||'')||0});}
+    candidates.sort((left,right)=>left.at-right.at);
+    for(const candidate of candidates){if(total<=SHOPPLUS_PRODUCT_MEDIA_CACHE_MAX_BYTES)break;try{await unlink(path.join(this.mediaDirectory,candidate.image.file));total-=candidate.size;candidate.image.status='unavailable';candidate.image.file=null;candidate.image.reviewReason='本机图片缓存超过 1 GB，已清理最久未查看图片；可在图片管理或商品详情重新更新。';}catch(error){if(error?.code!=='ENOENT')throw error;total-=candidate.size;candidate.image.status='unavailable';candidate.image.file=null;candidate.image.reviewReason='本机图片缓存文件已不存在；可重新更新图片。';}}
   }
   async cachedImageData(image){
     if(!image||image.status!=='cached'||!safeFile(image.file))return null;
@@ -242,7 +262,8 @@ export class ShopPlusProductCatalog {
     for(const product of this.state.archivedProducts||[]){const images=[];for(const stored of imageRecords(product)){const image={...stored};image.dataUrl=await this.cachedImageData(image);images.push(image);}const descriptionSource=product.localDescription??product.sourceLongDescription??product.sourceShortDescription??'';archivedProducts.push({...copied(product),name:product.localName||product.sourceName,description:readableDescription(descriptionSource),image:images[0]||null,images});}
     const lastRun=this.state.lastRun?copied(this.state.lastRun):null;
     const mappingCatalog=(this.state.mappingCatalog||[]).map(product=>({...copied(product),name:product.localName||product.sourceName,image:null,images:[]}));
-    return {products,archivedProducts,mappingCatalog,mappingCatalogRun:this.state.mappingCatalogRun?copied(this.state.mappingCatalogRun):null,listingHistory:copied(this.state.listingHistory||[]),lastRun,refreshRun:this.state.refreshRun?copied(this.state.refreshRun):null,mediaRun:this.state.mediaRun?copied(this.state.mediaRun):null,sourcePricingRun:this.state.sourcePricingRun?copied(this.state.sourcePricingRun):null,reconciliation:this.state.reconciliation?copied(this.state.reconciliation):null,lastSuccessfulReadAt:this.state.lastSuccessfulReadAt||null,batch:copied(this.state.batch||initial().batch),limit:null,legacyLimit:SHOPPLUS_PRODUCT_COLLECTION_LIMIT,archivedCount:(this.state.archivedProducts||[]).length,defaultTarget:SHOPPLUS_PRODUCT_COLLECTION_DEFAULT,imageMaxBytes:SHOPPLUS_PRODUCT_IMAGE_MAX_BYTES,canCollect:true};
+    const dailyPending=[...products,...archivedProducts].map(product=>{const action=pendingInventoryAction(product);return action?{...product,...action}:null;}).filter(Boolean);
+    return {products,archivedProducts,dailyPending,mappingCatalog,mappingCatalogRun:this.state.mappingCatalogRun?copied(this.state.mappingCatalogRun):null,listingHistory:copied(this.state.listingHistory||[]),lastRun,refreshRun:this.state.refreshRun?copied(this.state.refreshRun):null,mediaRun:this.state.mediaRun?copied(this.state.mediaRun):null,sourcePricingRun:this.state.sourcePricingRun?copied(this.state.sourcePricingRun):null,reconciliation:this.state.reconciliation?copied(this.state.reconciliation):null,lastSuccessfulReadAt:this.state.lastSuccessfulReadAt||null,batch:copied(this.state.batch||initial().batch),limit:null,legacyLimit:SHOPPLUS_PRODUCT_COLLECTION_LIMIT,archivedCount:(this.state.archivedProducts||[]).length,defaultTarget:SHOPPLUS_PRODUCT_COLLECTION_DEFAULT,imageMaxBytes:SHOPPLUS_PRODUCT_IMAGE_MAX_BYTES,canCollect:true};
   }
   async getView(){return this.serial(()=>this.view());}
   async imageRecord({remoteProductId,sourceUrl,previous}){
@@ -254,22 +275,27 @@ export class ShopPlusProductCatalog {
     catch(error){return {status:'unavailable',sourceUrl,byteLength:null,reviewReason:`图片读取失败：${String(error?.message||error).slice(0,120)}`,file:null,mimeType:null};}
     if(!response?.ok)return {status:'unavailable',sourceUrl,byteLength:null,reviewReason:`图片读取返回 HTTP ${Number(response?.status)||'错误'}`,file:null,mimeType:null};
     const declared=number(response.headers?.get?.('content-length'));
-    if(declared!==null&&declared>=SHOPPLUS_PRODUCT_IMAGE_MAX_BYTES)return {status:'manual_review',sourceUrl,byteLength:Math.floor(declared),reviewReason:'图片达到或超过 500 KiB，未缓存，待人工确认',file:null,mimeType:null};
-    const sourceType=String(response.headers?.get?.('content-type')||'').split(';',1)[0].trim().toLowerCase(),urlExtension=extensionForUrl(sourceUrl),extension=extensionForMime[sourceType]||urlExtension,mimeType=extension?mimeForExtension[extension]:null;
+    const needsThumbnail=declared!==null&&declared>=SHOPPLUS_PRODUCT_IMAGE_MAX_BYTES;
+    if(needsThumbnail&&typeof this.thumbnailEncoder!=='function')return {status:'manual_review',sourceUrl,byteLength:Math.floor(declared),reviewReason:'图片达到或超过 3 MB，未缓存，待人工确认',file:null,mimeType:null};
+    const sourceType=String(response.headers?.get?.('content-type')||'').split(';',1)[0].trim().toLowerCase(),urlExtension=extensionForUrl(sourceUrl),extension=extensionForMime[sourceType]||urlExtension;let mimeType=extension?mimeForExtension[extension]:null;
     if(!mimeType)return {status:'unavailable',sourceUrl,byteLength:null,reviewReason:'图片格式不在允许的 JPEG、PNG、WebP 或 GIF 范围内',file:null,mimeType:null};
     let bytes;
     try{
       if(response.body?.getReader){
         const reader=response.body.getReader(),chunks=[];let size=0;
-        while(true){const {done,value}=await reader.read();if(done)break;const chunk=Buffer.from(value);size+=chunk.length;if(size>=SHOPPLUS_PRODUCT_IMAGE_MAX_BYTES){await reader.cancel().catch(()=>{});return {status:'manual_review',sourceUrl,byteLength:size,reviewReason:'图片达到或超过 500 KiB，未缓存，待人工确认',file:null,mimeType:null};}chunks.push(chunk);}
+        while(true){const {done,value}=await reader.read();if(done)break;const chunk=Buffer.from(value);size+=chunk.length;if(size>=SHOPPLUS_PRODUCT_IMAGE_READ_HARD_MAX_BYTES){await reader.cancel().catch(()=>{});return {status:'manual_review',sourceUrl,byteLength:size,reviewReason:'图片达到 16 MB 读取保护，未缓存，待人工确认',file:null,mimeType:null};}if(size>=SHOPPLUS_PRODUCT_IMAGE_MAX_BYTES&&typeof this.thumbnailEncoder!=='function'){await reader.cancel().catch(()=>{});return {status:'manual_review',sourceUrl,byteLength:size,reviewReason:'图片达到或超过 3 MB，未缓存，待人工确认',file:null,mimeType:null};}chunks.push(chunk);}
         bytes=Buffer.concat(chunks,size);
       }else bytes=Buffer.from(await response.arrayBuffer());
     }catch(error){return {status:'unavailable',sourceUrl,byteLength:null,reviewReason:`图片读取失败：${String(error?.message||error).slice(0,120)}`,file:null,mimeType:null};}
-    if(bytes.length>=SHOPPLUS_PRODUCT_IMAGE_MAX_BYTES)return {status:'manual_review',sourceUrl,byteLength:bytes.length,reviewReason:'图片达到或超过 500 KiB，未缓存，待人工确认',file:null,mimeType:null};
-    const file=`shopplus-${hash(`${remoteProductId}:${sourceUrl}`).slice(0,16)}.${extension}`,target=path.join(this.mediaDirectory,file),temporary=`${target}.${Date.now()}.pending`;
-    try{await mkdir(this.mediaDirectory,{recursive:true,mode:0o700});await writeFile(temporary,bytes,{mode:0o600,flag:'wx'});await rename(temporary,target);}
+    let output=bytes,outputExtension=extension,thumbnail=false;
+    if(bytes.length>=SHOPPLUS_PRODUCT_IMAGE_MAX_BYTES){
+      if(typeof this.thumbnailEncoder!=='function')return {status:'manual_review',sourceUrl,byteLength:bytes.length,reviewReason:'图片达到或超过 3 MB，未缓存，待人工确认',file:null,mimeType:null};
+      try{const encoded=await this.thumbnailEncoder({bytes,mimeType,sourceUrl});if(!encoded?.bytes||encoded.bytes.length>=SHOPPLUS_PRODUCT_IMAGE_MAX_BYTES)throw new Error('缩略图仍超过 3 MB');output=Buffer.from(encoded.bytes);outputExtension='jpg';mimeType='image/jpeg';thumbnail=true;}catch(error){return {status:'manual_review',sourceUrl,byteLength:bytes.length,reviewReason:`图片缩略图生成失败：${String(error?.message||error).slice(0,100)}`,file:null,mimeType:null};}
+    }
+    const file=`shopplus-${hash(`${remoteProductId}:${sourceUrl}`).slice(0,16)}.${outputExtension}`,target=path.join(this.mediaDirectory,file),temporary=`${target}.${Date.now()}.pending`;
+    try{await mkdir(this.mediaDirectory,{recursive:true,mode:0o700});await writeFile(temporary,output,{mode:0o600,flag:'wx'});await rename(temporary,target);}
     catch(error){await unlink(temporary).catch(()=>{});return {status:'unavailable',sourceUrl,byteLength:bytes.length,reviewReason:`图片缓存失败：${String(error?.message||error).slice(0,120)}`,file:null,mimeType:null};}
-    return {status:'cached',sourceUrl,byteLength:bytes.length,reviewReason:null,file,mimeType};
+    return {status:'cached',sourceUrl,byteLength:output.length,originalByteLength:thumbnail?bytes.length:null,thumbnail,cachedAt:this.now().toISOString(),reviewReason:null,file,mimeType};
   }
   async collectImagesForProduct(product,urls,previousImages=[]){
     const byUrl=new Map(previousImages.filter(image=>image?.sourceUrl).map(image=>[image.sourceUrl,image]));
@@ -395,11 +421,14 @@ export class ShopPlusProductCatalog {
       await this.persist();return this.view();
     });
   }
-  async collectMedia({listPage}={}){
+  async collectMedia({listPage,remoteProductIds}={}){
     return this.serial(async()=>{
       await this.load();
       if(!this.state.products.length)throw catalogError('尚未保存可补采图片的 ShopPlus 商品','SHOPPLUS_PRODUCT_MEDIA_EMPTY');
-      const wanted=new Set(this.state.products.map(product=>product.remoteProductId)),sources=new Map();
+      const requested=Array.isArray(remoteProductIds)?new Set(remoteProductIds.map(value=>text(value,160)).filter(Boolean)):null;
+      const targets=this.state.products.filter(product=>!requested||requested.has(product.remoteProductId));
+      if(!targets.length)throw catalogError('没有可采集图片的已保存商品','SHOPPLUS_PRODUCT_MEDIA_TARGET_EMPTY');
+      const wanted=new Set(targets.map(product=>product.remoteProductId)),sources=new Map();
       const scan=await this.readPages(listPage,{pageSize:pageSizeFor(this.state.products.length),until:rows=>{
         const item=candidate(rows.at(-1));if(item&&wanted.has(item.remoteProductId))sources.set(item.remoteProductId,item);
         return sources.size===wanted.size;
@@ -407,32 +436,55 @@ export class ShopPlusProductCatalog {
       const at=this.now().toISOString();let matched=0,skippedOutOfStock=0,sourceImages=0,cachedImages=0,manualReviewImages=0,unavailableImages=0;
       const products=[];
       for(const saved of this.state.products){
+        if(!wanted.has(saved.remoteProductId)){products.push(saved);continue;}
         const source=sources.get(saved.remoteProductId),previousImages=imageRecords(saved);
         if(!source){products.push({...saved,media:{status:'incomplete',at,reason:'本次 ShopPlus 读取未返回该商品',sourceImageCount:previousImages.length}});continue;}
         matched++;
         if(!source.stockKnown||source.stockQuantity<=0){skippedOutOfStock++;products.push({...saved,media:{status:'skipped_out_of_stock',at,reason:'网站当前库存未确认或为零，未补采图片',sourceImageCount:previousImages.length}});continue;}
         if(!source.imageUrls.length){products.push({...saved,media:{status:'incomplete',at,reason:'网站本次未返回可读取的图片列表',sourceImageCount:0}});continue;}
-        const images=await this.collectImagesForProduct(source,source.imageUrls,previousImages);
-        const summary={status:'completed',at,sourceImageCount:images.length,cachedImageCount:images.filter(image=>image.status==='cached').length,manualReviewImageCount:images.filter(image=>image.status==='manual_review').length,unavailableImageCount:images.filter(image=>image.status==='unavailable'||image.status==='none').length};
+        const websiteImages=await this.collectImagesForProduct(source,source.imageUrls,previousImages);
+        const localImages=previousImages.filter(image=>image?.origin==='local');
+        const images=[...websiteImages,...localImages];
+        const summary={status:'completed',at,sourceImageCount:websiteImages.length,cachedImageCount:images.filter(image=>image.status==='cached').length,manualReviewImageCount:images.filter(image=>image.status==='manual_review').length,unavailableImageCount:images.filter(image=>image.status==='unavailable'||image.status==='none').length};
         sourceImages+=summary.sourceImageCount;cachedImages+=summary.cachedImageCount;manualReviewImages+=summary.manualReviewImageCount;unavailableImages+=summary.unavailableImageCount;
         products.push({...saved,images,image:images[0]||null,sourceImageCount:images.length,media:summary,updatedAt:at});
       }
       this.state.products=products;
-      this.state.mediaRun={at,received:scan.received,pages:scan.pages,requestedProducts:products.length,matchedProducts:matched,skippedOutOfStock,sourceImages,cachedImages,manualReviewImages,unavailableImages};
+      this.state.mediaRun={at,received:scan.received,pages:scan.pages,requestedProducts:targets.length,matchedProducts:matched,skippedOutOfStock,sourceImages,cachedImages,manualReviewImages,unavailableImages};
       this.state.lastSuccessfulReadAt=at;
+      await this.persist();return this.view();
+    });
+  }
+  async importLocalMedia({remoteProductId,images}={}){
+    return this.serial(async()=>{
+      await this.load();
+      const id=text(remoteProductId,160),index=this.state.products.findIndex(product=>product.remoteProductId===id);
+      if(index<0)throw catalogError('未找到可导入图片的已保存商品','SHOPPLUS_PRODUCT_IMPORT_TARGET');
+      const records=[];
+      for(const item of Array.isArray(images)?images.slice(0,20):[]){
+        const encoded=text(item?.data,5_000_000),bytes=Buffer.from(encoded,'base64');
+        if(!bytes.length||bytes.length>3*1024*1024)continue;
+        const file=`shopplus-${hash(`${id}:local:${item?.sourceName||''}:${bytes.length}:${Date.now()}:${records.length}`).slice(0,16)}.jpg`,target=path.join(this.mediaDirectory,file),temporary=`${target}.${Date.now()}.pending`;
+        await mkdir(this.mediaDirectory,{recursive:true,mode:0o700});await writeFile(temporary,bytes,{mode:0o600,flag:'wx'});await rename(temporary,target);
+        records.push({status:'cached',origin:'local',sourceUrl:null,sourceName:text(item?.sourceName,240)||'本机导入图片',byteLength:bytes.length,originalByteLength:number(item?.originalByteLength),thumbnail:Boolean(item?.thumbnail),cachedAt:this.now().toISOString(),reviewReason:null,file,mimeType:'image/jpeg'});
+      }
+      if(!records.length)throw catalogError('没有可保存的图片；请选择有效的 JPG、PNG、WebP 或 GIF 图片','SHOPPLUS_PRODUCT_IMPORT_EMPTY');
+      const product=this.state.products[index],existing=imageRecords(product),nextImages=[...existing,...records];
+      this.state.products[index]={...product,images:nextImages,image:nextImages[0]||null,updatedAt:this.now().toISOString()};
       await this.persist();return this.view();
     });
   }
   async integrateSourcePricing({sourceProducts,sourceUpdatedAt=null}={}){
     return this.serial(async()=>{
       await this.load();
-      if(!this.state.products.length)throw catalogError('请先采集有库存 ShopPlus 商品','SHOPPLUS_PRODUCT_SOURCE_PRICING_EMPTY');
+      const stored=[...this.state.products,...(this.state.archivedProducts||[])];
+      if(!stored.length)throw catalogError('请先采集有库存 ShopPlus 商品','SHOPPLUS_PRODUCT_SOURCE_PRICING_EMPTY');
       const source=Array.isArray(sourceProducts)?sourceProducts.filter(row=>row&&typeof row==='object'&&row.removed!==true):[];
       if(!source.length)throw catalogError('本机尚无可用来源库存资料；请先完成来源库存同步','SHOPPLUS_PRODUCT_SOURCE_PRICING_SOURCE_EMPTY');
       const sourceById=uniqueIndex(source,row=>normalizedIdentifier(row.businessId));
       const sourceByName=uniqueIndex(source,row=>normalizedName(row.sourceName));
       const at=this.now().toISOString();let matched=0,updated=0,unmatched=0,blank=0;
-      this.state.products=this.state.products.map(product=>{
+      const integrated=stored.map(product=>{
         const found=matchSourceProduct(product,sourceById,sourceByName);
         if(!found){
           unmatched++;
@@ -444,6 +496,8 @@ export class ShopPlusProductCatalog {
         const sourceStock=text(found.row.stock,40);
         return {...product,costPriceAed,suggestedPriceAed,sourcePricing:{status:costPriceAed===null&&suggestedPriceAed===null?'matched_empty':'matched',at,method:found.method,sourceBusinessId:text(found.row.businessId,160)||null,sourceName:text(found.row.sourceName,240)||null,sourceStock:['有货','无货'].includes(sourceStock)?sourceStock:null,costPriceAed,suggestedPriceAed}};
       });
+      this.state.products=integrated.filter(normalInventoryProduct);
+      this.state.archivedProducts=integrated.filter(product=>!normalInventoryProduct(product));
       this.state.sourcePricingRun={at,sourceUpdatedAt:sourceUpdatedAt||null,sourceCount:source.length,matched,updated,unmatched,blank};
       await this.persist();return this.view();
     });
@@ -453,7 +507,7 @@ export class ShopPlusProductCatalog {
       await this.load();
       const source=Array.isArray(sourceProducts)?sourceProducts.filter(row=>row&&typeof row==='object') : [];
       if(!source.length)throw catalogError('本机尚无已确认映射的来源资料；请先完成来源资料同步和映射确认','SHOPPLUS_RECONCILIATION_SOURCE_EMPTY');
-      const all=[...this.state.products,...(this.state.archivedProducts||[])],byBusiness=new Map(all.map(product=>[normalizedIdentifier(product.productNumber),product])),scoped=source.map(row=>({row,product:byBusiness.get(normalizedIdentifier(row.businessId))||null})).filter(item=>item.product);
+      const stored=[...this.state.products,...(this.state.archivedProducts||[])],knownRemoteIds=new Set(stored.map(product=>product.remoteProductId)),all=[...stored,...(this.state.mappingCatalog||[]).filter(product=>!knownRemoteIds.has(product.remoteProductId))],byBusiness=new Map(all.map(product=>[normalizedIdentifier(product.productNumber),product])),scoped=source.map(row=>({row,product:byBusiness.get(normalizedIdentifier(row.businessId))||null})).filter(item=>item.product);
       if(!scoped.length)throw catalogError('没有找到可按已确认映射核对的网站商品','SHOPPLUS_RECONCILIATION_MAPPING_EMPTY');
       const wanted=new Set(scoped.map(item=>item.product.remoteProductId)),websiteById=new Map();
       const scan=await this.readPages(listPage,{pageSize:SHOPPLUS_PRODUCT_ACTIVE_CATALOG_PAGE_SIZE,until:rows=>{const item=candidate(rows.at(-1));if(item&&wanted.has(item.remoteProductId))websiteById.set(item.remoteProductId,item);return websiteById.size===wanted.size;}});
@@ -498,15 +552,22 @@ export class ShopPlusProductCatalog {
         if(row.website){next.websitePriceAed=row.website.websitePriceAed;next.stockKnown=row.website.stockKnown;next.stockQuantity=row.website.stockQuantity??0;next.publishStatus=row.website.publishStatus;next.variants=row.website.variants;next.refresh={status:'reconciled',at};}
         next.updatedAt=at;return next;
       });
-      this.state.products=this.state.products.map(apply);this.state.archivedProducts=(this.state.archivedProducts||[]).map(apply);
+      const stored=[...this.state.products,...(this.state.archivedProducts||[])],storedByRemote=new Map(stored.map(product=>[product.remoteProductId,product])),mappingByRemote=new Map((this.state.mappingCatalog||[]).map(product=>[product.remoteProductId,product])),mappedRemoteIds=new Set(pending.rows.map(row=>row.remoteProductId)),active=this.state.products.filter(product=>!mappedRemoteIds.has(product.remoteProductId)),archived=(this.state.archivedProducts||[]).filter(product=>!mappedRemoteIds.has(product.remoteProductId));
+      for(const row of pending.rows){
+        const seed=storedByRemote.get(row.remoteProductId)||mappingByRemote.get(row.remoteProductId);
+        if(!seed)continue;
+        const next=apply(seed);
+        (normalInventoryProduct(next)?active:archived).push(next);
+      }
+      this.state.products=active.slice(0,SHOPPLUS_PRODUCT_LOCAL_RECORD_LIMIT);this.state.archivedProducts=archived.slice(0,SHOPPLUS_PRODUCT_ARCHIVE_LIMIT);
       this.state.sourcePricingRun={at,sourceUpdatedAt:pending.sourceUpdatedAt||null,sourceCount:pending.rows.length,matched:pending.rows.filter(row=>!row.source?.removed).length,updated:pending.rows.filter(row=>!row.source?.removed).length,unmatched:0,blank:pending.rows.filter(row=>row.source&&!row.source.removed&&row.source.costPriceAed===null&&row.source.suggestedPriceAed===null).length,reconciliation:true};
       this.state.reconciliation={...pending,status:'applied',appliedAt:at};await this.persist();return this.view();
     });
   }
   async update({remoteProductId,name,floorPrice,description}={}){
     return this.serial(async()=>{
-      await this.load();const id=text(remoteProductId,160),index=this.state.products.findIndex(product=>product.remoteProductId===id);if(index<0)throw catalogError('找不到待核对商品','SHOPPLUS_PRODUCT_NOT_FOUND');
-      const product=this.state.products[index];
+      await this.load();const id=text(remoteProductId,160),activeIndex=this.state.products.findIndex(product=>product.remoteProductId===id),archivedIndex=(this.state.archivedProducts||[]).findIndex(product=>product.remoteProductId===id),collection=activeIndex>=0?this.state.products:this.state.archivedProducts,index=activeIndex>=0?activeIndex:archivedIndex;if(index<0)throw catalogError('找不到待核对商品','SHOPPLUS_PRODUCT_NOT_FOUND');
+      const product=collection[index];
       if(name!==undefined){const next=text(name,240);if(!next)throw catalogError('商品名称不能为空','SHOPPLUS_PRODUCT_NAME_INVALID');product.localName=next;}
       if(floorPrice!==undefined){if(floorPrice===null||String(floorPrice).trim()==='')product.floorPriceAed=null;else{const value=number(floorPrice);if(value===null||value<0||value>10_000_000)throw catalogError('底价必须是有效的 AED 金额','SHOPPLUS_PRODUCT_FLOOR_INVALID');product.floorPriceAed=Math.round(value*100)/100;}}
       if(description!==undefined){const next=text(description,60000);product.localDescription=next||null;}
@@ -515,7 +576,7 @@ export class ShopPlusProductCatalog {
   }
   async listingReview(){
     return this.serial(async()=>{
-      await this.load();const at=this.now().toISOString(),operations=[];
+      await this.load();const at=this.now().toISOString(),stateAt=this.state.listingReviewCheckedAt||this.state.reconciliation?.appliedAt||this.state.reconciliation?.at||this.state.mappingCatalogRun?.at||this.state.lastSuccessfulReadAt||null,operations=[];
       for(const product of this.state.products){
         const sourceStock=product?.sourcePricing?.sourceStock,current=product?.publishStatus,locked=product?.listingControl?.manualLock===true;
         let state='not_actionable',reason='来源资料尚未唯一匹配';let target=null;
@@ -529,23 +590,29 @@ export class ShopPlusProductCatalog {
         }
         operations.push({remoteProductId:product.remoteProductId,productNumber:product.productNumber,name:product.localName||product.sourceName,sourceStock,publishStatus:[0,1].includes(current)?current:null,targetPublishStatus:target,state,reason});
       }
-      return {at,operations,suggested:operations.filter(operation=>operation.state==='suggested').length,locked:operations.filter(operation=>operation.state==='locked').length};
+      return {at,stateAt,operations,suggested:operations.filter(operation=>operation.state==='suggested').length,locked:operations.filter(operation=>operation.state==='locked').length};
+    });
+  }
+  async markListingReviewChecked(){
+    return this.serial(async()=>{
+      await this.load();this.state.listingReviewCheckedAt=this.now().toISOString();await this.persist();return this.state.listingReviewCheckedAt;
     });
   }
   async recordWebsiteUpdate({remoteProductId,raw,action,manualLock}={}){
     return this.serial(async()=>{
-      await this.load();const id=text(remoteProductId,160),index=this.state.products.findIndex(product=>product.remoteProductId===id),next=candidate(raw);
-      if(index<0||!next||next.remoteProductId!==id)throw catalogError('网站回读商品与当前本机记录不一致','SHOPPLUS_PRODUCT_READBACK_MISMATCH');
-      const previous=this.state.products[index],at=this.now().toISOString(),updated=retainedProduct(next,previous,at),target=action?.targetPublishStatus;
+      await this.load();const id=text(remoteProductId,160),activeIndex=this.state.products.findIndex(product=>product.remoteProductId===id),archivedIndex=(this.state.archivedProducts||[]).findIndex(product=>product.remoteProductId===id),previous=activeIndex>=0?this.state.products[activeIndex]:(this.state.archivedProducts||[])[archivedIndex],next=candidate(raw);
+      if(!previous||!next||next.remoteProductId!==id)throw catalogError('网站回读商品与当前本机记录不一致','SHOPPLUS_PRODUCT_READBACK_MISMATCH');
+      const at=this.now().toISOString(),updated=retainedProduct(next,previous,at),target=action?.targetPublishStatus;
       updated.listingControl={...(previous.listingControl||{}),...(manualLock===undefined?{}:{manualLock:Boolean(manualLock)}),lastAction:action?{at,type:text(action.type,40)||'website_update',beforePublishStatus:[0,1].includes(action.beforePublishStatus)?action.beforePublishStatus:null,targetPublishStatus:[0,1].includes(target)?target:null,beforeStockQuantity:Number.isSafeInteger(action.beforeStockQuantity)?action.beforeStockQuantity:null,targetStockQuantity:Number.isSafeInteger(action.targetStockQuantity)?action.targetStockQuantity:null,note:text(action.note,240)||null}:previous.listingControl?.lastAction||null};
-      this.state.products[index]=updated;
+      this.state.products=this.state.products.filter(product=>product.remoteProductId!==id);this.state.archivedProducts=(this.state.archivedProducts||[]).filter(product=>product.remoteProductId!==id);
+      (normalInventoryProduct(updated)?this.state.products:this.state.archivedProducts).push(updated);
       if(action){const record={at,remoteProductId:id,productNumber:updated.productNumber,name:updated.localName||updated.sourceName,type:text(action.type,40)||'website_update',beforePublishStatus:[0,1].includes(action.beforePublishStatus)?action.beforePublishStatus:null,targetPublishStatus:[0,1].includes(target)?target:null,afterPublishStatus:[0,1].includes(updated.publishStatus)?updated.publishStatus:null,beforeStockQuantity:Number.isSafeInteger(action.beforeStockQuantity)?action.beforeStockQuantity:null,targetStockQuantity:Number.isSafeInteger(action.targetStockQuantity)?action.targetStockQuantity:null,afterStockQuantity:updated.stockKnown?updated.stockQuantity:null,note:text(action.note,240)||null,result:'verified'};this.state.listingHistory=[record,...(this.state.listingHistory||[])].slice(0,200);}
       await this.persist();return this.view();
     });
   }
   async setManualListingLock({remoteProductId,locked}={}){
     return this.serial(async()=>{
-      await this.load();const id=text(remoteProductId,160),product=this.state.products.find(item=>item.remoteProductId===id);if(!product)throw catalogError('找不到待核对商品','SHOPPLUS_PRODUCT_NOT_FOUND');
+      await this.load();const id=text(remoteProductId,160),product=this.state.products.find(item=>item.remoteProductId===id)||(this.state.archivedProducts||[]).find(item=>item.remoteProductId===id);if(!product)throw catalogError('找不到待核对商品','SHOPPLUS_PRODUCT_NOT_FOUND');
       product.listingControl={...(product.listingControl||{}),manualLock:Boolean(locked),lockChangedAt:this.now().toISOString()};await this.persist();return this.view();
     });
   }

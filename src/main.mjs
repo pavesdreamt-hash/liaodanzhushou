@@ -37,6 +37,7 @@ import {SHOPPLUS_FILE_FILTER_EXTENSIONS,shopPlusExtension,validateShopPlusUpload
 import {ShopPlusConnection} from './orders/shopplus-api.mjs';
 import {ShopPlusProductCatalog} from './inventory/shopplus-product-catalog.mjs';
 const directory=path.dirname(fileURLToPath(import.meta.url)),PRODUCTION_WEB_PORT=43877;
+const wait=milliseconds=>new Promise(resolve=>setTimeout(resolve,milliseconds));
 app.setName(APP_NAME);const testMode=process.env.NODE_ENV==='test'||process.argv.includes('--orders-test-browser-workspace');const testUserData=testMode&&process.argv.find(value=>value.startsWith('--orders-test-user-data=')),testExcel=testMode&&process.argv.find(value=>value.startsWith('--orders-test-excel=')),testSaveDirectory=testMode&&process.argv.find(value=>value.startsWith('--orders-test-save-directory=')),testDataDirectory=testMode&&process.argv.find(value=>value.startsWith('--orders-test-data-directory=')),testRestoreFile=testMode&&process.argv.find(value=>value.startsWith('--orders-test-restore-file=')),testCancelSave=testMode&&process.argv.includes('--orders-test-cancel-save'),testCancelDataSave=testMode&&process.argv.includes('--orders-test-cancel-data-save'),testAddressDeliverable=testMode&&process.argv.includes('--orders-test-address-deliverable'),testBrowserWorkspace=testMode&&process.argv.includes('--orders-test-browser-workspace'),testBrowserUrlFile=testMode&&process.argv.find(value=>value.startsWith('--orders-test-browser-url-file=')),testTrayBoundsFile=testMode&&process.argv.find(value=>value.startsWith('--orders-test-tray-bounds-file='));app.setPath('userData',testUserData?path.resolve(testUserData.slice('--orders-test-user-data='.length)):path.join(app.getPath('appData'),APP_NAME));
 const isolatedUserData=process.argv.find(value=>value.startsWith('--isolated-user-data='));if(isolatedUserData){const selected=path.resolve(isolatedUserData.slice('--isolated-user-data='.length)),production=path.join(app.getPath('appData'),APP_NAME);if(selected===production||selected.startsWith(production+path.sep))throw new Error('隔离目录不能是正式应用数据目录');app.setPath('userData',selected);}
 let window,paths,orchestrator,startupLogFile,orderDatabase,orderApp,orderDatabaseError,addressVerifier,webServer,tray,priceCheckTimer,orderSyncTimer,orderSyncRunning=false,manualChat,quitting=false,suppressCloseActivation=false,suppressCloseActivationTimer;const excelSelections=new Map(),uploadedPreviewFiles=new Map(),restoreSelections=new Map(),operations=new Map();
@@ -71,6 +72,7 @@ let assistantConnectors={},assistantSettings,shopPlusConnection,shopPlusProductC
 const encodeChatThumbnail=dataUrl=>{const source=nativeImage.createFromDataURL(dataUrl);if(source.isEmpty())throw new Error('图片无法生成缩略图');const size=source.getSize(),scale=Math.min(1,1600/Math.max(size.width,size.height));const resized=scale<1?source.resize({width:Math.max(1,Math.round(size.width*scale)),height:Math.max(1,Math.round(size.height*scale)),quality:'good'}):source;return 'data:image/jpeg;base64,'+resized.toJPEG(80).toString('base64');};
 function updateSettingsConnector(){const state=assistantSettings?.state,p=state?.providers[state.activeProvider];if(assistantSettings?.saved){assistantConnectors.extractor=p?.key&&p?.model?{mode:"configured",extract:input=>assistantSettings.extract(input)}:null;if(orderApp)orderApp.assistant.extractor=assistantConnectors.extractor;}}
 const emitOrderSync=value=>{if(window&&!window.isDestroyed())window.webContents.send('app:orders-synced',value);webServer?.emit('orders-synced',value);};
+const emitProgress=value=>{if(window&&!window.isDestroyed())window.webContents.send('app:progress',value);webServer?.emit('progress',value);};
 async function syncShopPlusOrders({automatic=false}={}){
   if(!orderApp||!shopPlusConnection)throw new Error('订单服务尚未准备好');
   if(orderSyncRunning)throw new Error('订单同步正在进行，请稍候');
@@ -284,7 +286,7 @@ async function bootstrap(){
   const settingsDataArg=testMode&&testUserData&&process.argv.find(value=>value.startsWith('--orders-test-settings-data='));
   assistantSettings=new AssistantSettings({userDataPath:settingsDataArg?path.resolve(settingsDataArg.slice('--orders-test-settings-data='.length)):paths.base,verificationOnly:Boolean(settingsDataArg),safeStorage:fixtureSecretStorage||asyncSecretStorage(safeStorage),onChanged:updateSettingsConnector,promptKey:settingsFixture?async()=>settingsFixture.key??null:promptForApiKey,...(settingsFixture?{simulation:true,fetchImpl:async(_url,options)=>{if(settingsFixture.delayMs)await new Promise(resolve=>setTimeout(resolve,Math.min(settingsFixture.delayMs,3000)));const request=JSON.parse(options.body),input=JSON.parse(request.messages[1].content);const result=input.language==='zh'?{translations:input.messages.map(m=>({id:m.id,text:(settingsFixture.translationPrefix||'模拟中文：')+m.text}))}:input.english?{text:input.english,chinese:settingsFixture.backTranslationChinese||'模拟英文回译中文'}:input.intent&&!input.mode?{text:settingsFixture.translationText||'Thank you for your support.',chinese:settingsFixture.translationChinese||'感谢你的支持。'}:input.mode?{text:settingsFixture.reply||'Fictional AI draft. Please confirm the address.',chinese:'模拟中文对照'}:{fields:{fullName:{value:'Avery Example',messageIds:['probe-customer-1']}},items:[],quotes:[]};return {ok:true,status:200,text:async()=>JSON.stringify({choices:[{finish_reason:'stop',message:{content:JSON.stringify(result)}}]})};}}:{})});
   shopPlusConnection=new ShopPlusConnection({userDataPath:paths.base,safeStorage:asyncSecretStorage(safeStorage),promptCredential:promptForApiKey});
-  shopPlusProductCatalog=new ShopPlusProductCatalog({directory:path.join(paths.base,'orders','shopplus-product-pilot')});
+  shopPlusProductCatalog=new ShopPlusProductCatalog({directory:path.join(paths.base,'orders','shopplus-product-pilot'),thumbnailEncoder:async({bytes})=>{const source=nativeImage.createFromBuffer(bytes);if(source.isEmpty())throw new Error('图片格式无法生成缩略图');const size=source.getSize(),scale=Math.min(1,1600/Math.max(size.width,size.height)),resized=scale<1?source.resize({width:Math.max(1,Math.round(size.width*scale)),height:Math.max(1,Math.round(size.height*scale)),quality:'good'}):source;let output=resized.toJPEG(82);if(output.length>=3*1024*1024)output=resized.resize({width:Math.max(1,Math.round(resized.getSize().width*.7)),height:Math.max(1,Math.round(resized.getSize().height*.7)),quality:'good'}).toJPEG(72);return {bytes:output};}});
   // Never probe macOS Keychain merely because the app launches. Access is
   // deferred to an explicit AI/settings action, so a normal workbench launch
   // cannot repeatedly surface a system password dialog. Manual AI operations
@@ -360,20 +362,46 @@ async function bootstrap(){
   handler('orders:sync-shopplus-products',async payload=>{try{const listPage=request=>shopPlusConnection.listProductsPage(request),catalog=payload?.scope==='published-in-stock'?await shopPlusProductCatalog.collectPublishedInStock({listPage}):await shopPlusProductCatalog.collect({target:payload?.target,listPage});await shopPlusConnection.markProductVerified('已通过 ShopPlus 商品读取验证');return {catalog,status:await shopPlusConnection.status(),collected:true};}catch(error){await shopPlusConnection.markProductFailed(`商品读取失败：${String(error?.message||error)}`).catch(()=>{});throw error;}});
   handler('orders:sync-shopplus-mapping-catalog',async()=>{try{const catalog=await shopPlusProductCatalog.syncMappingCatalog({listPage:request=>shopPlusConnection.listProductsPage(request)});await shopPlusConnection.markProductVerified('已通过 ShopPlus 商品匹配目录读取验证');return {catalog,status:await shopPlusConnection.status(),synced:true};}catch(error){await shopPlusConnection.markProductFailed(`商品匹配目录读取失败：${String(error?.message||error)}`).catch(()=>{});throw error;}});
   handler('orders:refresh-shopplus-products',async()=>{try{const catalog=await shopPlusProductCatalog.refresh({listPage:request=>shopPlusConnection.listProductsPage(request)});await shopPlusConnection.markProductVerified('已通过 ShopPlus 商品资料更新验证');return {catalog,status:await shopPlusConnection.status(),refreshed:true};}catch(error){await shopPlusConnection.markProductFailed(`商品资料更新失败：${String(error?.message||error)}`).catch(()=>{});throw error;}});
-  handler('orders:sync-shopplus-product-media',async()=>{try{const catalog=await shopPlusProductCatalog.collectMedia({listPage:payload=>shopPlusConnection.listProductsPage(payload)});await shopPlusConnection.markProductVerified('已通过 ShopPlus 商品图片只读采集验证');return {catalog,status:await shopPlusConnection.status(),collected:true};}catch(error){await shopPlusConnection.markProductFailed(`商品图片读取失败：${String(error?.message||error)}`).catch(()=>{});throw error;}});
+  handler('orders:sync-shopplus-product-media',async payload=>{try{const catalog=await shopPlusProductCatalog.collectMedia({listPage:request=>shopPlusConnection.listProductsPage(request),remoteProductIds:payload?.remoteProductIds});await shopPlusConnection.markProductVerified('已通过 ShopPlus 商品图片只读采集验证');return {catalog,status:await shopPlusConnection.status(),collected:true};}catch(error){await shopPlusConnection.markProductFailed(`商品图片读取失败：${String(error?.message||error)}`).catch(()=>{});throw error;}});
+  handler('orders:import-shopplus-product-media',async payload=>{const remoteProductId=String(payload?.remoteProductId||'').trim();if(!remoteProductId)throw new Error('未选择需要导入图片的商品');const selected=await openDialog({title:'从电脑导入商品图片',properties:['openFile','multiSelections'],filters:[{name:'商品图片',extensions:['jpg','jpeg','png','webp','gif']}]});if(selected.canceled)return {catalog:await shopPlusProductCatalog.getView(),canceled:true};const images=[];for(const file of selected.filePaths.slice(0,20)){const original=await readFile(file),source=nativeImage.createFromPath(file);if(source.isEmpty())continue;const size=source.getSize(),large=original.length>3*1024*1024,limit=large?1600:2400,scale=Math.min(1,limit/Math.max(size.width,size.height)),resized=scale<1?source.resize({width:Math.max(1,Math.round(size.width*scale)),height:Math.max(1,Math.round(size.height*scale)),quality:'good'}):source;let bytes=resized.toJPEG(large?80:86);if(bytes.length>3*1024*1024)bytes=resized.resize({width:Math.max(1,Math.round(resized.getSize().width*.7)),height:Math.max(1,Math.round(resized.getSize().height*.7)),quality:'good'}).toJPEG(72);images.push({sourceName:path.basename(file),originalByteLength:original.length,thumbnail:large||bytes.length<original.length,data:bytes.toString('base64')});}const catalog=await shopPlusProductCatalog.importLocalMedia({remoteProductId,images});return {catalog,status:await shopPlusConnection.status(),imported:images.length};});
   handler('orders:integrate-shopplus-source-pricing',async()=>{const local=await orchestrator.localInventory(),catalog=await shopPlusProductCatalog.integrateSourcePricing({sourceProducts:local?.current?.products||[],sourceUpdatedAt:local?.current?.savedAt||local?.updatedAt||null});return {catalog,status:await shopPlusConnection.status(),sourcePricing:true};});
   handler('orders:reconcile-shopplus-source-data',async()=>{const local=await orchestrator.localInventory();if(!local?.current?.capturedAt||local.current.capturedAt!==local?.latestCollection?.capturedAt)throw new Error('最新来源资料尚未完成本机映射确认；请先保存对应关系后再核对网站变化');const catalog=await shopPlusProductCatalog.reconcileSourceAndWebsite({sourceProducts:local.current.products||[],sourceSnapshotProducts:local.latestCollection?.products||[],sourceUpdatedAt:local.current.savedAt||local.updatedAt||null,listPage:request=>shopPlusConnection.listProductsPage(request)});await shopPlusConnection.markProductVerified('已通过 ShopPlus 已映射商品资料核对验证');return {catalog,status:await shopPlusConnection.status(),reconciled:true};});
   handler('orders:apply-shopplus-source-reconciliation',async()=>({catalog:await shopPlusProductCatalog.applyReconciliation(),status:await shopPlusConnection.status(),applied:true}));
+  handler('inventory:daily-source-sync',async()=>{
+    let login=await orchestrator.kdocsLoginStatus();
+    if(login?.state!=='ready'){
+      emitProgress({stage:'来源登录',message:'来源资料尚未登录，正在打开登录窗口…',phase:'open-login'});
+      login=await orchestrator.login();
+      const deadline=Date.now()+5*60*1000;
+      while(login?.state!=='ready'&&Date.now()<deadline){
+        if(['closed','failed'].includes(String(login?.state||'')))return {outcome:'login_required',login,reason:login?.reason||'来源资料登录窗口已关闭'};
+        emitProgress({stage:'来源登录',message:'请在已打开的来源资料窗口完成登录；完成后系统会自动继续…',phase:'waiting-login'});
+        await wait(1000);login=await orchestrator.kdocsLoginStatus();
+      }
+      if(login?.state!=='ready')return {outcome:'login_required',login,reason:'等待来源资料登录超过 5 分钟，请重新点击一键同步'};
+    }
+    emitProgress({stage:'一键同步',message:'来源资料登录已确认，正在同步来源资料…',phase:'source-sync'});
+    const source=await orchestrator.syncSourceLocal();await refreshOrderInventory();
+    const summary=source?.mapping?.summary||source?.summary||{},needsConfirmation=Number(summary.needsConfirmation||0),pendingNumber=Number(summary.pendingNumber||0);
+    if(source?.action!=='complete'||needsConfirmation>0||pendingNumber>0)return {outcome:'mapping_required',source,mapping:await orchestrator.mappingStatus(),needsConfirmation,pendingNumber};
+    emitProgress({stage:'一键同步',message:'来源映射已确认，正在读取网站商品目录…',phase:'website-catalog'});
+    const mappingCatalog=await shopPlusProductCatalog.syncMappingCatalog({listPage:request=>shopPlusConnection.listProductsPage(request)});
+    const local=await orchestrator.localInventory();
+    if(!local?.current?.capturedAt||local.current.capturedAt!==local?.latestCollection?.capturedAt)throw new Error('最新来源资料尚未完成本机映射确认；请先在来源资料完成匹配。');
+    emitProgress({stage:'一键同步',message:'正在核对已确认商品并更新本机库存状态…',phase:'reconcile'});
+    await shopPlusProductCatalog.reconcileSourceAndWebsite({sourceProducts:local.current.products||[],sourceSnapshotProducts:local.latestCollection?.products||[],sourceUpdatedAt:local.current.savedAt||local.updatedAt||null,listPage:request=>shopPlusConnection.listProductsPage(request)});
+    const catalog=await shopPlusProductCatalog.applyReconciliation(),pending=Array.isArray(catalog?.dailyPending)?catalog.dailyPending:[],pendingSummary={replenish:pending.filter(item=>item.kind==='replenish').length,publish:pending.filter(item=>item.kind==='publish').length,unpublish:pending.filter(item=>item.kind==='unpublish').length};await shopPlusConnection.markProductVerified('已通过来源与网站一键核对验证');
+    emitProgress({stage:'完成',message:`一键同步完成：正常库存 ${catalog?.products?.length||0} 款，待处理 ${pending.length} 项。`,phase:'complete'});
+    return {outcome:'complete',catalog,status:await shopPlusConnection.status(),mappingCatalogCaptured:mappingCatalog?.mappingCatalogRun?.captured||0,pendingSummary};
+  });
   handler('orders:update-shopplus-product',async payload=>({catalog:await shopPlusProductCatalog.update(payload),status:await shopPlusConnection.status()}));
   const detailProduct=detail=>detail?.productVO||detail?.product||detail;
   const catalogProduct=async remoteProductId=>{
-    const view=await shopPlusProductCatalog.getView(),product=view.products.find(item=>String(item.remoteProductId)===String(remoteProductId));
+    const view=await shopPlusProductCatalog.getView(),product=view.products.find(item=>String(item.remoteProductId)===String(remoteProductId))||view.archivedProducts.find(item=>String(item.remoteProductId)===String(remoteProductId));
     if(!product)throw Object.assign(new Error('商品不在本机采集目录中，请先刷新商品资料'),{code:'SHOPPLUS_PRODUCT_NOT_FOUND',stage:'商品库存'});
     return product;
   };
   const requireListingConfirmation=payload=>{if(payload?.confirmed!==true)throw Object.assign(new Error('请在页面中明确确认后再执行网站上架/下架'),{code:'SHOPPLUS_LISTING_CONFIRM_REQUIRED',stage:'网站上下架'});};
-  handler('orders:shopplus-listing-review',async()=>({review:await shopPlusProductCatalog.listingReview(),status:await shopPlusConnection.status()}));
-  handler('orders:set-shopplus-listing-lock',async payload=>({catalog:await shopPlusProductCatalog.setManualListingLock({remoteProductId:payload?.remoteProductId,locked:payload?.locked}),status:await shopPlusConnection.status()}));
   handler('orders:update-shopplus-publish-status',async payload=>{
     requireListingConfirmation(payload);
     const product=await catalogProduct(payload?.remoteProductId),desired=Number(payload?.publishStatus);
@@ -384,22 +412,6 @@ async function bootstrap(){
     if(Number(after?.publishStatus)!==desired)throw Object.assign(new Error('网站回读未确认上架状态，已停止后续操作'),{code:'SHOPPLUS_PUBLISH_READBACK_FAILED',stage:'网站上下架'});
     const catalog=await shopPlusProductCatalog.recordWebsiteUpdate({remoteProductId:product.remoteProductId,raw:after,manualLock:payload?.manual!==false,action:{type:desired===1?'publish':'unpublish',beforePublishStatus:Number(before?.publishStatus),targetPublishStatus:desired,at:new Date().toISOString()}});
     return {catalog,status:await shopPlusConnection.status(),updated:true};
-  });
-  handler('orders:apply-shopplus-listing-review',async payload=>{
-    requireListingConfirmation(payload);
-    const selected=new Set(Array.isArray(payload?.remoteProductIds)?payload.remoteProductIds.map(String):[]),review=await shopPlusProductCatalog.listingReview(),results=[];
-    for(const operation of review.operations){
-      if(!selected.has(String(operation.remoteProductId))||operation.state!=='suggested')continue;
-      try{
-        const product=await catalogProduct(operation.remoteProductId),before=detailProduct(await shopPlusConnection.productDetail(product.remoteProductId));
-        if(Number(before?.publishStatus)!==operation.currentPublishStatus)throw Object.assign(new Error('网站状态已变化，未执行此项'),{code:'SHOPPLUS_PUBLISH_STATUS_STALE'});
-        const after=detailProduct(await shopPlusConnection.updateProductPublishStatus({productId:product.remoteProductId,publishStatus:operation.targetPublishStatus}));
-        if(Number(after?.publishStatus)!==operation.targetPublishStatus)throw Object.assign(new Error('网站回读未确认'),{code:'SHOPPLUS_PUBLISH_READBACK_FAILED'});
-        await shopPlusProductCatalog.recordWebsiteUpdate({remoteProductId:product.remoteProductId,raw:after,manualLock:false,action:{type:'source-review',beforePublishStatus:Number(before?.publishStatus),targetPublishStatus:operation.targetPublishStatus,sourceStock:operation.sourceStock,at:new Date().toISOString()}});
-        results.push({remoteProductId:product.remoteProductId,ok:true});
-      }catch(error){results.push({remoteProductId:operation.remoteProductId,ok:false,message:String(error?.message||error).slice(0,200)});}
-    }
-    return {results,catalog:await shopPlusProductCatalog.getView(),status:await shopPlusConnection.status()};
   });
   handler('orders:update-shopplus-variant-inventory',async payload=>{
     if(payload?.confirmed!==true)throw Object.assign(new Error('请在页面中明确确认库存数量后再更新网站'),{code:'SHOPPLUS_INVENTORY_CONFIRM_REQUIRED',stage:'网站库存'});

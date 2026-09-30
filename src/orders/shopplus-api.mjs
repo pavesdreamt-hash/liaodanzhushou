@@ -8,6 +8,11 @@ export const SHOPPLUS_OPEN_API_URL='https://api-portal.shoplus.net/open-api';
 // every write-capable endpoint.
 export const SHOPPLUS_PRODUCT_LIST_TIMEOUT_MS=120_000;
 export const SHOPPLUS_PRODUCT_LIST_READ_RETRIES=1;
+// A listing decision is a small, interactive operation.  It must not inherit
+// the longer catalogue-read deadline: each write and its mandatory readback
+// has a bounded, visible wait instead of leaving the operator guessing.
+export const SHOPPLUS_LISTING_WRITE_TIMEOUT_MS=12_000;
+export const SHOPPLUS_LISTING_READBACK_TIMEOUT_MS=12_000;
 
 export const shopPlusApiError=(message,code='SHOPPLUS_API')=>Object.assign(new Error(message),{code,stage:'ShopPlus 订单同步'});
 
@@ -126,13 +131,14 @@ export class ShopPlusConnection {
     const data=await this.request('products',{pageNum,pageSize,fields:[...new Set(fields)].sort((a,b)=>a-b)},{timeoutMs:SHOPPLUS_PRODUCT_LIST_TIMEOUT_MS,retries:SHOPPLUS_PRODUCT_LIST_READ_RETRIES});
     return {products:Array.isArray(data?.productVOs)?data.productVOs:[],totalCount:Number.isFinite(Number(data?.totalCount))?Number(data.totalCount):null,pageNum,pageSize};
   }
-  async productDetail(productId){return await this.request('products.detail',{id:identifier(productId,'ShopPlus 商品 ID')});}
-  async updateProductPublishStatus({productId,publishStatus}={}){
+  async productDetail(productId,{timeoutMs}={}){return await this.request('products.detail',{id:identifier(productId,'ShopPlus 商品 ID')},timeoutMs===undefined?{}:{timeoutMs});}
+  async updateProductPublishStatus({productId,publishStatus,timeoutMs=SHOPPLUS_LISTING_WRITE_TIMEOUT_MS,readbackTimeoutMs=SHOPPLUS_LISTING_READBACK_TIMEOUT_MS}={}){
     const id=identifier(productId,'ShopPlus 商品 ID'),status=Number(publishStatus);
     if(![0,1].includes(status))throw shopPlusApiError('上架状态只能是 0（下架）或 1（上架）','SHOPPLUS_PUBLISH_STATUS_INVALID');
-    const result=await this.request('products.updateSpuSelective',{id,publishStatus:status});
+    const result=await this.request('products.updateSpuSelective',{id,publishStatus:status},{timeoutMs});
     if(result?.result!==true)throw shopPlusApiError('ShopPlus 未确认商品上架状态更新','SHOPPLUS_PUBLISH_UPDATE_UNCONFIRMED');
-    return await this.productDetail(id);
+    try{return await this.productDetail(id,{timeoutMs:readbackTimeoutMs});}
+    catch(error){throw shopPlusApiError('上架／下架请求已提交，但网站回读未完成；请先核对建议中心，勿重复执行','SHOPPLUS_PUBLISH_READBACK_UNCERTAIN');}
   }
   async updateVariantInventory({productId,variantId,stockQuantity}={}){
     const id=identifier(productId,'ShopPlus 商品 ID'),variant=identifier(variantId,'ShopPlus 变体 ID'),quantity=inventoryQuantity(stockQuantity);
