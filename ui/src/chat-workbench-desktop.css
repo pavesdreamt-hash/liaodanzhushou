@@ -421,3 +421,87 @@
 .cwb-order-item-edit-row .cwb-quantity-stepper input::-webkit-inner-spin-button{appearance:none}
 @media(max-width:760px){.cwb-items-editor-dialog{width:calc(100vw - 28px)}.cwb-order-item-column-heads,.cwb-order-item-edit-row{grid-template-columns:repeat(3,minmax(0,1fr))}.cwb-dialog-help-tip{left:auto;right:0;top:calc(100% + 8px);transform:none}}
 .cwb-order-item-column-heads span{font-size:12px!important}
+
+/* D-178: a local catalog picker builds an editable draft; it never sends on selection. */
+#chat-workbench-desktop .cwb-composer-tabs>.cwb-product{color:#28705b;border-color:#c6e0d2;background:#effaf4}
+#chat-workbench-desktop .cwb-composer-tabs>.cwb-product:disabled{color:#8f879d;border-color:#e3deea;background:#f7f6f9;cursor:not-allowed}
+.cwb-product-picker-dialog{width:min(860px,calc(100vw - 40px));max-width:860px;height:min(860px,calc(100vh - 32px));max-height:calc(100vh - 32px);padding:24px;overflow:hidden}
+.cwb-product-picker-dialog[open]{display:grid;grid-template-rows:auto auto auto auto minmax(0,1fr) auto auto;gap:0}
+.cwb-product-picker-dialog .cwb-product-picker-lead{margin:0 0 9px;color:#5d556a;line-height:1.55}
+.cwb-product-picker-dialog .cwb-product-picker-sync{margin:0 0 12px;padding:7px 9px;color:#536c61;background:#f1faf4;border:1px solid #d4eadb;border-radius:7px;font-size:11px}
+.cwb-product-picker-dialog .cwb-product-picker-search{display:grid;grid-template-columns:70px minmax(0,1fr);gap:9px;align-items:center;margin:0 0 12px;color:#4c4557;font-size:12px}
+.cwb-product-picker-dialog .cwb-product-picker-search input{width:100%;min-height:36px}
+.cwb-product-picker-dialog .cwb-product-picker-layout{display:grid;grid-template-columns:minmax(230px,.88fr) minmax(0,1.12fr);gap:14px;min-height:0;overflow:hidden}
+.cwb-product-picker-dialog .cwb-product-picker-list-panel,.cwb-product-picker-dialog .cwb-product-picker-detail-panel{min-width:0;min-height:0;display:flex;flex-direction:column;gap:8px;padding:11px;border:1px solid #e7e1ed;border-radius:10px;background:#fcfbfd}
+.cwb-product-picker-dialog .cwb-product-picker-list-panel>strong,.cwb-product-picker-dialog .cwb-product-picker-detail-panel>strong{font-size:12px;color:#443b51}
+.cwb-product-picker-dialog .cwb-product-picker-list{min-height:0;max-height:none;flex:1;overflow:auto;display:grid;align-content:start;gap:6px}
+.cwb-product-picker-dialog .cwb-product-picker-item{width:100%;min-width:0;display:grid;gap:3px;padding:9px 10px;border:1px solid #e8e2ee;border-radius:8px;background:#fff;color:#42394e;text-align:left}
+.cwb-product-picker-dialog .cwb-product-picker-item:hover,.cwb-product-picker-dialog .cwb-product-picker-item[aria-pressed=true]{border-color:#bf9bef;background:#faf6ff}
+.cwb-product-picker-dialog .cwb-product-picker-item strong,.cwb-product-picker-dialog .cwb-product-picker-item small,.cwb-product-picker-dialog .cwb-product-picker-item span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cwb-product-picker-dialog .cwb-product-picker-item strong{font-size:12px}.cwb-product-picker-dialog .cwb-product-picker-item small{color:#746b80;font-size:10px}.cwb-product-picker-dialog .cwb-product-picker-item span{color:#28705b;font-size:10px}
+.cwb-product-picker-dialog .cwb-product-picker-details{min-height:0;flex:1;display:grid;align-content:start;gap:9px;overflow:auto}
+.cwb-product-picker-dialog .cwb-product-picker-summary{display:grid;gap:3px;padding-bottom:8px;border-bottom:1px solid #ebe5f0}.cwb-product-picker-dialog .cwb-product-picker-summary strong{font-size:14px;word-break:break-word}.cwb-product-picker-dialog .cwb-product-picker-summary small{color:#756d80;font-size:10px;word-break:break-word}
+.cwb-product-picker-dialog .cwb-product-picker-field{display:grid;grid-template-columns:16px minmax(0,1fr) auto;gap:7px;align-items:center;margin:0;padding:7px 8px;border:1px solid #ece7f1;border-radius:7px;background:#fff;cursor:pointer}.cwb-product-picker-dialog .cwb-product-picker-field:has(input:disabled){color:#928a99;background:#f8f7f9;cursor:not-allowed}.cwb-product-picker-dialog .cwb-product-picker-field input{width:15px;min-width:15px;height:15px;margin:0;padding:0}.cwb-product-picker-dialog .cwb-product-picker-field span{min-width:0;font-size:12px}.cwb-product-picker-dialog .cwb-product-picker-field small{max-width:160px;overflow:hidden;color:#6e6577;text-align:right;text-overflow:ellipsis;white-space:nowrap;font-size:10px}
+.cwb-product-picker-dialog .cwb-product-picker-image{width:100%;max-height:132px;object-fit:contain;border:1px solid #e4deea;border-radius:7px;background:#fff}
+.cwb-product-picker-dialog .cwb-product-picker-empty{margin:auto 0;color:#7b7284;font-size:12px;line-height:1.55}.cwb-product-picker-dialog .cwb-product-picker-notice{margin:12px 0 0;padding:8px 10px;color:#aa3a2d;background:#fff5f3;border:1px solid #f0d2cd;border-radius:7px;font-size:11px}.cwb-product-picker-dialog footer{flex-shrink:0}.cwb-product-picker-dialog .cwb-product-picker-add{color:#fff!important;background:#7c3aed!important;border-color:#7c3aed!important}
+@media(max-width:640px){.cwb-product-picker-dialog{width:calc(100vw - 24px);padding:18px}.cwb-product-picker-dialog .cwb-product-picker-layout{grid-template-columns:1fr;min-height:0}.cwb-product-picker-dialog .cwb-product-picker-list{max-height:180px}.cwb-product-picker-dialog .cwb-product-picker-field small{max-width:120px}}
+
+/* D-181: user-triggered, read-only AdsPower inbox scan. */
+#chat-workbench-desktop .cwb-adspower-scan{color:#0f6b5a;background:#edf9f5}
+#chat-workbench-desktop .cwb-adspower-scan:hover{background:#dff5ed}
+#chat-workbench-desktop .cwb-adspower-scan.is-loading{pointer-events:none;opacity:.72}
+#chat-workbench-desktop .cwb-adspower-scan.is-loading svg{animation:cwb-spin .65s linear infinite}
+.cwb-adspower-dialog{box-sizing:border-box;width:min(920px,calc(100vw - 40px));max-width:920px;height:fit-content;max-height:calc(100vh - 36px);padding:22px;overflow:hidden;border:1px solid #ddd7e8;border-radius:14px;background:#fff;box-shadow:0 18px 60px #1f183a33}
+.cwb-adspower-dialog[open]{display:grid;grid-template-rows:auto auto auto minmax(0,auto) auto;align-content:start;gap:12px}
+.cwb-adspower-dialog h2{margin:0;color:#312940;font-size:19px}
+.cwb-adspower-dialog .cwb-adspower-lead{margin:6px 0 0;color:#625a6d;font-size:12px;line-height:1.6}
+.cwb-adspower-dialog .cwb-adspower-safety{margin:0;padding:9px 10px;color:#215b50;background:#eefaf5;border:1px solid #ccebdd;border-radius:8px;font-size:11px;line-height:1.55}
+.cwb-adspower-dialog .cwb-adspower-status{min-height:18px;margin:0;color:#675d73;font-size:12px;line-height:1.5}
+.cwb-adspower-dialog .cwb-adspower-results{min-height:0;max-height:min(460px,calc(100vh - 360px));display:grid;align-content:start;gap:10px;overflow:auto;padding:1px}
+.cwb-adspower-dialog .cwb-adspower-profile{display:grid;gap:9px;padding:12px;border:1px solid #e3ddec;border-radius:10px;background:#fcfbfd}
+.cwb-adspower-dialog .cwb-adspower-profile.is-failed{border-color:#efcfca;background:#fff9f8}
+.cwb-adspower-dialog .cwb-adspower-profile.is-skipped{background:#faf9fb}
+.cwb-adspower-dialog .cwb-adspower-profile-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.cwb-adspower-dialog .cwb-adspower-profile-head strong{font-size:13px}
+.cwb-adspower-dialog .cwb-adspower-profile-head small{color:#6f667a;font-size:11px;line-height:1.45}
+.cwb-adspower-dialog .cwb-adspower-state{flex:0 0 auto;padding:3px 7px;border-radius:999px;color:#16634f;background:#e9f8f1;font-size:10px}
+.cwb-adspower-dialog .is-failed .cwb-adspower-state{color:#ae3d33;background:#fff0ee}
+.cwb-adspower-dialog .is-skipped .cwb-adspower-state{color:#726a7a;background:#f0eef3}
+.cwb-adspower-dialog .cwb-adspower-page{display:grid;gap:7px;padding:10px;border:1px solid #eee9f2;border-radius:8px;background:#fff}
+.cwb-adspower-dialog .cwb-adspower-page>small{color:#756d80;font-size:10px}
+.cwb-adspower-dialog .cwb-adspower-fragment{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;padding:8px 9px;border:1px solid #eee9f2;border-radius:7px;background:#fdfcff}
+.cwb-adspower-dialog .cwb-adspower-fragment>section{min-width:0}.cwb-adspower-dialog .cwb-adspower-fragment small{display:block;margin-bottom:3px;color:#7b7285;font-size:10px}.cwb-adspower-dialog .cwb-adspower-fragment p{margin:0;color:#3e354b;font-size:12px;line-height:1.55;white-space:pre-wrap;word-break:break-word}.cwb-adspower-dialog .cwb-adspower-fragment .translation p{color:#4c1d95}.cwb-adspower-dialog .cwb-adspower-fragment .translation.is-pending p{color:#7a6e88}
+.cwb-adspower-dialog .cwb-adspower-error{margin:0;color:#ae3d33;font-size:11px;line-height:1.5}
+.cwb-adspower-dialog footer{display:flex;justify-content:flex-end;gap:8px}.cwb-adspower-dialog footer button{min-height:34px;padding:0 12px;border:1px solid #dcd4e7;border-radius:7px;color:#544b60;background:#fff}.cwb-adspower-dialog footer .cwb-adspower-rescan{color:#fff;border-color:#7c3aed;background:#7c3aed}
+@media(max-width:1400px){#chat-workbench-desktop .cwb-adspower-scan span{display:none}}
+@media(max-width:620px){.cwb-adspower-dialog{width:calc(100vw - 24px);padding:17px}.cwb-adspower-dialog .cwb-adspower-fragment{grid-template-columns:1fr}}
+
+/* D-189: the desktop workbench consumes the order-management shell metrics. */
+#chat-workbench-desktop{--cwb-nav-width:var(--app-nav-collapsed-width);--cwb-list-width:max(240px,calc(33.333vw - var(--cwb-nav-width) - 8px));padding-top:var(--app-topbar-height);grid-template-columns:var(--cwb-nav-width) var(--cwb-list-width) 8px minmax(360px,1fr) 8px var(--cwb-order-width)}
+#chat-workbench-desktop.is-nav-open{grid-template-columns:var(--cwb-nav-width) var(--cwb-list-width) 8px minmax(360px,1fr) 8px var(--cwb-order-width)}
+#chat-workbench-desktop .cwb-topbar{height:var(--app-topbar-height);padding:0 20px 0 var(--app-topbar-safe-left)}
+#chat-workbench-desktop .cwb-nav{padding:var(--app-nav-padding-block-start) var(--app-nav-padding-inline) var(--app-nav-padding-block-end);gap:0}
+#chat-workbench-desktop .cwb-nav-section,#chat-workbench-desktop .cwb-nav nav.cwb-nav-section{gap:0}
+#chat-workbench-desktop .cwb-nav-section+.cwb-nav-section{margin-top:22px}
+#chat-workbench-desktop .cwb-nav-heading{min-height:var(--app-nav-heading-height);margin:0 var(--app-nav-heading-margin-inline) var(--app-nav-heading-gap);display:flex;align-items:center}
+#chat-workbench-desktop .cwb-nav-heading .cwb-nav-toggle{width:var(--app-nav-toggle-size);height:var(--app-nav-toggle-size);min-height:var(--app-nav-toggle-size);padding:0;display:grid;place-items:center}
+#chat-workbench-desktop .cwb-nav-section button:not(.cwb-nav-toggle){height:var(--app-nav-item-height);min-height:var(--app-nav-item-height);padding:0 var(--app-nav-item-padding-inline);gap:var(--app-nav-item-gap);border-radius:var(--app-nav-item-radius)}
+#chat-workbench-desktop .cwb-nav nav button[aria-current=page]{background:var(--app-nav-active)}
+#chat-workbench-desktop:not(.is-nav-open) .cwb-nav-heading{min-height:var(--app-nav-heading-height);margin:0 0 var(--app-nav-heading-gap);justify-content:center}
+#chat-workbench-desktop:not(.is-nav-open) .cwb-nav-heading .cwb-nav-toggle{position:static;transform:none}
+@media(max-width:1180px){#chat-workbench-desktop,#chat-workbench-desktop.is-nav-open{grid-template-columns:var(--cwb-nav-width) var(--cwb-list-width) 7px minmax(340px,1fr) 8px var(--cwb-order-width)}}
+@media(max-width:980px){#chat-workbench-desktop,#chat-workbench-desktop.is-nav-open{grid-template-columns:var(--app-nav-collapsed-width) var(--cwb-list-width) 7px minmax(0,1fr)}#chat-workbench-desktop .cwb-nav-heading{margin-inline:0;justify-content:center}#chat-workbench-desktop .cwb-nav-heading>span{display:none}#chat-workbench-desktop .cwb-nav-section button{justify-content:center;padding-inline:0}}
+
+/* The first paint must already match the fixed shared shell; runtime state only changes this to 64px when collapsed. */
+#chat-workbench-desktop{--cwb-bg:#f7f6fb;--cwb-nav-width:208px}
+@media(max-width:980px){#chat-workbench-desktop{--cwb-nav-width:64px}}
+
+/* D-191: collapsed navigation uses the same 64px canvas and 48px targets as order management. */
+#chat-workbench-desktop:not(.is-nav-open) .cwb-nav,#chat-workbench-desktop.cwb-nav-compact .cwb-nav{padding-inline:8px}
+#chat-workbench-desktop:not(.is-nav-open) .cwb-nav-heading,#chat-workbench-desktop.cwb-nav-compact .cwb-nav-heading{margin-inline:0;justify-content:center}
+#chat-workbench-desktop:not(.is-nav-open) .cwb-nav-heading>span,#chat-workbench-desktop.cwb-nav-compact .cwb-nav-heading>span{display:none}
+#chat-workbench-desktop:not(.is-nav-open) .cwb-nav-section button:not(.cwb-nav-toggle) span,#chat-workbench-desktop.cwb-nav-compact .cwb-nav-section button:not(.cwb-nav-toggle) span{display:none!important}
+#chat-workbench-desktop:not(.is-nav-open) .cwb-nav-section button:not(.cwb-nav-toggle),#chat-workbench-desktop.cwb-nav-compact .cwb-nav-section button:not(.cwb-nav-toggle){width:100%;justify-content:center;padding-inline:0}
+#chat-workbench-desktop .cwb-nav-heading .cwb-nav-toggle{border:1px solid #e5dff0;background:#f8f6fb}
+#chat-workbench-desktop .cwb-nav-heading .cwb-nav-toggle svg{width:18px;height:18px}
+#chat-workbench-desktop:not(.is-nav-open) .cwb-nav-heading .cwb-nav-toggle,#chat-workbench-desktop.cwb-nav-compact .cwb-nav-heading .cwb-nav-toggle{position:static;top:auto;right:auto;transform:none;margin:0}

@@ -1,9 +1,24 @@
 export {};
 
+type ChatProductCatalogPayload={token:string;query?:string;remoteProductId?:string;includeImage?:boolean};
+type ChatProductCatalogItem={remoteProductId:string;name:string;productNumber:string|null;sourceSpu:string|null;stockKnown:boolean;stockQuantity:number|null;sourceStock:'有货'|'无货'|null;websitePriceAed:number|null;costPriceAed:number|null;suggestedPriceAed:number|null;floorPriceAed:number|null;image?:{status:'cached'|'unavailable'|'manual_review'|'none';dataUrl?:string;mimetype?:string;filename?:string}};
+type ChatProductCatalogResult={products:ChatProductCatalogItem[];lastSuccessfulReadAt:string|null};
+type AdsPowerScanFragment={id:string;text:string};
+type AdsPowerScanPage={pageId:string;title:string;error?:string;fragments:AdsPowerScanFragment[]};
+type AdsPowerScanProfile={profileId:string;label:string;status:'scanned'|'skipped'|'failed';detail:string;pages:AdsPowerScanPage[]};
+type AdsPowerScanResult={token:string;scannedAt:string;profiles:AdsPowerScanProfile[];limits:{profiles:number;fragmentsPerProfile:number}};
+
 declare global {
   interface Window {
+    adsPowerInbox?: {
+      scan: () => Promise<{ok:boolean;data?:AdsPowerScanResult;error?:{message?:string}|string}>;
+      translate: (payload:{token:string;messageIds:string[]}) => Promise<{ok:boolean;data?:{translations:{id:string;text:string}[]};error?:{message?:string}|string}>;
+      clear: (payload:{token:string}) => Promise<{ok:boolean;data?:{cleared:boolean};error?:{message?:string}|string}>;
+    };
     inventoryApp?: {
-      orders?: Record<string, (...args: any[]) => Promise<{ok: boolean; data?: any; error?: {message?: string}}>>;
+      orders?: Record<string, (...args: any[]) => Promise<{ok: boolean; data?: any; error?: {message?: string}}>> & {
+        chatProductCatalog?: (payload?:ChatProductCatalogPayload) => Promise<{ok:boolean;data?:ChatProductCatalogResult;error?:{message?:string}}>;
+      };
       localInventory?: () => Promise<{ok: boolean; data?: unknown; error?: {message?: string}}>;
       status?: () => Promise<{ok: boolean; data?: unknown; error?: {message?: string}}>;
       assistantSettings?: {

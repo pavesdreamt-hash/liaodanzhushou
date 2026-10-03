@@ -5,6 +5,9 @@ import {version} from '../../package.json';
 export type OrderLayoutDesktop = {
   mergedTitlebar?:boolean;
   setOrderChrome?:(enabled:boolean)=>Promise<boolean>;
+  toggleMaximize?:()=>Promise<boolean>;
+  getWindowBounds?:()=>Promise<{x:number;y:number}|null>;
+  moveWindow?:(position:{x:number;y:number})=>Promise<boolean>;
   getDisplay:()=>Promise<DisplayProfile|null>;
   onDisplayChanged:(callback:(display:DisplayProfile)=>void)=>()=>void;
 };
@@ -39,8 +42,7 @@ export function installOrderLayout(doc:Document,win:Window,desktop?:OrderLayoutD
   root.querySelector('.od-top-actions')!.prepend(button);
   const dialog=doc.createElement('dialog');dialog.className='ol-dialog';dialog.setAttribute('aria-labelledby','ol-title');
   dialog.innerHTML=`<h2 id="ol-title">聊天页面布局</h2><p class="ol-display"></p>
-    <div class="ol-settings-section"><label class="ol-settings-row">导航宽度（px）<input data-setting="navWidth" type="number" min="144" max="340" step="1"></label>
-    <label class="ol-settings-row">中间内容宽度（px）<input data-setting="contentWidth" type="number" min="300" step="1"></label>
+    <div class="ol-settings-section"><label class="ol-settings-row">中间内容宽度（px）<input data-setting="contentWidth" type="number" min="300" step="1"></label>
     <label class="ol-settings-row">手机宽度（px）<input data-setting="phoneWidth" type="number" min="280" max="650" step="1"></label>
     <label class="ol-settings-row">手机高度（px）<input data-setting="phoneHeight" type="number" min="560" max="1500" step="1"></label>
     <label class="ol-settings-row">左侧回复区宽度（px）<input data-setting="replyWidth" type="number" min="280" max="420" step="1"></label>
@@ -52,7 +54,7 @@ export function installOrderLayout(doc:Document,win:Window,desktop?:OrderLayoutD
     <output class="ol-save-state" aria-live="polite"></output><div class="ol-dialog-actions"><button type="button" class="od-button" data-reset>恢复本屏幕默认</button><button type="button" class="od-button od-button-primary" data-close>完成</button></div>`;
   root.append(dialog);
   const inputs=Object.fromEntries(Array.from(dialog.querySelectorAll<HTMLInputElement>('[data-setting]')).map(input=>[input.dataset.setting!,input]));
-  if(removeChatWorkspace){dialog.querySelector('h2')!.textContent='订单详情布局';for(const key of ['contentWidth','phoneWidth','phoneHeight','replyWidth','locked','chatFont'])inputs[key].closest('label')!.hidden=true;dialog.querySelectorAll('p')[1]!.textContent='导航宽度和页面字号会按当前显示器保存。';}
+  if(removeChatWorkspace){dialog.querySelector('h2')!.textContent='订单详情布局';for(const key of ['contentWidth','phoneWidth','phoneHeight','replyWidth','locked','chatFont'])inputs[key].closest('label')!.hidden=true;dialog.querySelectorAll('p')[1]!.textContent='侧栏宽度固定；页面字号会按当前显示器保存。';}
   const status=dialog.querySelector<HTMLOutputElement>('output')!;
   let disposed=false,ready=!desktop,display:DisplayProfile={id:`browser-${win.screen.width}x${win.screen.height}-${win.devicePixelRatio}`,label:'当前屏幕'};
   let prefs=defaults(win.innerWidth,win.innerHeight),saved=false;
@@ -76,14 +78,12 @@ export function installOrderLayout(doc:Document,win:Window,desktop?:OrderLayoutD
     for(const [key,value] of Object.entries(variables))root.style.setProperty(key,`${value}px`);
     const values={...prefs,navWidth:g.nav,phoneWidth:g.phoneWidth,phoneHeight:g.phoneHeight,contentWidth:Math.round(content.getBoundingClientRect().width)};
     for(const [key,input] of Object.entries(inputs)){if(input.type==='checkbox')input.checked=prefs.locked;else input.value=String(values[key as keyof typeof values]);}
-    inputs.navWidth.disabled=g.compact;
-    inputs.navWidth.max=String(Math.min(340,win.innerWidth-720));
     inputs.contentWidth.min=String(g.contentMin);
     inputs.contentWidth.max=String(Math.floor(layout.clientWidth-48-railWidth()-280));
     inputs.phoneWidth.max=String(Math.floor(Math.min(650,layout.clientWidth-48-railWidth()-g.contentMin)));
     inputs.phoneHeight.min=String(prefs.locked?Math.round(280*prefs.ratio):560);
     inputs.phoneHeight.max=String(prefs.locked?Math.round(Number(inputs.phoneWidth.max)*prefs.ratio):1500);
-    navDivider.setAttribute('aria-valuenow',String(g.nav));columnDivider.setAttribute('aria-valuenow',String(values.contentWidth));
+    columnDivider.setAttribute('aria-valuenow',String(values.contentWidth));
     dialog.querySelector('.ol-display')!.textContent=`${display.label} · 导航和内容字号在各页共用`;
     root.dataset.layoutReady=String(ready);
     onTitlebar?.(win.innerWidth-root.querySelector('.od-top-actions')!.getBoundingClientRect().left+10,Boolean(doc.querySelector('dialog[open],.od-overlay:not([hidden])')));
@@ -91,8 +91,7 @@ export function installOrderLayout(doc:Document,win:Window,desktop?:OrderLayoutD
   const effective=()=>{const g=geometry(prefs,win.innerWidth,railWidth());return {...prefs,navWidth:g.nav,phoneWidth:g.phoneWidth,phoneHeight:g.phoneHeight};};
   const fit=(value:LayoutPreferences)=>{const g=geometry(value,win.innerWidth,railWidth());return {...value,navWidth:g.compact?value.navWidth:g.nav,phoneWidth:g.phoneWidth,phoneHeight:g.phoneHeight};};
   const update=(kind:string,dx:number,dy:number,start:LayoutPreferences)=>{
-    if(kind==='nav')prefs={...start,navWidth:start.navWidth+dx};
-    else if(kind==='column')prefs=resizePhone(start,start.phoneWidth-dx,start.phoneHeight,'width');
+    if(kind==='column')prefs=resizePhone(start,start.phoneWidth-dx,start.phoneHeight,'width');
     else if(kind==='reply-width')prefs=sanitize({...start,replyWidth:start.replyWidth+dx},start);
     else{
       const horizontal=/[ew]/.test(kind),vertical=/[ns]/.test(kind);
@@ -117,7 +116,6 @@ export function installOrderLayout(doc:Document,win:Window,desktop?:OrderLayoutD
   const divider=(className:string,label:string,target:string,kind:string)=>{
     const el=doc.createElement('button');el.type='button';el.className=`ol-divider ${className}`;el.setAttribute('role','separator');el.setAttribute('aria-orientation','vertical');el.setAttribute('aria-label',label);el.setAttribute('aria-controls',target);el.title=label+'：拖动或使用方向键';handle(el,kind);return el;
   };
-  const navDivider=divider('ol-nav-divider','调整导航宽度','ol-sidebar','nav');sidebar.append(navDivider);
   const columnDivider=divider('ol-column-divider','调整中间内容宽度','ol-content','column');layout.append(columnDivider);
   const replyDivider=divider('reply-width-divider','调整回复区宽度','ol-composer','reply-width');rail?.append(replyDivider);replyDivider.ondblclick=()=>{prefs={...prefs,replyWidth:300};paint();persist();};
   navToggle.onclick=()=>{navCollapsed=!navCollapsed;try{win.localStorage.setItem(NAV_COLLAPSED_KEY,String(navCollapsed));}catch{}renderNavToggle();paint();};

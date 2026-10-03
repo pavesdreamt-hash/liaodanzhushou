@@ -1,6 +1,7 @@
 import {createHash,randomUUID} from 'node:crypto';
 import {mkdir,readFile,rename,writeFile} from 'node:fs/promises';
 import path from 'node:path';
+import {FB_REFERENCE_SCRIPT_AI_RULES,FB_REFERENCE_SCRIPT_SET_ID,FB_REFERENCE_SCRIPT_TEXT,FB_REFERENCE_SCRIPT_TITLE} from '../shared/fb-reference-scripts.mjs';
 const invalid=message=>Object.assign(new Error(message),{stage:'回复翻译',code:'MANUAL_TRANSLATION'});
 function validateChatMessages(payload){
   const messages=payload?.messages;
@@ -68,6 +69,20 @@ export async function backTranslateManualReply(settings,payload){
   const result=await settings.complete({purpose:'translate-draft',input:{english},configuration});
   if(result?.text!==english||typeof result?.chinese!=='string'||!result.chinese.trim()||result.chinese.length>16000)throw invalid('回译结果不完整，原稿已保留，请重试');
   return {text:english,chinese:result.chinese.trim()};
+}
+
+export async function generateFacebookReplyDraft(settings,payload){
+  const intent=payload?.text;
+  if(typeof intent!=='string'||!intent.trim())throw invalid('请先输入需要整理的中文回复');
+  if(intent.length>6000)throw invalid('一次最多整理 6000 个字符，请分段处理');
+  const configuration=await settings.configuration();
+  // This deliberately combines only the merchant's current FB input with the packaged
+  // reference chosen by the merchant. It never receives scan fragments, a Facebook
+  // conversation, WhatsApp context, order data, or arbitrary renderer-provided examples.
+  const referenceScripts={id:FB_REFERENCE_SCRIPT_SET_ID,title:FB_REFERENCE_SCRIPT_TITLE,content:FB_REFERENCE_SCRIPT_TEXT,rules:FB_REFERENCE_SCRIPT_AI_RULES};
+  const result=await settings.complete({purpose:'compose',input:{intent:intent.trim(),tone:'professional',channel:'fb-manual',referenceScripts},configuration});
+  if(typeof result?.text!=='string'||!result.text.trim()||result.text.length>16000||typeof result?.chinese!=='string'||!result.chinese.trim()||result.chinese.length>16000)throw invalid('AI 整理结果不完整，已有草稿保留，请重试');
+  return {text:result.text.trim(),chinese:result.chinese.trim(),note:'AI 草稿请人工核对后复制；未向 FB 发送内容。'};
 }
 
 export async function generateManualAssistantDraft(settings,payload){

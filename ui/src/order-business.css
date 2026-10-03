@@ -1,7 +1,6 @@
 #ui040 .ob-orders{display:flex;flex-direction:column;gap:12px;min-height:0;flex:1}
 #ui040 .main>.tabs,#ui040 .main>.tab-panel{display:none!important}
 #ui008-order-detail:not([data-empty-data="true"]) .od-content{visibility:hidden}
-#ui040.unified-page .up-divider:after{inset:0 4px;background:#e8e2ed;border-radius:0}
 #ui040 .ob-title-row{display:flex;align-items:center;gap:8px}
 #ui040 .head,#ui040 .head-actions{flex-wrap:wrap}
 #ui040 .ob-title-info{width:23px;height:23px;padding:0;display:grid;place-items:center;color:#6f657a;background:#fff;border:1px solid #dcd2e8;border-radius:50%;font-size:13px;font-weight:700;line-height:1}

@@ -1,5 +1,6 @@
 export const STORAGE_KEY = 'liaodan.order-detail.layout.v1';
 export const PHONE_RATIO = 2.1;
+export const FIXED_NAV_WIDTH = 208;
 export type LayoutPreferences = {
   navWidth:number; phoneWidth:number; phoneHeight:number; ratio:number; locked:boolean;
   navFont:number; contentFont:number; chatFont:number; composerHeight:number; replyWidth:number;
@@ -21,7 +22,8 @@ export function sanitize(value:unknown,fallback:LayoutPreferences):LayoutPrefere
 export function geometry(p:LayoutPreferences,width:number,railWidth=0){
   const compact=width<980;
   const contentMin=width<(railWidth>200?1440:1100)?300:380;
-  const nav=compact?64:Math.round(clamp(p.navWidth,144,Math.max(144,Math.min(340,width-720,width-84-contentMin-railWidth-280))));
+  // D-190: the shared sidebar does not resize per page or display.
+  const nav=compact?64:FIXED_NAV_WIDTH;
   // Main padding, column gap and the right-column scroll gutter.
   const available=Math.max(280,width-nav-36-18-30-contentMin-railWidth);
   const phoneWidth=Math.round(clamp(p.phoneWidth,280,Math.min(650,available)));

@@ -1,5 +1,6 @@
 import test from 'node:test';import assert from 'node:assert/strict';import {mkdtemp,rm} from 'node:fs/promises';import os from 'node:os';import path from 'node:path';
-import {translateManualReply,backTranslateManualReply,generateManualAssistantDraft,recognizeImageText} from '../src/manual-translation.mjs';import {AssistantSettings} from '../src/orders/assistant-settings.mjs';
+import {translateManualReply,backTranslateManualReply,generateFacebookReplyDraft,generateManualAssistantDraft,recognizeImageText} from '../src/manual-translation.mjs';import {AssistantSettings} from '../src/orders/assistant-settings.mjs';
+import {FB_REFERENCE_SCRIPT_AI_RULES,FB_REFERENCE_SCRIPT_SET_ID,FB_REFERENCE_SCRIPT_TEXT,FB_REFERENCE_SCRIPT_TITLE} from '../shared/fb-reference-scripts.mjs';
 test('manual translation submits only the typed Chinese using the existing translation purpose and preserves emoji counts',async()=>{
  let request;const service={configuration:async()=>({model:'fictional'}),complete:async value=>{request=value;return {text:'Thank you 😊',chinese:'感谢你'};}};
  const result=await translateManualReply(service,{text:'感谢你的支持😊😊🙏',customer:'must not be sent'});
@@ -17,6 +18,16 @@ test('manual back translation sends only the current English for a non-sending C
  await assert.rejects(backTranslateManualReply(service,{text:''}),/英文/);
  service.complete=async()=>({text:'Changed English',chinese:'不应接受'});
  await assert.rejects(backTranslateManualReply(service,{text:english}),/不完整/);
+});
+test('FB AI reply draft submits the merchant\'s current manual input plus only the packaged local reference, never conversation context',async()=>{
+ let request,calls=0;const service={configuration:async()=>({provider:'fictional',model:'fictional-model',configRevision:3}),complete:async value=>{calls++;request=value;return {text:'Please send the fictional product photo.',chinese:'请发送虚构的产品图片。'};}};
+ const result=await generateFacebookReplyDraft(service,{text:'请发送虚构的产品图片',scannedText:'must not be sent',conversation:[{text:'must not be sent'}],whatsAppContext:'must not be sent',order:'must not be sent',referenceScripts:{content:'renderer content must not be sent'}});
+ assert.deepEqual(result,{text:'Please send the fictional product photo.',chinese:'请发送虚构的产品图片。',note:'AI 草稿请人工核对后复制；未向 FB 发送内容。'});
+ assert.deepEqual(request,{purpose:'compose',configuration:{provider:'fictional',model:'fictional-model',configRevision:3},input:{intent:'请发送虚构的产品图片',tone:'professional',channel:'fb-manual',referenceScripts:{id:FB_REFERENCE_SCRIPT_SET_ID,title:FB_REFERENCE_SCRIPT_TITLE,content:FB_REFERENCE_SCRIPT_TEXT,rules:FB_REFERENCE_SCRIPT_AI_RULES}}});assert.equal(calls,1);
+});
+test('FB AI reply rejects invalid manual input before any service request',async()=>{
+ let calls=0;const service={configuration:async()=>({}),complete:async()=>{calls++;return {text:'must not be used',chinese:'不得使用'};}};
+ await assert.rejects(generateFacebookReplyDraft(service,{text:''}),/输入/);await assert.rejects(generateFacebookReplyDraft(service,{text:'x'.repeat(6001)}),/6000/);assert.equal(calls,0);
 });
 test('AI reply draft uses only a bounded verified conversation and never sends a message',async()=>{
  let request,calls=0;const service={configuration:async()=>({provider:'fictional',model:'fictional-model',configRevision:3}),complete:async value=>{calls++;request=value;return {text:'Please confirm the fictional delivery address.',chinese:'请确认虚构收货地址。'};}};

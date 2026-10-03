@@ -6,6 +6,10 @@ const defaultMediaRetentionDays=30,defaultMediaCacheBytes=1024*1024*1024,display
 const dataBytes=value=>{const body=String(value||'').split(',',2)[1]||'';return Math.floor(body.length*3/4)-(body.endsWith('==')?2:body.endsWith('=')?1:0);};
 const cachedData=value=>{const match=typeof value==='string'&&value.match(displayableMedia);return match&&dataBytes(value)>0&&dataBytes(value)<=16*1024*1024?value:null;};
 const cachedAt=(value,fallback)=>Number.isFinite(Date.parse(value))?Date.parse(value):fallback;
+// WhatsApp can expose the same verified message through a phone-number (PN)
+// remote in one read and a LID remote in another. The opaque suffix is the
+// message identity; keep it intact, including underscores.
+export const canonicalMessageId=value=>String(value||'').trim().replace(/^(true|false)_[^_]+_/,'$1_');
 
 // A browser session can expose fewer old messages after a restart. Keep only
 // messages that were actually read from the verified chat, never guessed rows.
@@ -17,11 +21,41 @@ export class ManualChatHistory {
     const file=path.join(this.directory,'verified-chat-history.sqlite');
     const database=new DatabaseSync(file,{timeout:5000});
     database.exec('PRAGMA journal_mode=WAL');
-    database.exec('CREATE TABLE IF NOT EXISTS messages(account_id TEXT NOT NULL,chat_id TEXT NOT NULL,message_id TEXT NOT NULL,sent_at TEXT NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(account_id,chat_id,message_id))');
-    database.exec('CREATE INDEX IF NOT EXISTS messages_by_time ON messages(account_id,chat_id,sent_at,message_id)');
+    database.exec('CREATE TABLE IF NOT EXISTS messages(account_id TEXT NOT NULL,chat_id TEXT NOT NULL,message_id TEXT NOT NULL,canonical_id TEXT NOT NULL,sent_at TEXT NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(account_id,chat_id,message_id))');
+    this.ensureCanonicalIds(database);
+    database.exec('CREATE UNIQUE INDEX IF NOT EXISTS messages_by_canonical ON messages(account_id,chat_id,canonical_id)');
+    database.exec('CREATE INDEX IF NOT EXISTS messages_by_canonical_time ON messages(account_id,chat_id,sent_at,canonical_id)');
     database.exec('CREATE TABLE IF NOT EXISTS hidden_chats(account_id TEXT NOT NULL,chat_id TEXT NOT NULL,hidden_at TEXT NOT NULL,PRIMARY KEY(account_id,chat_id))');
     await Promise.all([file,`${file}-wal`,`${file}-shm`].map(name=>chmod(name,0o600).catch(error=>{if(error.code!=='ENOENT')throw error;})));
     this.database=database;this.cleanupMediaCache(database);return database;
+  }
+  ensureCanonicalIds(db){
+    const columns=db.prepare('PRAGMA table_info(messages)').all();
+    if(!columns.some(column=>column.name==='canonical_id'))db.exec('ALTER TABLE messages ADD COLUMN canonical_id TEXT');
+    const rows=db.prepare('SELECT rowid id,account_id,chat_id,message_id,sent_at,payload,canonical_id FROM messages ORDER BY rowid').all(),updateCanonical=db.prepare('UPDATE messages SET canonical_id=? WHERE rowid=?');
+    db.exec('BEGIN IMMEDIATE');
+    try{
+      for(const row of rows)updateCanonical.run(canonicalMessageId(row.message_id),row.id);
+      const grouped=new Map();
+      for(const row of rows){const key=[row.account_id,row.chat_id,canonicalMessageId(row.message_id)].join('\u0000'),group=grouped.get(key)||[];group.push(row);grouped.set(key,group);}
+      const update=db.prepare('UPDATE messages SET message_id=?,canonical_id=?,sent_at=?,payload=? WHERE rowid=?'),remove=db.prepare('DELETE FROM messages WHERE rowid=?');
+      for(const group of grouped.values()){
+        if(group.length<2)continue;
+        let merged=null;
+        for(const row of group){
+          let payload;
+          try{payload=JSON.parse(row.payload);}catch{payload={id:row.message_id,sentAt:row.sent_at,text:'[未知类型消息]',metadata:{media:[]}};}
+          merged=merged?ManualChatHistory.merge(merged,payload):payload;
+        }
+        // Keep the first legacy primary key while its aliases still exist;
+        // changing it before deleting the other alias would violate the old
+        // primary key constraint. Live reads are reconciled by canonical ID.
+        const keeper=group[0],messageId=keeper.message_id,canonicalId=canonicalMessageId(messageId),next={...merged,id:messageId},sentAt=Number.isFinite(Date.parse(next?.sentAt))?next.sentAt:keeper.sent_at;
+        update.run(messageId,canonicalId,sentAt,JSON.stringify(next),keeper.id);
+        for(const row of group.slice(1))remove.run(row.id);
+      }
+      db.exec('COMMIT');
+    }catch(error){db.exec('ROLLBACK');throw error;}
   }
   static portable(message,now=new Date().toISOString()){
     const media=message.metadata?.media?.map(({dataUrl,status,mediaCachedAt,...item})=>{
@@ -51,14 +85,21 @@ export class ManualChatHistory {
   }
   async save(accountId,chatId,messages){
     if(!messages.length)return;
-    const db=await this.open(),select=db.prepare('SELECT payload FROM messages WHERE account_id=? AND chat_id=? AND message_id=?'),insert=db.prepare('INSERT INTO messages(account_id,chat_id,message_id,sent_at,payload) VALUES(?,?,?,?,?) ON CONFLICT(account_id,chat_id,message_id) DO UPDATE SET sent_at=excluded.sent_at,payload=excluded.payload');
+    const db=await this.open(),select=db.prepare('SELECT rowid id,payload FROM messages WHERE account_id=? AND chat_id=? AND canonical_id=?'),insert=db.prepare('INSERT INTO messages(account_id,chat_id,message_id,canonical_id,sent_at,payload) VALUES(?,?,?,?,?,?)'),update=db.prepare('UPDATE messages SET message_id=?,canonical_id=?,sent_at=?,payload=? WHERE rowid=?');
     db.exec('BEGIN IMMEDIATE');
-    try{for(const message of messages){if(!message?.id||!Number.isFinite(Date.parse(message.sentAt)))continue;const old=select.get(accountId,chatId,message.id),next=ManualChatHistory.portable(message,new Date(this.now()).toISOString()),merged=old?ManualChatHistory.merge(JSON.parse(old.payload),next):next;insert.run(accountId,chatId,message.id,merged.sentAt,JSON.stringify(merged));}db.exec('COMMIT');}
+    try{for(const message of messages){
+      if(!message?.id||!Number.isFinite(Date.parse(message.sentAt)))continue;
+      const canonicalId=canonicalMessageId(message.id);if(!canonicalId)continue;
+      const old=select.get(accountId,chatId,canonicalId),next=ManualChatHistory.portable(message,new Date(this.now()).toISOString()),merged=old?ManualChatHistory.merge(JSON.parse(old.payload),next):next,messageId=String(merged.id||message.id);
+      if(old)update.run(messageId,canonicalId,merged.sentAt,JSON.stringify(merged),old.id);
+      else insert.run(accountId,chatId,messageId,canonicalId,merged.sentAt,JSON.stringify(merged));
+    }db.exec('COMMIT');}
     catch(error){db.exec('ROLLBACK');throw error;}
     this.cleanupMediaCache(db);
   }
   async message(accountId,chatId,messageId){
-    const db=await this.open(),row=db.prepare('SELECT rowid id,payload FROM messages WHERE account_id=? AND chat_id=? AND message_id=?').get(accountId,chatId,messageId);
+    const canonicalId=canonicalMessageId(messageId);if(!canonicalId)return null;
+    const db=await this.open(),row=db.prepare('SELECT rowid id,payload FROM messages WHERE account_id=? AND chat_id=? AND canonical_id=?').get(accountId,chatId,canonicalId);
     if(!row)return null;
     const payload=JSON.parse(row.payload),accessedAt=new Date(this.now()).toISOString();let changed=false;
     for(const media of payload.metadata?.media||[])if(media.status==='cached'&&cachedData(media.dataUrl)&&media.mediaCachedAt!==accessedAt){media.mediaCachedAt=accessedAt;changed=true;}
@@ -74,12 +115,12 @@ export class ManualChatHistory {
         if(media?.status!=='cached')continue;
         const dataUrl=cachedData(media.dataUrl);
         if(!dataUrl){delete media.dataUrl;media.status='unavailable';payload.metadata.note='本机图片缓存不可用，可在当前会话重试读取。';updates.set(row.id,payload);continue;}
-        rows.push({id:row.id,payload,media,at:cachedAt(media.mediaCachedAt,Date.parse(row.sent_at)),bytes:dataBytes(dataUrl)});
+        rows.push({id:row.id,payload,media,at:cachedAt(media.mediaCachedAt,Date.parse(row.sent_at)),bytes:dataBytes(dataUrl),ageProtected:payload.metadata?.mediaCachePolicy==='verified-outbound'&&media.type==='image'});
       }
     }
     rows.sort((a,b)=>b.at-a.at);let used=0;
     for(const row of rows){
-      if(row.at<cutoff||used+row.bytes>this.maxMediaBytes){delete row.media.dataUrl;row.media.status='unavailable';row.payload.metadata.note='本机图片缓存已清理，可在当前会话重试读取。';updates.set(row.id,row.payload);}else used+=row.bytes;
+      if((!row.ageProtected&&row.at<cutoff)||used+row.bytes>this.maxMediaBytes){delete row.media.dataUrl;row.media.status='unavailable';row.payload.metadata.note='本机图片缓存已清理，可在当前会话重试读取。';updates.set(row.id,row.payload);}else used+=row.bytes;
     }
     if(!updates.size)return;
     const update=db.prepare('UPDATE messages SET payload=? WHERE rowid=?');db.exec('BEGIN IMMEDIATE');
@@ -87,8 +128,9 @@ export class ManualChatHistory {
   }
   async page(accountId,chatId,{limit=20,before=null,beforeId=null}={}){
     const db=await this.open(),count=Math.max(1,Math.min(100,limit));
-    const query=before&&beforeId?'SELECT payload FROM messages WHERE account_id=? AND chat_id=? AND (sent_at<? OR (sent_at=? AND message_id<?)) ORDER BY sent_at DESC,message_id DESC LIMIT ?':before?'SELECT payload FROM messages WHERE account_id=? AND chat_id=? AND sent_at<? ORDER BY sent_at DESC,message_id DESC LIMIT ?':'SELECT payload FROM messages WHERE account_id=? AND chat_id=? ORDER BY sent_at DESC,message_id DESC LIMIT ?';
-    const rows=before&&beforeId?db.prepare(query).all(accountId,chatId,before,before,beforeId,count+1):before?db.prepare(query).all(accountId,chatId,before,count+1):db.prepare(query).all(accountId,chatId,count+1);
+    const query=before&&beforeId?'SELECT payload FROM messages WHERE account_id=? AND chat_id=? AND (sent_at<? OR (sent_at=? AND canonical_id<?)) ORDER BY sent_at DESC,canonical_id DESC LIMIT ?':before?'SELECT payload FROM messages WHERE account_id=? AND chat_id=? AND sent_at<? ORDER BY sent_at DESC,canonical_id DESC LIMIT ?':'SELECT payload FROM messages WHERE account_id=? AND chat_id=? ORDER BY sent_at DESC,canonical_id DESC LIMIT ?';
+    const cursorId=canonicalMessageId(beforeId);
+    const rows=before&&beforeId?db.prepare(query).all(accountId,chatId,before,before,cursorId,count+1):before?db.prepare(query).all(accountId,chatId,before,count+1):db.prepare(query).all(accountId,chatId,count+1);
     return {messages:rows.slice(0,count).map(row=>JSON.parse(row.payload)).reverse(),hasMore:rows.length>count};
   }
   async hiddenChatIds(accountId){

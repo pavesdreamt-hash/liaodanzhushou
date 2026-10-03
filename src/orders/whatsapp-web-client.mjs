@@ -38,6 +38,20 @@ const messageFallback=(type,message)=>{if(type==='ciphertext')return '[等待 Wh
 const supportedMedia=(type,mimetype)=>/^image\/(?:png|jpeg|webp|gif)$/.test(mimetype)||(['gif','video'].includes(type)&&mimetype==='video/mp4');
 const imageLimitBytes=16*1024*1024,videoLimitBytes=1_042_500,mediaCacheLimitBytes=48*1024*1024;
 const canonicalMessageId=id=>String(id||'').replace(/^(true|false)_[^_]+_/,'$1_');
+// A saved desktop row may use the LID form while the current verified chat
+// exposes the same message through its phone-number form. Keep the opaque
+// suffix intact; it is the only part we may carry between verified remotes.
+const verifiedMediaRemote=value=>/^(?:[1-9]\d{6,14}@c\.us|\d{1,30}@lid)$/.test(String(value||''));
+const parsedMediaMessageId=value=>{
+ const id=String(value||'').trim(),match=id.match(/^(true|false)_((?:[1-9]\d{6,14}@c\.us)|(?:\d{1,30}@lid))_([^\r\n]+)$/);
+ if(!match||match[3].length>160)return null;
+ return {id,direction:match[1],remote:match[2],opaque:match[3]};
+};
+const equivalentMediaMessageIds=(value,aliases)=>{
+ const source=parsedMediaMessageId(value);if(!source)return null;
+ const remotes=[...(aliases.has(source.remote)?[source.remote]:[]),...aliases].filter(verifiedMediaRemote).filter((remote,index,rows)=>rows.indexOf(remote)===index).slice(0,3);
+ return {source,ids:remotes.map(remote=>`${source.direction}_${remote}_${source.opaque}`)};
+};
 const locationDescription=message=>{const value=message?.location?.description??message?.location?.name??message?.locationDescription??message?.body;return typeof value==='string'&&value.trim()&&value.trim().length<=500?value.trim():null;};
 
 // Only the maintained library owns the WhatsApp protocol and browser internals.
@@ -199,39 +213,36 @@ export class WhatsAppWebClient {
    void (async()=>{const source=job.manual?await this.locateMediaMessage(job.input):{message:job.message,target:job.target};const key=source.target.accountId+':'+serialized(source.message.id),cached=this.mediaCache.get(key);if(cached&&!job.input?.force){this.mediaCache.delete(key);this.mediaCache.set(key,cached);return this.normalize(source.message,source.target);}return this.downloadImage(source.message,source.target,job.generation,{manual:job.manual,emit:!job.manual,trusted:job.trusted});})().then(value=>job.resolve?.(value),failure=>job.reject?.(failure)).finally(()=>{this.mediaActive--;this.drainMedia();});
   }
  }
- async mediaTarget({accountId,chatId,binding}={}){
+ async mediaTarget({accountId,chatId,binding,identityVerified}={}){
+  if(identityVerified!==true)throw error('当前会话号码映射尚未核对，未读取图片','WHATSAPP_MEDIA_IDENTITY');
   await this.resolve({accountId,chatId,binding});
-  const pn=number(chatId)+'@c.us',configured=this.targets.find(target=>target.accountId===accountId&&target.chatId===chatId);
-  const aliases=new Set([pn,...(configured?.aliases||[]),...(Array.isArray(binding?.aliases)?binding.aliases:[])]);
-  if(typeof binding?.nativeRemote==='string'&&binding.nativeRemote)aliases.add(binding.nativeRemote);
+  const pn=number(chatId)+'@c.us',aliases=new Set([pn]);
+  // Do not reuse an arbitrary saved alias for an old-image lookup. A LID is
+  // eligible only when WhatsApp currently maps it back to this exact PN.
+  if(typeof this.client?.getContactLidAndPhone==='function')try{
+   const pairs=await bounded(this.client.getContactLidAndPhone([pn]),8000);
+   for(const pair of pairs||[]){const lid=serialized(pair?.lid),mappedPn=serialized(pair?.pn);if(mappedPn===pn&&verifiedMediaRemote(lid)&&lid.endsWith('@lid'))aliases.add(lid);}
+  }catch{/* PN remains a verified candidate when the optional LID map is temporarily unavailable. */}
   return {accountId,chatId,aliases};
  }
  async locateMediaMessage(input){
-  const target=await this.mediaTarget(input);let message=null,directFailure=null,directTried=false;
-  // A historical image must not depend on loading the chat's newest row first:
-  // the maintained client can resolve the recorded native message ID directly.
-  if(typeof this.client.getMessageById==='function'){directTried=true;try{message=await bounded(this.client.getMessageById(input.messageId),15000);}catch(cause){directFailure=cause;}}
-  if(message){
-   if(canonicalMessageId(serialized(message.id))!==canonicalMessageId(input.messageId))throw error('图片标识与所选消息不一致，已停止读取','WHATSAPP_MEDIA_IDENTITY');
-   this.normalize(message,target);
+  const target=await this.mediaTarget(input),lookup=equivalentMediaMessageIds(input.messageId,target.aliases);
+  if(!lookup)throw error('图片消息标识无效，已停止读取','WHATSAPP_MEDIA_IDENTITY');
+  // Never substitute the newest row for an old image. We try at most the same
+  // message's PN/LID forms that WhatsApp currently verifies for this chat.
+  if(typeof this.client?.getMessageById!=='function')throw error('当前 WhatsApp 连接不支持按消息标识读取旧图片；请在 WhatsApp 打开该聊天后重试。','WHATSAPP_MEDIA_LOOKUP_UNAVAILABLE');
+  let directFailure=null;
+  for(const messageId of lookup.ids){
+   let message;try{message=await bounded(this.client.getMessageById(messageId),15000);}catch(cause){directFailure??=cause;continue;}
+   if(!message)continue;
+   const actual=parsedMediaMessageId(serialized(message.id));
+   if(!actual||actual.direction!==lookup.source.direction||actual.opaque!==lookup.source.opaque||!target.aliases.has(actual.remote))throw error('图片标识与所选消息不一致，已停止读取','WHATSAPP_MEDIA_IDENTITY');
+   try{this.normalize(message,target);}catch{throw error('图片标识与当前已核对会话不一致，已停止读取','WHATSAPP_MEDIA_IDENTITY');}
    if(!(mediaKindFor(message,messageType(message.type))||message.hasMedia))throw error('这条消息没有可读取的图片附件','WHATSAPP_MEDIA_UNAVAILABLE');
    return {target,message};
   }
-  let messages=[];
-  try{({messages}=await this.fetch({...input,limit:1}));}catch(cause){
-   if(directFailure)throw error('WhatsApp 未能按消息标识读取这张旧图片，当前会话也暂时无法读取；请待连接稳定后重试。','WHATSAPP_MEDIA_LOOKUP_UNAVAILABLE');
-   throw cause;
-  }
-  message??=messages.find(row=>canonicalMessageId(serialized(row.id))===canonicalMessageId(input.messageId));
-  if(!message){
-   if(directFailure)throw error('WhatsApp 未能按消息标识读取这张旧图片；请在 WhatsApp 打开该聊天后重试。','WHATSAPP_MEDIA_LOOKUP_UNAVAILABLE');
-   if(directTried)throw error('WhatsApp 当前未返回这条图片；可在 WhatsApp 打开该聊天后重试','WHATSAPP_MEDIA_NOT_FOUND');
-   throw error('当前 WhatsApp 连接不支持按消息标识读取旧图片；请在 WhatsApp 打开该聊天后重试。','WHATSAPP_MEDIA_LOOKUP_UNAVAILABLE');
-  }
-  if(canonicalMessageId(serialized(message.id))!==canonicalMessageId(input.messageId))throw error('图片标识与所选消息不一致，已停止读取','WHATSAPP_MEDIA_IDENTITY');
-  this.normalize(message,target);
-  if(!(mediaKindFor(message,messageType(message.type))||message.hasMedia))throw error('这条消息没有可读取的图片附件','WHATSAPP_MEDIA_UNAVAILABLE');
-  return {target,message};
+  if(directFailure)throw error('WhatsApp 暂时无法按当前已核对的消息标识读取这张历史图片；请在 WhatsApp 打开当前聊天后重试。','WHATSAPP_MEDIA_LOOKUP_UNAVAILABLE');
+  throw error('WhatsApp 当前未返回这条历史图片；请在 WhatsApp 打开当前聊天后重试。','WHATSAPP_MEDIA_NOT_FOUND');
  }
  async downloadImage(message,target,generation,{manual=false,emit=true,trusted=false}={}){
   if(systemMessageType(messageType(message.type)))return null;

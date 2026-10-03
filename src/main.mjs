@@ -1,5 +1,6 @@
 import {ManualChat} from './manual-chat.mjs';
-import {translateManualReply,backTranslateManualReply,generateManualAssistantDraft,recognizeImageText,ChatTranslationCache} from './manual-translation.mjs';
+import {translateManualReply,backTranslateManualReply,generateFacebookReplyDraft,generateManualAssistantDraft,recognizeImageText,ChatTranslationCache,translateChatMessages} from './manual-translation.mjs';
+import {AdsPowerInboxScanner,AdsPowerScanSessions} from './adspower-inbox.mjs';
 import {ManualProductImages} from './manual-product-images.mjs';
 import {WhatsAppWebClient} from './orders/whatsapp-web-client.mjs';
 import {WhatsAppStructuredBrowser as WhatsAppBrowser} from './orders/whatsapp-structured-browser.mjs';
@@ -36,6 +37,7 @@ import {LocalWebServer} from './local-web-server.mjs';
 import {SHOPPLUS_FILE_FILTER_EXTENSIONS,shopPlusExtension,validateShopPlusUpload} from './orders/shopplus-file.mjs';
 import {ShopPlusConnection} from './orders/shopplus-api.mjs';
 import {ShopPlusProductCatalog} from './inventory/shopplus-product-catalog.mjs';
+import {projectChatProductCatalog} from './orders/chat-product-catalog.mjs';
 const directory=path.dirname(fileURLToPath(import.meta.url)),PRODUCTION_WEB_PORT=43877;
 const wait=milliseconds=>new Promise(resolve=>setTimeout(resolve,milliseconds));
 app.setName(APP_NAME);const testMode=process.env.NODE_ENV==='test'||process.argv.includes('--orders-test-browser-workspace');const testUserData=testMode&&process.argv.find(value=>value.startsWith('--orders-test-user-data=')),testExcel=testMode&&process.argv.find(value=>value.startsWith('--orders-test-excel=')),testSaveDirectory=testMode&&process.argv.find(value=>value.startsWith('--orders-test-save-directory=')),testDataDirectory=testMode&&process.argv.find(value=>value.startsWith('--orders-test-data-directory=')),testRestoreFile=testMode&&process.argv.find(value=>value.startsWith('--orders-test-restore-file=')),testCancelSave=testMode&&process.argv.includes('--orders-test-cancel-save'),testCancelDataSave=testMode&&process.argv.includes('--orders-test-cancel-data-save'),testAddressDeliverable=testMode&&process.argv.includes('--orders-test-address-deliverable'),testBrowserWorkspace=testMode&&process.argv.includes('--orders-test-browser-workspace'),testBrowserUrlFile=testMode&&process.argv.find(value=>value.startsWith('--orders-test-browser-url-file=')),testTrayBoundsFile=testMode&&process.argv.find(value=>value.startsWith('--orders-test-tray-bounds-file='));app.setPath('userData',testUserData?path.resolve(testUserData.slice('--orders-test-user-data='.length)):path.join(app.getPath('appData'),APP_NAME));
@@ -151,10 +153,28 @@ function orderLayoutDisplay(target){
   return {id:String(display.id),label:display.label||`显示器 ${display.id}`,workArea:{width:display.workArea.width,height:display.workArea.height},scaleFactor:display.scaleFactor};
 }
 async function bootstrap(){
-  let chatTranslationCache;const customerSuggestions=new Map();
+  let chatTranslationCache;const customerSuggestions=new Map(),adsPowerSessions=new AdsPowerScanSessions({
+    scanner:new AdsPowerInboxScanner(),
+    translate:messages=>{
+      if(!assistantSettings)throw new Error('请先在“助手配置”保存翻译服务和 API 密钥');
+      return translateChatMessages(assistantSettings,{messages});
+    }
+  });
   ipcMain.handle('order-layout:chrome',(event,enabled)=>{
     if(process.platform!=='darwin'||typeof enabled!=='boolean'||!window||window.isDestroyed()||event.sender!==window.webContents||event.senderFrame!==window.webContents.mainFrame)return false;
     window.setWindowButtonPosition(enabled?{x:22,y:21}:{x:14,y:9});return true;
+  });
+  ipcMain.handle('order-layout:toggle-maximize',event=>{
+    if(!window||window.isDestroyed()||event.sender!==window.webContents||event.senderFrame!==window.webContents.mainFrame)return false;
+    if(window.isMaximized())window.unmaximize();else window.maximize();return window.isMaximized();
+  });
+  ipcMain.handle('order-layout:window-bounds',event=>{
+    if(!window||window.isDestroyed()||event.sender!==window.webContents||event.senderFrame!==window.webContents.mainFrame)return null;
+    const {x,y}=window.getBounds();return {x,y};
+  });
+  ipcMain.handle('order-layout:move-window',(event,position)=>{
+    if(!window||window.isDestroyed()||event.sender!==window.webContents||event.senderFrame!==window.webContents.mainFrame||!position||!Number.isFinite(position.x)||!Number.isFinite(position.y))return false;
+    window.setPosition(Math.round(position.x),Math.round(position.y));return true;
   });
   ipcMain.handle('order-layout:display',event=>{
     if(!window||window.isDestroyed()||event.sender!==window.webContents||event.senderFrame!==window.webContents.mainFrame)return null;
@@ -187,7 +207,10 @@ async function bootstrap(){
         if(!bound.accountId||!bound.chatId)throw new Error('当前会话核对失效，请重新选择客户');
         return generateManualAssistantDraft(assistantSettings,{intent:payload.intent,referenceMessageId:payload.referenceMessageId,messages});
       };
-      const operations={translate:()=>translateManualReply(assistantSettings,payload),'translate-draft':()=>backTranslateManualReply(assistantSettings,payload),'assist-draft':draftAssistantReply,'chat-translate':()=>chatCache(true),'chat-cache':()=>chatCache(false),'image-text':recognizeMessageImage,settings:()=>assistantSettings.get(),save:()=>assistantSettings.save(payload),key:()=>assistantSettings.changeKey(payload),usage:()=>assistantSettings.setUsageMode(payload)};
+      // FB replies remain a separate, copy-only workflow.  Its explicit AI action is
+      // deliberately limited to the merchant text in payload and never reads any scan
+      // result or WhatsApp conversation context.
+      const operations={translate:()=>translateManualReply(assistantSettings,payload),'translate-draft':()=>backTranslateManualReply(assistantSettings,payload),'fb-assist-draft':()=>generateFacebookReplyDraft(assistantSettings,payload),'assist-draft':draftAssistantReply,'chat-translate':()=>chatCache(true),'chat-cache':()=>chatCache(false),'image-text':recognizeMessageImage,settings:()=>assistantSettings.get(),save:()=>assistantSettings.save(payload),key:()=>assistantSettings.changeKey(payload),usage:()=>assistantSettings.setUsageMode(payload)};
       if(!Object.hasOwn(operations,action))return {ok:false,error:'未知翻译操作'};
       return {ok:true,data:await operations[action]()};
     }catch(error){return {ok:false,error:publicError(error).message};}
@@ -199,6 +222,9 @@ async function bootstrap(){
   // The local dashboard bridge reaches this same bounded handler only after its
   // loopback origin and per-instance token checks; it never receives raw IPC.
   operations.set('manual-reply-translation',handleManualReplyTranslation);
+  handler('adspower:scan',()=>adsPowerSessions.scan());
+  handler('adspower:translate',payload=>adsPowerSessions.translateRows(payload));
+  handler('adspower:clear',payload=>adsPowerSessions.clear(payload?.token));
   ipcMain.handle('order-template:export',async(event,payload)=>{
     if(!window||window.isDestroyed()||event.sender!==window.webContents||event.senderFrame!==window.webContents.mainFrame)return {ok:false,error:'无法导出订单'};
     try{
@@ -255,7 +281,7 @@ async function bootstrap(){
       const operations={status:()=>manualChat.status(),inbox,setInboxHidden:()=>manualChat.setInboxHidden(payload),openInbox:()=>manualChat.openInbox(payload),recent:()=>manualChat.recent(payload),markSeen:()=>manualChat.markSeen(payload),media:()=>manualChat.media(payload),connect:()=>manualChat.connect(),inspect:()=>manualChat.inspect(payload),bind:()=>payload.orderId?bindOrder():manualChat.bind(payload),restore:restoreOrder,history:historyOrder,send:sendOrder,extractCustomer,applyCustomerSuggestion};
       if(!Object.hasOwn(operations,action))return {ok:false,error:'未知聊天操作'};
       return {ok:true,data:await operations[action]()};
-    }catch(error){return {ok:false,error:publicError(error).message};}
+    }catch(error){const safe=publicError(error);return {ok:false,error:request?.action==='media'?{message:safe.message,code:safe.code,retryable:error?.retryable!==false}:safe.message};}
   };
   ipcMain.handle('manual-chat',async(event,request)=>{
     if(!window||window.isDestroyed()||event.sender!==window.webContents||event.senderFrame!==window.webContents.mainFrame)return {ok:false,error:'聊天服务尚未准备好'};
@@ -359,6 +385,12 @@ async function bootstrap(){
   handler('orders:acknowledge-shopplus-sync-attention',payload=>orders().acknowledgeShopPlusSyncAttention(payload));
   const shopPlusProductStatus=async()=>({catalog:await shopPlusProductCatalog.getView(),status:await shopPlusConnection.status()});
   handler('orders:shopplus-product-catalog',shopPlusProductStatus);
+  handler('orders:chat-product-catalog',async payload=>{
+    const token=typeof payload?.token==='string'?payload.token:'',bound=manualChat?.bindings.get(token);
+    if(!bound||bound.identityVerified!==true)throw new Error('请先选择并完成当前客户会话身份核对，再调取商品资料');
+    const {token:ignored,...request}=payload||{};
+    return projectChatProductCatalog(await shopPlusProductCatalog.getView(),request);
+  });
   handler('orders:sync-shopplus-products',async payload=>{try{const listPage=request=>shopPlusConnection.listProductsPage(request),catalog=payload?.scope==='published-in-stock'?await shopPlusProductCatalog.collectPublishedInStock({listPage}):await shopPlusProductCatalog.collect({target:payload?.target,listPage});await shopPlusConnection.markProductVerified('已通过 ShopPlus 商品读取验证');return {catalog,status:await shopPlusConnection.status(),collected:true};}catch(error){await shopPlusConnection.markProductFailed(`商品读取失败：${String(error?.message||error)}`).catch(()=>{});throw error;}});
   handler('orders:sync-shopplus-mapping-catalog',async()=>{try{const catalog=await shopPlusProductCatalog.syncMappingCatalog({listPage:request=>shopPlusConnection.listProductsPage(request)});await shopPlusConnection.markProductVerified('已通过 ShopPlus 商品匹配目录读取验证');return {catalog,status:await shopPlusConnection.status(),synced:true};}catch(error){await shopPlusConnection.markProductFailed(`商品匹配目录读取失败：${String(error?.message||error)}`).catch(()=>{});throw error;}});
   handler('orders:refresh-shopplus-products',async()=>{try{const catalog=await shopPlusProductCatalog.refresh({listPage:request=>shopPlusConnection.listProductsPage(request)});await shopPlusConnection.markProductVerified('已通过 ShopPlus 商品资料更新验证');return {catalog,status:await shopPlusConnection.status(),refreshed:true};}catch(error){await shopPlusConnection.markProductFailed(`商品资料更新失败：${String(error?.message||error)}`).catch(()=>{});throw error;}});

@@ -3,6 +3,24 @@ import type {OrderLayoutDesktop} from './order-layout';
 import {version} from '../../package.json';
 
 export const NAV_COLLAPSED_KEY='liaodan-unified-nav-collapsed';
+export const FIXED_EXPANDED_NAV_WIDTH=208;
+
+export type UnifiedNavigationMetrics={compact:boolean;collapsed:boolean;width:number};
+
+/**
+ * The order-management layout is the single source for navigation defaults.
+ * Specialized pages call this instead of carrying their own expanded widths.
+ */
+export function unifiedNavigationMetrics(win:Window,collapsed:boolean,display?:DisplayProfile):UnifiedNavigationMetrics{
+  const compact=win.innerWidth<980;
+  // D-190: navigation is a fixed shared shell, not a per-display resize target.
+  void display;
+  return {compact,collapsed,width:compact||collapsed?64:FIXED_EXPANDED_NAV_WIDTH};
+}
+
+export async function resolveUnifiedNavigationMetrics(win:Window,collapsed:boolean,desktop?:OrderLayoutDesktop):Promise<UnifiedNavigationMetrics>{
+  try{return unifiedNavigationMetrics(win,collapsed,(await desktop?.getDisplay())||undefined);}catch{return unifiedNavigationMetrics(win,collapsed);}
+}
 
 export function aliasWorkbench(doc:Document){
   const root=doc.querySelector<HTMLElement>('#chat-workbench-aligned')!;
@@ -13,6 +31,36 @@ export function aliasWorkbench(doc:Document){
   const observer=new MutationObserver(()=>{for(const name of ['bubble','translation'])root.querySelectorAll(`.cw-${name}:not(.od-${name})`).forEach(el=>el.classList.add(`od-${name}`));});
   observer.observe(root.querySelector('.cw-messages')!,{childList:true,subtree:true});
   return ()=>observer.disconnect();
+}
+
+/**
+ * The source-library view predates the shared application shell.  Keep its
+ * business document intact, but host it in the same neutral chrome used by
+ * order management before the regular unified-layout installer runs.
+ */
+export function prepareSourceUnifiedShell(doc:Document){
+  const root=doc.querySelector<HTMLElement>('#ui-source-library');
+  const main=root?.querySelector<HTMLElement>(':scope > .main');
+  if(!root||!main||root.querySelector(':scope > .app'))return;
+  const app=doc.createElement('div');app.className='app source-unified-app';
+  const top=doc.createElement('header');top.className='topbar';
+  const brand=doc.createElement('div');brand.className='brand';
+  const logo=doc.createElement('span');logo.className='logo';logo.innerHTML='<i data-lucide="messages-square"></i>';
+  const name=doc.createElement('strong');name.className='brand-name';name.textContent='聊单助手';
+  const release=doc.createElement('span');release.className='version';release.textContent=version;
+  brand.append(logo,name,release);
+  const actions=doc.createElement('div');actions.className='top-actions';
+  const status=doc.createElement('span');status.className='preview';status.textContent='来源资料';actions.append(status);top.append(brand,actions);
+  const shell=doc.createElement('div');shell.className='shell';
+  const sidebar=doc.createElement('aside');sidebar.className='sidebar';
+  const heading=doc.createElement('p');heading.className='nav-label';heading.textContent='我的工作台';
+  const primary=doc.createElement('nav');primary.className='nav-group';
+  primary.append(heading);
+  const labels:[string,string][]=[['messages-square','聊单工作台'],['scan-search','FB 聊天'],['archive','订单管理'],['boxes','商品库存'],['chart-no-axes-combined','利润核算']];
+  for(const [icon,label] of labels){const button=doc.createElement('button');button.type='button';button.className='nav-item';button.innerHTML=`<i data-lucide="${icon}"></i><span>${label}</span>`;primary.append(button);}
+  const management=doc.createElement('nav');management.className='nav-group';
+  for(const [icon,label] of [['bot','助手配置'],['settings','连接与设置']]){const button=doc.createElement('button');button.type='button';button.className='nav-item';button.innerHTML=`<i data-lucide="${icon}"></i><span>${label}</span>`;management.append(button);}
+  sidebar.append(primary,management);shell.append(sidebar,main);app.append(top,shell);root.append(app);
 }
 
 export function installUnifiedLayout(doc:Document,win:Window,desktop:OrderLayoutDesktop|undefined,onTitlebar:(right:number,blocked:boolean)=>void){
@@ -39,15 +87,16 @@ export function installUnifiedLayout(doc:Document,win:Window,desktop:OrderLayout
   };
   if(desktop?.mergedTitlebar)top.style.paddingLeft='104px';
   const button=doc.createElement('button');button.type='button';button.className='up-settings';button.textContent='布局设置';actions.prepend(button);
-  const dialog=doc.createElement('dialog');dialog.className='shared-dialog';dialog.innerHTML='<h2>页面布局</h2><p>各页面共用导航和内容字号，按显示器保存。</p><label>导航宽度（px）<input data-setting="navWidth" type="number" min="144" max="340"></label><label>导航字号（px）<input data-setting="navFont" type="number" min="13" max="22"></label><label>内容字号（px）<input data-setting="contentFont" type="number" min="13" max="22"></label><output aria-live="polite"></output><footer><button data-reset>恢复本屏幕默认</button><button data-close>完成</button></footer>';root.append(dialog);
+  const dialog=doc.createElement('dialog');dialog.className='shared-dialog';dialog.innerHTML='<h2>页面布局</h2><p>侧栏宽度已统一固定；导航和内容字号按屏幕保存。</p><label>导航字号（px）<input data-setting="navFont" type="number" min="13" max="22"></label><label>内容字号（px）<input data-setting="contentFont" type="number" min="13" max="22"></label><output aria-live="polite"></output><footer><button data-reset>恢复本屏幕默认</button><button data-close>完成</button></footer>';root.append(dialog);
   let display:DisplayProfile={id:`browser-${win.screen.width}x${win.screen.height}-${win.devicePixelRatio}`,label:'当前屏幕'},prefs=defaults(win.innerWidth,win.innerHeight),disposed=false;
   const state=dialog.querySelector('output')!;
   const paint=()=>{
     if(disposed)return;
-    const compact=win.innerWidth<980;root.classList.toggle('up-compact',compact);root.classList.toggle('up-nav-collapsed',collapsed);
-    root.style.setProperty('--up-nav',`${compact||collapsed?64:Math.max(144,Math.min(prefs.navWidth,340))}px`);
+    const metrics=unifiedNavigationMetrics(win,collapsed,display);
+    root.classList.toggle('up-compact',metrics.compact);root.classList.toggle('up-nav-collapsed',collapsed);
+    root.style.setProperty('--up-nav',`${metrics.width}px`);
     root.style.setProperty('--up-nav-font',`${prefs.navFont}px`);root.style.setProperty('--up-content-font',`${prefs.contentFont}px`);
-    dialog.querySelectorAll<HTMLInputElement>('[data-setting]').forEach(el=>{el.value=String(prefs[el.dataset.setting as 'navWidth']);el.disabled=el.dataset.setting==='navWidth'&&compact;});
+    dialog.querySelectorAll<HTMLInputElement>('[data-setting]').forEach(el=>{el.value=String(prefs[el.dataset.setting as 'navFont']);});
     onTitlebar(win.innerWidth-actions.getBoundingClientRect().left+10,Boolean(doc.querySelector('dialog[open],.overlay:not([hidden])')));
     root.dataset.layoutReady='true';
   };
@@ -57,12 +106,6 @@ export function installUnifiedLayout(doc:Document,win:Window,desktop:OrderLayout
   button.onclick=()=>dialog.showModal();dialog.querySelector<HTMLButtonElement>('[data-close]')!.onclick=()=>dialog.close();
   dialog.querySelector<HTMLButtonElement>('[data-reset]')!.onclick=()=>{prefs=defaults(win.innerWidth,win.innerHeight);save();paint();};
   dialog.querySelectorAll<HTMLInputElement>('input').forEach(el=>el.onchange=()=>{if(Number.isFinite(el.valueAsNumber))prefs=sanitize({...prefs,[el.dataset.setting!]:el.valueAsNumber},prefs);save();paint();});
-  const separator=doc.createElement('button');separator.className='up-divider';separator.setAttribute('role','separator');separator.setAttribute('aria-label','调整导航宽度');separator.setAttribute('aria-orientation','vertical');side.append(separator);
-  let drag:{x:number;width:number}|undefined;
-  separator.onpointerdown=e=>{if(e.button!==0)return;e.preventDefault();drag={x:e.clientX,width:prefs.navWidth};separator.setPointerCapture(e.pointerId);};
-  separator.onpointermove=e=>{if(drag){prefs=sanitize({...prefs,navWidth:drag.width+e.clientX-drag.x},prefs);paint();}};
-  separator.onpointerup=()=>{drag=undefined;save();};separator.onpointercancel=()=>{drag=undefined;};
-  separator.onkeydown=e=>{if(['ArrowLeft','ArrowRight'].includes(e.key)){e.preventDefault();prefs=sanitize({...prefs,navWidth:prefs.navWidth+(e.key==='ArrowLeft'?-8:8)},prefs);save();paint();}};
   const observer=new MutationObserver(paint);observer.observe(doc.body,{subtree:true,attributes:true,attributeFilter:['open','hidden']});
   const measurements=new ResizeObserver(paint);measurements.observe(actions);win.addEventListener('resize',paint);
   const change=(d:DisplayProfile)=>{if(!disposed){display=d;read();}};

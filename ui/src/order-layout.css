@@ -75,7 +75,6 @@ body{padding:0;box-sizing:border-box}
 #ui008-order-detail .ol-divider{position:absolute;width:10px;padding:0;border:0;background:transparent;touch-action:none;cursor:col-resize;z-index:4}
 #ui008-order-detail .ol-divider:after{content:'';position:absolute;width:3px;inset:0 auto 0 3px;border-radius:3px;background:var(--od-accent-mid);opacity:.25}
 #ui008-order-detail .ol-divider:hover:after,#ui008-order-detail .ol-divider:focus-visible:after{opacity:1}
-#ui008-order-detail .ol-nav-divider{right:-5px;top:0;bottom:0}
 #ui008-order-detail .ol-column-divider{left:calc(100% - var(--ol-phone-width) - var(--ol-rail,128px) - 44px);top:0;bottom:0}
 #ui008-order-detail .ol-resize{position:absolute;border:0;padding:0;background:transparent;touch-action:none;z-index:6}
 #ui008-order-detail .ol-resize:focus-visible{outline:2px solid var(--od-accent);outline-offset:2px}
@@ -105,17 +104,25 @@ body{padding:0;box-sizing:border-box}
 #ui008-order-detail.ol-compact .ol-nav-heading{justify-content:center;margin-inline:0}
 #ui008-order-detail.ol-compact .ol-nav-toggle{position:static;transform:none}
 #ui008-order-detail.ol-compact .od-nav-item{justify-content:center;padding:8px 0}
-#ui008-order-detail.ol-compact .ol-nav-divider{display:none}
 #ui008-order-detail.ol-nav-collapsed .od-sidebar{padding-inline:8px}
 #ui008-order-detail.ol-nav-collapsed .od-nav-label:not(.ol-nav-heading),#ui008-order-detail.ol-nav-collapsed .od-nav-item span,#ui008-order-detail.ol-nav-collapsed .ol-nav-heading>span{display:none}
 #ui008-order-detail.ol-nav-collapsed .ol-nav-heading{justify-content:center;margin-inline:0}
 #ui008-order-detail.ol-nav-collapsed .ol-nav-toggle{position:static;transform:none}
 #ui008-order-detail.ol-nav-collapsed .od-nav-item{justify-content:center;padding:8px 0}
-#ui008-order-detail.ol-nav-collapsed .ol-nav-divider{display:none}
 #ui008-order-detail.ol-details-only .od-layout{grid-template-columns:minmax(0,1fr);gap:0}
 #ui008-order-detail.ol-details-only .od-content{padding-right:0}
 @media(max-width:1100px){
  #ui008-order-detail .od-preview-label{display:none}
 }
+
+/* D-189: order detail keeps its business workspace, but shares the order-list shell exactly. */
+#ui008-order-detail .od-topbar{min-height:var(--app-topbar-height);flex-basis:var(--app-topbar-height)}
+#ui008-order-detail.ol-merged-titlebar .od-topbar{padding-left:var(--app-topbar-safe-left)}
+#ui008-order-detail .od-sidebar{padding:var(--app-nav-padding-block-start) var(--app-nav-padding-inline) var(--app-nav-padding-block-end)}
+#ui008-order-detail .ol-nav-heading{min-height:var(--app-nav-heading-height);margin:0 var(--app-nav-heading-margin-inline) var(--app-nav-heading-gap)}
+#ui008-order-detail .ol-nav-toggle{width:var(--app-nav-toggle-size);height:var(--app-nav-toggle-size)}
+#ui008-order-detail .od-nav-item{height:var(--app-nav-item-height);min-height:var(--app-nav-item-height);padding:0 var(--app-nav-item-padding-inline);gap:var(--app-nav-item-gap);border-radius:var(--app-nav-item-radius)}
+#ui008-order-detail .od-nav-item:is(.on,.active,[aria-current="page"]){background:var(--app-nav-active)}
+#ui008-order-detail:is(.ol-compact,.ol-nav-collapsed) .od-nav-item{padding-inline:0}
 
 #ui008-order-detail .ol-layout-button,#ui008-order-detail .ol-dialog .od-button{background:white;color:#746c80;border:1px solid #e5dff0;border-radius:8px;padding:7px 10px;cursor:pointer}

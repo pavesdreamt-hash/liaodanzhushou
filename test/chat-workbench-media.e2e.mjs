@@ -22,8 +22,8 @@ test('聊天窗口只读取进入当前视口的图片，滚动到图片后才�
    ipcMain.removeHandler('manual-chat');ipcMain.handle('manual-chat',async(_event,{action,payload={}})=>{
     if(action==='status')return {ok:true,data:{status:'online'}};
     if(action==='inbox')return {ok:true,data:{items:[{phone:'971500000002',chatId:'wa-phone:971500000002',name:'Media Fixture',updatedAt:'2026-09-23T08:39:00.000Z',preview:'[图片]',direction:'customer',unreadCount:0},{phone:'971500000003',chatId:'wa-phone:971500000003',name:'Other Fixture',updatedAt:'2026-09-22T08:39:00.000Z',preview:'Second chat',direction:'customer',unreadCount:0}],total:2,offset:0,hasMore:false}};
-    if((action==='openInbox'&&payload.chatId==='wa-phone:971500000003')||(action==='recent'&&payload.token==='other-binding'))return {ok:true,data:{token:'other-binding',accountId:'wa-phone:971500000001',chatId:'wa-phone:971500000003',phone:'971500000003',messages:[{id:'other-1',direction:'customer',text:'Second chat',sentAt:'2026-09-22T08:39:00.000Z',metadata:{messageType:'chat',media:[]}}],hasMore:false}};
-    if(action==='openInbox'||action==='recent')return {ok:true,data:{token:'media-binding',accountId:'wa-phone:971500000001',chatId:'wa-phone:971500000002',phone:'971500000002',messages:globalThis.__mediaRows,hasMore:false}};
+    if((action==='openInbox'&&payload.chatId==='wa-phone:971500000003')||(action==='recent'&&payload.token==='other-binding'))return {ok:true,data:{token:'other-binding',accountId:'wa-phone:971500000001',chatId:'wa-phone:971500000003',phone:'971500000003',identityVerified:true,messages:[{id:'other-1',direction:'customer',text:'Second chat',sentAt:'2026-09-22T08:39:00.000Z',metadata:{messageType:'chat',media:[]}}],hasMore:false}};
+    if(action==='openInbox'||action==='recent')return {ok:true,data:{token:'media-binding',accountId:'wa-phone:971500000001',chatId:'wa-phone:971500000002',phone:'971500000002',identityVerified:true,messages:globalThis.__mediaRows,hasMore:false}};
     if(action==='media'){globalThis.__mediaCalls.push(payload.messageId);if(payload.force)globalThis.__mediaForced.push(payload.messageId);globalThis.__mediaActive++;globalThis.__mediaMaximum=Math.max(globalThis.__mediaMaximum,globalThis.__mediaActive);await new Promise(resolve=>setTimeout(resolve,90));globalThis.__mediaActive--;if(payload.messageId==='media-39'&&globalThis.__mediaFailureOnce){globalThis.__mediaFailureOnce=false;return {ok:false,error:'临时读取失败'};}const row=globalThis.__mediaRows.find(value=>value.id===payload.messageId),dataUrl=payload.messageId==='media-0'&&!payload.force?'data:image/png;base64,YmFk':imageData;return {ok:true,data:row?{...row,metadata:{...row.metadata,note:null,media:[{type:'image',status:'cached',dataUrl}]}}:null};}
     return {ok:true,data:null};
    });
@@ -62,4 +62,56 @@ test('聊天窗口只读取进入当前视口的图片，滚动到图片后才�
   assert.equal(await frame.locator('.cwb-message-image').count(),0,'切换会话后旧图片不能留在新聊天');
   assert.equal(await frame.locator('dialog.cwb-image-lightbox').count(),0);
  }finally{try{if(application)await Promise.race([application.close(),new Promise(resolve=>setTimeout(resolve,4000))]);}catch{}try{application?.process().kill('SIGKILL');}catch{}await new Promise(resolve=>setTimeout(resolve,150));await rm(directory,{recursive:true,force:true});}
+});
+
+test('legacy raw media failures are replaced by a useful retry message in the desktop app',async()=>{
+ const directory=await mkdtemp(path.join(os.tmpdir(),'workbench-media-safe-failure-'));let application;
+ try{
+  const executable=process.env.KDOCS_TEST_EXECUTABLE;
+  application=await electron.launch({executablePath:executable||electronPath,args:executable?[`--isolated-user-data=${directory}`,`--orders-test-user-data=${directory}`]:['.',`--orders-test-user-data=${directory}`],cwd:path.resolve('.'),env:{...process.env,NODE_ENV:'test'}});
+  if(executable)assert.deepEqual(await application.evaluate(({app})=>({packaged:app.isPackaged,version:app.getVersion()})),{packaged:true,version:appVersion});
+  const page=await application.firstWindow();
+  await application.evaluate(({ipcMain})=>{
+   globalThis.__legacyMediaCalls=0;
+   const legacy={id:'legacy-media',direction:'merchant',text:'[图片]',sentAt:'2026-08-24T05:11:31.000Z',metadata:{messageType:'image',mediaFailure:{code:'WHATSAPP_MEDIA_READ_FAILED',message:'t'},media:[{type:'image',status:'unavailable'}]}};
+   ipcMain.removeHandler('manual-chat');ipcMain.handle('manual-chat',async(_event,{action})=>{
+    if(action==='status')return {ok:true,data:{status:'online'}};
+    if(action==='inbox')return {ok:true,data:{items:[{phone:'971500000002',chatId:'wa-phone:971500000002',name:'Legacy media fixture',updatedAt:legacy.sentAt,preview:'[图片]',direction:'merchant',unreadCount:0}],total:1,offset:0,hasMore:false}};
+    if(action==='openInbox'||action==='recent')return {ok:true,data:{token:'legacy-media-binding',accountId:'wa-phone:971500000001',chatId:'wa-phone:971500000002',phone:'971500000002',identityVerified:true,messages:[legacy],hasMore:false}};
+    if(action==='markSeen')return {ok:true,data:{seen:true}};
+    if(action==='media'){globalThis.__legacyMediaCalls++;return {ok:false,error:'t'};}
+    return {ok:false,error:`unexpected action ${action}`};
+   });
+   ipcMain.removeHandler('manual-reply-translation');ipcMain.handle('manual-reply-translation',async()=>({ok:true,data:{translations:[]}}));
+  });
+  const frame=page.frameLocator('iframe.confirmed-frame');await frame.locator('.cwb-refresh').click();await frame.locator('.cwb-conversation').click();
+  const status=frame.locator('[data-message-id="legacy-media"] .cwb-message-media-status'),retry=status.locator('.cwb-media-retry');await retry.waitFor();
+  assert.equal(await status.locator('small').textContent(),'图片暂时无法读取，可稍后重试。');assert.equal((await status.textContent()).includes('t'),false,'legacy raw error text must not be rendered');assert.equal(await application.evaluate(()=>globalThis.__legacyMediaCalls),1);
+  await retry.click();await frame.locator('[data-message-id="legacy-media"] .cwb-media-retry').waitFor();assert.equal(await status.locator('small').textContent(),'图片暂时无法读取，可稍后重试。');assert.equal(await application.evaluate(()=>globalThis.__legacyMediaCalls),2);
+ }finally{try{await application?.close();}catch{}try{application?.process().kill('SIGKILL');}catch{}await rm(directory,{recursive:true,force:true});}
+});
+
+test('未核对会话不向 WhatsApp 请求图片，并明确说明原因',async()=>{
+ const directory=await mkdtemp(path.join(os.tmpdir(),'workbench-media-unverified-'));let application;
+ try{
+  const executable=process.env.KDOCS_TEST_EXECUTABLE;
+  application=await electron.launch({executablePath:executable||electronPath,args:executable?[`--isolated-user-data=${directory}`,`--orders-test-user-data=${directory}`]:['.',`--orders-test-user-data=${directory}`],cwd:path.resolve('.'),env:{...process.env,NODE_ENV:'test'}});
+  if(executable)assert.deepEqual(await application.evaluate(({app})=>({packaged:app.isPackaged,version:app.getVersion()})),{packaged:true,version:appVersion});
+  const page=await application.firstWindow();
+  await application.evaluate(({ipcMain})=>{
+   globalThis.__unverifiedMediaCalls=0;
+   const picture={id:'unverified-picture',direction:'customer',text:'[图片]',sentAt:'2026-09-30T08:24:00.000Z',metadata:{messageType:'image',media:[{type:'image',status:'unavailable'}]}};
+   ipcMain.removeHandler('manual-chat');ipcMain.handle('manual-chat',async(_event,{action})=>{
+    if(action==='status')return {ok:true,data:{status:'online'}};
+    if(action==='inbox')return {ok:true,data:{items:[{phone:'971500000002',chatId:'wa-phone:971500000002',name:'Unverified media fixture',updatedAt:picture.sentAt,preview:'[图片]',direction:'customer',unreadCount:0}],total:1,offset:0,hasMore:false}};
+    if(action==='openInbox'||action==='recent')return {ok:true,data:{token:'unverified-media-binding',accountId:'wa-phone:971500000001',chatId:'wa-phone:971500000002',phone:'971500000002',identityVerified:false,messages:[picture],hasMore:false}};
+    if(action==='media'){globalThis.__unverifiedMediaCalls++;return {ok:true,data:picture};}
+    return {ok:true,data:null};
+   });
+   ipcMain.removeHandler('manual-reply-translation');ipcMain.handle('manual-reply-translation',async()=>({ok:true,data:{translations:[]}}));
+  });
+  const frame=page.frameLocator('iframe.confirmed-frame');await frame.locator('.cwb-refresh').click();await frame.locator('.cwb-conversation').click();
+  const status=frame.locator('[data-message-id="unverified-picture"] .cwb-message-media-status');await status.waitFor();assert.equal(await status.locator('small').textContent(),'当前会话号码映射尚未核对，暂不能读取图片。');assert.equal(await status.locator('.cwb-media-retry').count(),0);
+  await page.waitForTimeout(300);assert.equal(await application.evaluate(()=>globalThis.__unverifiedMediaCalls),0,'未核对会话不能触发任何图片读取 IPC');
+ }finally{try{await application?.close();}catch{}try{application?.process().kill('SIGKILL');}catch{}await rm(directory,{recursive:true,force:true});}
 });

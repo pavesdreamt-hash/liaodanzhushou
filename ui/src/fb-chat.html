@@ -1,0 +1,55 @@
+<div id="fb-chat-page" class="fb-shell unified-page" aria-label="FB 聊天">
+  <header class="fb-topbar" aria-label="应用标题">
+    <div class="fb-brand"><span class="fb-brand-mark" aria-hidden="true"><i data-lucide="messages-square"></i></span><strong>聊单助手</strong><span class="fb-version">__APP_VERSION__</span></div>
+    <div class="fb-top-title"><i data-lucide="scan-search" aria-hidden="true"></i><span>FB 聊天</span><small>AdsPower 个人号 · 主动只读扫描</small></div>
+    <span class="fb-top-state"><i data-lucide="shield-check" aria-hidden="true"></i>不发送消息</span>
+  </header>
+  <aside class="fb-nav up-sidebar" aria-label="主导航">
+    <nav class="fb-nav-section nav-group" aria-label="我的工作台">
+      <div class="fb-nav-heading up-nav-heading"><span class="fb-nav-label">我的工作台</span><button type="button" class="fb-nav-toggle up-nav-toggle" title="折叠导航栏" aria-label="折叠导航栏"><i data-lucide="panel-left-close" aria-hidden="true"></i></button></div>
+      <button type="button" class="fb-nav-item up-nav" title="聊单工作台"><i data-lucide="messages-square"></i><span>聊单工作台</span><small>WhatsApp</small></button>
+      <button type="button" class="fb-nav-item up-nav" aria-current="page" title="FB 聊天"><i data-lucide="scan-search"></i><span>FB 聊天</span><small>AdsPower</small></button>
+      <button type="button" class="fb-nav-item up-nav" title="订单管理"><i data-lucide="archive"></i><span>订单管理</span></button>
+      <button type="button" class="fb-nav-item up-nav" title="商品库存"><i data-lucide="boxes"></i><span>商品库存</span></button>
+      <button type="button" class="fb-nav-item up-nav" title="利润核算"><i data-lucide="chart-no-axes-combined"></i><span>利润核算</span></button>
+    </nav>
+    <nav class="fb-nav-section nav-group" aria-label="助手管理">
+      <span class="fb-nav-label nav-label">助手管理</span>
+      <button type="button" class="fb-nav-item up-nav" title="助手配置"><i data-lucide="bot"></i><span>助手配置</span></button>
+      <button type="button" class="fb-nav-item up-nav" title="连接与设置"><i data-lucide="settings"></i><span>连接与设置</span></button>
+    </nav>
+    <div class="fb-nav-footer">FB 内容仅在本次应用运行期间保留</div>
+  </aside>
+  <main class="fb-main" aria-label="AdsPower 扫描工作区">
+    <header class="fb-page-head">
+      <div><p class="fb-eyebrow">独立工作区</p><h1>FB 聊天</h1><p>只查看你已手动打开的 AdsPower 档案中，当前加载的 Facebook、Messenger、Marketplace 或 Meta Business Suite Inbox 收件箱文字。</p></div>
+      <div class="fb-actions"><button type="button" class="fb-scan"><i data-lucide="scan-search"></i><span>主动扫描</span></button><button type="button" class="fb-clear" disabled><i data-lucide="trash-2"></i><span>清空本次扫描</span></button></div>
+    </header>
+    <p class="fb-safety"><i data-lucide="shield-check" aria-hidden="true"></i><span>与 WhatsApp 聊天、订单和商品完全分开。不会登录、打开或关闭档案，不切换客户对话、不标记已读、不输入文字，也不会发送 FB 消息。请仍在原 AdsPower 浏览器手动回复。</span></p>
+    <section class="fb-scan-status" aria-live="polite"><span class="fb-status-dot" aria-hidden="true"></span><span data-fb-status>尚未扫描。先在 AdsPower 手动打开需要查看的个人号和收件箱，再点击“主动扫描”。</span></section>
+    <section class="fb-results" aria-live="polite" data-fb-results></section>
+    <section class="fb-reply-workspace" aria-label="回复草稿">
+      <header class="fb-reply-head"><div><p class="fb-eyebrow">人工回复整理</p><div class="fb-reply-title-line"><h2>回复草稿</h2><span class="fb-reply-service-note"><i data-lucide="sparkles" aria-hidden="true"></i><span>与聊天工作台使用同一 AI 与翻译服务</span></span></div><p>先用中文写回复意图；需要时再整理或翻译。确认后加入待复制列表，再到原 FB Inbox 人工粘贴、核对并发送。</p></div><button type="button" class="fb-copy-selected" data-fb-copy-selected disabled><i data-lucide="copy" aria-hidden="true"></i><span>复制已选</span></button></header>
+      <div class="fb-reply-tools-row"><div class="fb-reply-tabs" aria-label="草稿语言"><span class="is-current">中文输入</span><span>英文译文</span></div><div class="fb-reply-assist-actions" aria-label="回复草稿工具"><button type="button" class="fb-reference-scripts" data-fb-reference-scripts aria-haspopup="dialog"><i data-lucide="book-open-text" aria-hidden="true"></i><span>参考话术</span></button><button type="button" class="fb-ai-assist" data-fb-ai-assist><i data-lucide="sparkles" aria-hidden="true"></i><span>AI 整理</span></button><button type="button" class="fb-reply-translate" data-fb-reply-translate><i data-lucide="languages" aria-hidden="true"></i><span>翻译为英文</span></button></div></div>
+      <div class="fb-reply-composer-grid">
+        <section class="fb-reply-language-card">
+          <header><label class="fb-reply-composer-label" for="fb-reply-chinese">中文草稿</label><small>可直接修改 · 输入内容</small></header>
+          <textarea id="fb-reply-chinese" class="fb-reply-composer" data-fb-reply-chinese maxlength="4000" placeholder="例如：您好，这个产品还有货，请问您需要哪个编号？"></textarea>
+        </section>
+        <section class="fb-reply-language-card fb-reply-english-card">
+          <header><label class="fb-reply-composer-label" for="fb-reply-english">英文回复</label><small>翻译结果可继续编辑</small></header>
+          <textarea id="fb-reply-english" class="fb-reply-composer" data-fb-reply-english maxlength="4000" placeholder="需要时点击“翻译为英文”，也可以直接手动输入英文。"></textarea>
+        </section>
+      </div>
+      <footer class="fb-reply-composer-foot"><span data-fb-reply-status>草稿仅保存在当前运行中。</span><button type="button" class="fb-add-draft" data-fb-add-draft><i data-lucide="list-plus" aria-hidden="true"></i><span>加入待复制列表</span></button></footer>
+      <div class="fb-reply-list" data-fb-reply-list></div>
+      <dialog class="fb-reference-dialog" data-fb-reference-dialog aria-labelledby="fb-reference-title">
+        <header class="fb-reference-dialog-head"><div><p class="fb-eyebrow">本地参考资料</p><h3 id="fb-reference-title">聊天话术</h3><p>仅供查看和整理表达；不会自动发送到 FB。</p></div><button type="button" class="fb-reference-close" data-fb-reference-close aria-label="关闭参考话术"><i data-lucide="x" aria-hidden="true"></i></button></header>
+        <p class="fb-reference-safety"><i data-lucide="shield-check" aria-hidden="true"></i><span>查看不会调用 AI。只有点击“AI 整理”时，当前中文草稿与这份本地资料才会交给你已配置的 AI；价格、配送、联系方式等事实仍需以当前草稿为准。</span></p>
+        <nav class="fb-reference-index" aria-label="话术目录" data-fb-reference-index></nav>
+        <div class="fb-reference-content" data-fb-reference-content></div>
+        <footer class="fb-reference-dialog-foot"><span>AI 只参考语气和结构，不会自动照抄资料中的事实性承诺或合规风险表述。</span><button type="button" data-fb-reference-close>关闭</button></footer>
+      </dialog>
+    </section>
+  </main>
+</div>

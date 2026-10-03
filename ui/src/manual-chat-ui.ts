@@ -4,9 +4,10 @@ type Draft={text:string;chinese:string;pictures:Picture[];stale:boolean};
 type Message={id:string;direction:string;text:string;sentAt:string;sender?:string;metadata?:{sender?:string;origin?:string}};
 type Candidate={token:string;accountId:string;chatId:string;accountPhone:string;targetPhone:string};
 type Binding={token:string;phone:string;accountId:string;messages:Message[]};
-type Bridge={request:(value:unknown)=>Promise<{ok:boolean;data?:unknown;error?:string}>};
+type BridgeError=string|{message?:string;code?:string;retryable?:boolean};
+type Bridge={request:(value:unknown)=>Promise<{ok:boolean;data?:unknown;error?:BridgeError}>};
 const bridge=(window as Window&{manualChat?:Bridge}).manualChat;
-async function request(action:string,payload?:unknown){if(!bridge)throw new Error('请在桌面 App 中连接 WhatsApp 后发送');const result=await bridge.request({action,payload});if(!result.ok)throw new Error(result.error||'聊天操作失败');return result.data;}
+async function request(action:string,payload?:unknown){if(!bridge)throw new Error('请在桌面 App 中连接 WhatsApp 后发送');const result=await bridge.request({action,payload});if(!result.ok)throw new Error(typeof result.error==='string'?result.error:result.error?.message||'聊天操作失败');return result.data;}
 
 export function installManualChat(doc:Document,root:HTMLElement,options:{draft:()=>Draft;clear:(draft:Draft)=>void;say:(value:string)=>void;bound:(phone:string)=>void;edit:(value:string)=>void},{orderId}:{orderId?:string}={}){
   const messages=root.querySelector<HTMLElement>('.od-messages')!,send=root.querySelector<HTMLButtonElement>('#od-send-preview')!;

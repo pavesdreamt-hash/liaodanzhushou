@@ -1,20 +1,37 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
   <defs>
-    <linearGradient id="bg" x1="120" y1="80" x2="880" y2="940" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#1769E0"/><stop offset="1" stop-color="#093D80"/>
+    <linearGradient id="background" x1="150" y1="104" x2="868" y2="936" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#3813B9"/>
+      <stop offset=".5" stop-color="#6F36E7"/>
+      <stop offset="1" stop-color="#A855F7"/>
     </linearGradient>
-    <linearGradient id="badge" x1="610" y1="570" x2="890" y2="870" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#32C989"/><stop offset="1" stop-color="#0B8A59"/>
+    <radialGradient id="highlight" cx="0" cy="0" r="1" gradientTransform="matrix(454 360 -414 522 738 178)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#EBCBFF" stop-opacity=".68"/>
+      <stop offset="1" stop-color="#EBCBFF" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="tag" x1="640" y1="643" x2="844" y2="846" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFE884"/>
+      <stop offset="1" stop-color="#F5A917"/>
     </linearGradient>
-    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="24" stdDeviation="28" flood-opacity=".25"/></filter>
+    <filter id="bubble-shadow" x="-20%" y="-20%" width="150%" height="160%">
+      <feDropShadow dx="0" dy="26" stdDeviation="28" flood-color="#18045C" flood-opacity=".28"/>
+    </filter>
+    <filter id="tag-shadow" x="-30%" y="-30%" width="170%" height="180%">
+      <feDropShadow dx="0" dy="20" stdDeviation="18" flood-color="#210578" flood-opacity=".32"/>
+    </filter>
   </defs>
-  <rect x="52" y="52" width="920" height="920" rx="218" fill="url(#bg)"/>
-  <path d="M184 235c0-44 36-80 80-80h496c44 0 80 36 80 80v526c0 44-36 80-80 80H264c-44 0-80-36-80-80V235Z" fill="#fff" filter="url(#shadow)"/>
-  <rect x="184" y="155" width="656" height="155" rx="78" fill="#E8F1FF"/>
-  <circle cx="268" cy="233" r="26" fill="#1769E0"/><rect x="320" y="208" width="340" height="50" rx="25" fill="#A9C7F5"/>
-  <path d="M184 310h656M184 475h656M184 640h656M390 310v531" fill="none" stroke="#BCD0E8" stroke-width="24"/>
-  <rect x="246" y="365" width="84" height="54" rx="22" fill="#1769E0"/><rect x="246" y="530" width="84" height="54" rx="22" fill="#1769E0"/><rect x="246" y="695" width="84" height="54" rx="22" fill="#1769E0"/>
-  <rect x="453" y="368" width="258" height="46" rx="23" fill="#CAD8E8"/><rect x="453" y="533" width="205" height="46" rx="23" fill="#CAD8E8"/><rect x="453" y="698" width="244" height="46" rx="23" fill="#CAD8E8"/>
-  <circle cx="756" cy="744" r="174" fill="url(#badge)" stroke="#fff" stroke-width="28" filter="url(#shadow)"/>
-  <path d="M661 715c12-57 62-99 122-99 36 0 68 15 91 39l24 28M897 616v71h-71M851 773c-13 56-63 97-122 97-35 0-67-14-90-38l-25-29M615 870v-71h71" fill="none" stroke="#fff" stroke-width="38" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <rect x="48" y="48" width="928" height="928" rx="236" fill="url(#background)"/>
+  <rect x="48" y="48" width="928" height="928" rx="236" fill="url(#highlight)"/>
+  <path d="M203 245h430c48 0 87 39 87 87v223c0 48-39 87-87 87H387L256 763c-23 21-58 1-50-30l26-91h-29c-48 0-87-39-87-87V332c0-48 39-87 87-87Z" fill="#FFF" filter="url(#bubble-shadow)"/>
+  <rect x="252" y="361" width="331" height="42" rx="21" fill="#7656D7"/>
+  <rect x="252" y="455" width="219" height="42" rx="21" fill="#B6A7EC"/>
+  <circle cx="539" cy="476" r="21" fill="#B6A7EC"/>
+
+  <g transform="rotate(-11 734 735)" filter="url(#tag-shadow)">
+    <path d="M620 649h165c17 0 30 13 30 30v133c0 17-13 30-30 30H620l-72-96 72-97Z" fill="url(#tag)"/>
+    <circle cx="636" cy="746" r="17" fill="#8A51DB"/>
+    <rect x="674" y="703" width="90" height="26" rx="13" fill="#FFF7D6"/>
+    <rect x="674" y="755" width="57" height="22" rx="11" fill="#FFF1B4"/>
+  </g>
 </svg>

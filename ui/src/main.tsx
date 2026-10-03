@@ -3,6 +3,7 @@ import {createRoot} from 'react-dom/client';
 import {renderToStaticMarkup} from 'react-dom/server';
 import {CircleHelp,icons} from 'lucide-react';
 import desktopWorkbenchHtml from './chat-workbench-desktop.html?raw';
+import facebookChatHtml from './fb-chat.html?raw';
 import ordersHtml from './confirmed/orders.html?raw';
 import inventoryHtml from './confirmed/inventory.html?raw';
 import profitHtml from './confirmed/profit.html?raw';
@@ -20,16 +21,18 @@ import unifiedCss from './unified-layout.css?raw';
 import replyCss from './reply-tools.css?raw';
 import mediaDialogCss from './media-dialog.css?raw';
 import productMediaCss from './product-media.css?raw';
-import {installUnifiedLayout} from './unified-layout';
+import {installUnifiedLayout,prepareSourceUnifiedShell} from './unified-layout';
 import {installProductPictures} from './reply-tools';
 import {installEmptyWorkspace} from './empty-workspace';
 import {installDesktopChatWorkbench} from './chat-workbench-desktop';
+import {installFacebookChat} from './fb-chat';
 import {installRestoredPage} from './restored-pages';
 import {installOrdersPage,installOrderDetail} from './order-business';
 import orderBusinessCss from './order-business.css?raw';
 import workbenchOrdersCss from './workbench-orders.css?raw';
 import emptyCss from './empty-workspace.css?raw';
 import desktopWorkbenchCss from './chat-workbench-desktop.css?raw';
+import facebookChatCss from './fb-chat.css?raw';
 import restoredCss from './restored-pages.css?raw';
 import hoverHintsCss from './hover-hints.css?raw';
 import {installHoverHints} from './hover-hints';
@@ -38,7 +41,7 @@ import {version} from '../../package.json';
 const UI_BUILD_MARKER='liaodan-assistant-next-ui';
 document.documentElement.dataset.build=UI_BUILD_MARKER;
 
-type Page='workbench'|'orders'|'inventory'|'source'|'profit'|'assistant'|'settings'|'product'|'order'|'profit-detail';
+type Page='workbench'|'fb-chat'|'orders'|'inventory'|'source'|'profit'|'assistant'|'settings'|'product'|'order'|'profit-detail';
 type DragRect={left:number;top:number;width:number;height:number};
 type DragArea={right:number;blocked:boolean;workbenchRects:DragRect[]};
 const chatPages=new Set<Page>(['order','workbench']);
@@ -46,13 +49,13 @@ const productPages=new Set<Page>(['inventory','source','product']);
 const restoredPages=new Set<Page>(['inventory','source','profit','assistant','settings','product','profit-detail']);
 const moduleStyle=(name:string,css:string)=>`<style data-ui-module="${name}">${css}</style>`;
 const pages:Record<Page,string>={
-  workbench:desktopWorkbenchHtml,orders:ordersHtml,inventory:inventoryHtml,source:sourceLibraryHtml,profit:profitHtml,
+  workbench:desktopWorkbenchHtml,'fb-chat':facebookChatHtml,orders:ordersHtml,inventory:inventoryHtml,source:sourceLibraryHtml,profit:profitHtml,
   assistant:assistantHtml,settings:settingsHtml,product:productHtml,order:orderHtml,
   'profit-detail':profitDetailHtml
 };
 
 const routeByLabel:Record<string,Page>={
-  '聊单工作台':'workbench','订单管理':'orders','订单与客户':'orders','商品库存':'inventory',
+  '聊单工作台':'workbench','FB聊天':'fb-chat','订单管理':'orders','订单与客户':'orders','商品库存':'inventory',
   '利润核算':'profit','利润':'profit','助手配置':'assistant','助手设置':'assistant','连接与设置':'settings'
 };
 
@@ -83,6 +86,7 @@ function ConfirmedApp(){
     // contain demo interactions and can run before the real order data mounts, so the current
     // renderer owns every order-list/detail interaction and data field.
     return ((restoredPages.has(page)||page==='orders'||page==='order')?pages[page].replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi,''):pages[page]).replaceAll('__APP_VERSION__',version).replace(/>1\.0</g,`>${version}<`)
+      +moduleStyle('shared-canvas','html,body{background:#f7f6fb!important}')
       +moduleStyle('shared-layout',unifiedCss)
       +(chat?moduleStyle('chat-layout',orderLayoutCss.replaceAll('#ui008-order-detail',':is(#ui008-order-detail,#chat-workbench-aligned)')):'')
       +(chat||product?moduleStyle('media-dialog',mediaDialogCss):'')
@@ -91,6 +95,7 @@ function ConfirmedApp(){
       +(['orders','order'].includes(page)?moduleStyle('order-business',orderBusinessCss):'')
       +(page==='workbench'?moduleStyle('workbench-orders',workbenchOrdersCss):'')
       +(page==='workbench'?moduleStyle('desktop-workbench',desktopWorkbenchCss):'')
+      +(page==='fb-chat'?moduleStyle('facebook-chat',facebookChatCss):'')
       +moduleStyle('empty-workspace',emptyCss)
       +(restoredPages.has(page)?moduleStyle('restored-pages',restoredCss):'')
       +moduleStyle('hover-hints',hoverHintsCss);
@@ -99,6 +104,7 @@ function ConfirmedApp(){
     cleanup.current?.();cleanup.current=undefined;
     const current=frame.current;const doc=current?.contentDocument;const win=current?.contentWindow as (Window&{lucide?:{createIcons:(options?:{nodes?:Array<Document|Element>;attrs?:Record<string,string|number>})=>void}})|null;
     if(!current||!doc||!win)return;
+    if(page==='source')prepareSourceUnifiedShell(doc);
     const navButtons=Array.from(doc.querySelectorAll('aside button,nav button'));
     for(const button of navButtons){
       const text=(button.textContent||'').replace(/\s+/g,'').trim();
@@ -107,6 +113,18 @@ function ConfirmedApp(){
       if(text==='助手设置')button.querySelector('span') ? button.querySelector('span')!.textContent='助手配置' : button.append('助手配置');
     }
     const normalized=Array.from(doc.querySelectorAll('aside button,nav button'));
+    if(!normalized.some(button=>(button.textContent||'').replace(/\s+/g,'').includes('FB聊天'))){
+      const workbenchButton=normalized.find(button=>(button.textContent||'').replace(/\s+/g,'').includes('聊单工作台'));
+      if(workbenchButton){
+        const fbButton=workbenchButton.cloneNode(true) as HTMLButtonElement;
+        fbButton.className=fbButton.className.replace(/\b(on|active)\b/g,'').trim();
+        fbButton.removeAttribute('aria-current');
+        fbButton.setAttribute('aria-label','FB 聊天');
+        fbButton.title='FB 聊天';
+        fbButton.innerHTML='<i data-lucide="scan-search"></i><span>FB 聊天</span>';
+        workbenchButton.after(fbButton);
+      }
+    }
     if(!normalized.some(button=>(button.textContent||'').includes('利润'))){
       const inventory=normalized.find(button=>(button.textContent||'').includes('商品库存'));
       if(inventory){
@@ -117,9 +135,12 @@ function ConfirmedApp(){
         inventory.after(profitButton);
       }
     }
-    const navIcons:Record<string,string>={'聊单工作台':'messages-square','订单管理':'archive','商品库存':'boxes','利润核算':'chart-no-axes-combined','助手配置':'bot','连接与设置':'settings'};
+    const navIcons:Record<string,string>={'聊单工作台':'messages-square','FB聊天':'scan-search','订单管理':'archive','商品库存':'boxes','利润核算':'chart-no-axes-combined','助手配置':'bot','连接与设置':'settings'};
+    const activeNavPage:Page=page==='source'||page==='product'?'inventory':page==='order'?'orders':page==='profit-detail'?'profit':page;
     for(const button of doc.querySelectorAll<HTMLButtonElement>('aside button')){
-      const icon=navIcons[(button.textContent||'').replace(/\s+/g,'').trim()],placeholder=button.querySelector<HTMLElement>('[data-lucide]');
+      const label=(button.textContent||'').replace(/\s+/g,'').trim(),icon=navIcons[label],placeholder=button.querySelector<HTMLElement>('[data-lucide]'),navPage=Object.entries(routeByLabel).find(([name])=>label===name||label.startsWith(name))?.[1];
+      if(label&&button.closest('#chat-workbench-desktop .cwb-nav-section')&&!button.hasAttribute('aria-label'))button.setAttribute('aria-label',label);
+      if(navPage){button.toggleAttribute('aria-current',navPage===activeNavPage);if(navPage===activeNavPage)button.setAttribute('aria-current','page');}
       if(icon&&placeholder)placeholder.dataset.lucide=icon;
     }
     const createIcons=(options?:{nodes?:Array<Document|Element>;attrs?:Record<string,string|number>})=>{
@@ -145,7 +166,7 @@ function ConfirmedApp(){
     });
     if(page==='order'){
       disposers.push(installOrderLayout(doc,win,desktop,chrome,{removeChatWorkspace:true}));
-    }else if(page!=='workbench'&&page!=='source')disposers.push(installUnifiedLayout(doc,win,desktop,chrome));
+    }else if(page!=='workbench'&&page!=='fb-chat')disposers.push(installUnifiedLayout(doc,win,desktop,chrome));
     if(page==='order')installEmptyWorkspace(doc,page);
     if(restoredPages.has(page)){
       disposers.push(installRestoredPage(doc,win,page as 'inventory'|'source'|'profit'|'assistant'|'settings'|'product'|'profit-detail',{
@@ -164,7 +185,7 @@ function ConfirmedApp(){
     }
     if(page==='order'&&selectedOrderId)disposers.push(installOrderDetail(doc,selectedOrderId));
     if(page==='workbench'){
-      disposers.push(installDesktopChatWorkbench(doc));
+      disposers.push(installDesktopChatWorkbench(doc,desktop));
       // The iframe cannot provide a reliable native macOS drag hit region. Build the shared
       // 56px strip in the parent document, while physically leaving holes above its controls.
       const workbench=doc.querySelector<HTMLElement>('#chat-workbench-desktop')!;
@@ -192,6 +213,7 @@ function ConfirmedApp(){
       win.addEventListener('resize',scheduleWorkbenchChrome);
       disposers.push(()=>{win.cancelAnimationFrame(chromeFrame);chromeObserver.disconnect();win.removeEventListener('resize',scheduleWorkbenchChrome);});
     }
+    if(page==='fb-chat')disposers.push(installFacebookChat(doc,desktop));
     disposers.push(installHoverHints(doc));
     createIcons({nodes:[doc]});
     cleanup.current=()=>disposers.reverse().forEach(dispose=>dispose());
@@ -203,7 +225,7 @@ function ConfirmedApp(){
       const orderId=button.matches('[data-open-order-detail]')?button.closest<HTMLElement>('[data-order-id]')?.dataset.orderId:undefined;
       if(orderId){event.preventDefault();event.stopImmediatePropagation();setSelectedOrderId(orderId);setPage('order');return;}
       const label=(button.textContent||'').replace(/\s+/g,'').trim();
-      const navPage=Object.entries(routeByLabel).find(([name])=>label===name)?.[1];
+      const navPage=Object.entries(routeByLabel).find(([name])=>label===name||label.startsWith(name))?.[1];
       if(navPage&&button.closest('aside,nav')){event.preventDefault();event.stopImmediatePropagation();setPage(navPage);return;}
       if(button.dataset.restoredAction==='true')return;
       let next:Page|undefined;
@@ -218,7 +240,7 @@ function ConfirmedApp(){
   };
   const iframe=<iframe key={`${page}:${page==='order'?selectedOrderId||'':page==='product'?selectedProductId||'':page==='profit-detail'?selectedProfitDay||'':''}`} ref={frame} className="confirmed-frame" title="聊单助手" srcDoc={html} onLoad={setup}/>;
   if(!merged)return iframe;
-  const dragLayers=!dragArea.blocked&&(page==='workbench'?dragArea.workbenchRects.map((rect,index)=><div key={`${rect.left}:${rect.top}:${rect.width}:${rect.height}:${index}`} className="order-window-drag" aria-hidden="true" style={{left:rect.left,top:rect.top,width:rect.width,height:rect.height,right:'auto'}}/>):<div className="order-window-drag" aria-hidden="true" style={{right:dragArea.right,height:56}}/>);
+  const dragLayers=!dragArea.blocked&&(page==='workbench'?dragArea.workbenchRects.map((rect,index)=><div key={`${rect.left}:${rect.top}:${rect.width}:${rect.height}:${index}`} className="order-window-drag" aria-hidden="true" style={{left:rect.left,top:rect.top,width:rect.width,height:rect.height,right:'auto'}}/>):page==='fb-chat'?<div className="order-window-drag fb-window-drag" aria-hidden="true" style={{left:96,right:0,height:56}}/>:<div className="order-window-drag" aria-hidden="true" style={{right:dragArea.right,height:56}}/>);
   return <div className="desktop-shell">{iframe}{dragLayers}</div>;
 }
 

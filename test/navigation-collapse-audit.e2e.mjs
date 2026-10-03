@@ -44,5 +44,5 @@ test('九个可进入页面都有唯一导航折叠入口，订单详情与全�
     await frame.locator('#ui034 tbody tr').filter({hasText:day}).getByRole('button',{name:'查看详情',exact:true}).click();await assertCollapsed('利润详情','#ui035','up-nav-collapsed');
     await frame.getByRole('button',{name:'助手配置',exact:true}).click();await assertCollapsed('助手配置','#ui041','up-nav-collapsed');
     await frame.getByRole('button',{name:'连接与设置',exact:true}).click();await assertCollapsed('连接与设置','#ui036','up-nav-collapsed');
-  }finally{if(database)database.close();if(application){await Promise.race([application.close().catch(()=>{}),new Promise(resolve=>setTimeout(resolve,3000))]);if(application.process().exitCode===null)application.process().kill('SIGKILL');}await rm(directory,{recursive:true,force:true});}
+  }finally{if(database)database.close();if(application){const process=application.process();await Promise.race([application.close().catch(()=>{}),new Promise(resolve=>setTimeout(resolve,3000))]);if(process.exitCode===null)process.kill('SIGKILL');}await rm(directory,{recursive:true,force:true});}
 });

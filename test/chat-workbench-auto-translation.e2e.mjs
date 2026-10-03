@@ -51,8 +51,8 @@ test('聊天工作台默认先读取当前页缓存，再自动翻译未译消�
   await frame.locator('#chat-workbench-desktop').evaluate(root=>{root.style.setProperty('--cwb-list-width','240px');root.style.setProperty('--cwb-order-width','100px');root.ownerDocument.defaultView?.dispatchEvent(new Event('resize'));});
   assert.equal(await frame.locator('#chat-workbench-desktop').evaluate(root=>root.style.getPropertyValue('--cwb-list-width')),'');
   assert.equal(await frame.locator('#chat-workbench-desktop').evaluate(root=>root.style.getPropertyValue('--cwb-order-width')),'');
-  const shell=await frame.locator('#chat-workbench-desktop').boundingBox(),defaultChat=await frame.locator('.cwb-chat').boundingBox();
-  assert.ok(shell&&defaultChat&&Math.abs(defaultChat.x-shell.x-Math.max(shell.width/3,456))<=1,'放大或拉伸窗口后，导航和客户聊天栏整体恢复为三分之一宽度');
+  const shell=await frame.locator('#chat-workbench-desktop').boundingBox(),navAfterReset=await frame.locator('.cwb-nav').boundingBox(),defaultChat=await frame.locator('.cwb-chat').boundingBox();
+  assert.ok(shell&&navAfterReset&&defaultChat&&Math.abs(defaultChat.x-shell.x-Math.max(shell.width/3,navAfterReset.width+248))<=1,'放大或拉伸窗口后，导航和客户聊天栏按订单管理页的共享宽度规则恢复');
   const order=await frame.locator('.cwb-order').boundingBox(),orderResizer=frame.locator('.cwb-order-resizer');
   assert.equal(await orderResizer.count(),1);
   assert.equal(await frame.locator('.cwb-conversations').evaluate(element=>getComputedStyle(element).borderRightWidth),'0px');
