@@ -43,7 +43,8 @@ export function validateCollection(collection,previous=null,rules=SOURCE_RULES){
   fail(c.recognizedRows!==c.endRow||result.rows.length!==c.endRow,'存在明显漏行或只有当前屏数据');
   const coreAddress=a=>/^[ADEFG]\d+$/.test(a);
   fail(c.missing.some(coreAddress),`关键单元格未完整绘制：${c.missing.filter(coreAddress).slice(0,12).join('、')}`);
-  fail(c.conflicts.some(x=>coreAddress(x.address)&&new Set(x.variants.map(v=>coreText(v.text))).size>1),'关键单元格出现冲突，可能采集期间来源变化');
+  const coreConflicts=c.conflicts.filter(x=>coreAddress(x.address)&&new Set(x.variants.map(v=>coreText(v.text))).size>1);
+  fail(coreConflicts.length>0,`关键单元格出现冲突：${coreConflicts.slice(0,12).map(x=>x.address).join('、')}，可能采集期间来源变化`);
   fail(c.clipped.some(coreAddress),'A/D/E/F/G存在文字裁剪风险');fail(c.dropped>0,`Canvas事件溢出：${c.dropped}`);
   fail(named.length<rules.minimumNamedProducts,`有效来源资料行仅${named.length}条，低于首次安全门限${rules.minimumNamedProducts}`);
   if(previous?.quality?.rawNamedRows&&named.length!==previous.quality.rawNamedRows)warnings.push(`来源原始资料行数变化：${previous.quality.rawNamedRows}→${named.length}；请在本次变化明细核对商品增删`);
@@ -65,7 +66,7 @@ export function validateCollection(collection,previous=null,rules=SOURCE_RULES){
     }
   }
   const unnamed=records.filter(r=>!coreText(r.sourceName));if(unnamed.length)warnings.push(`${unnamed.length}行A列为空但含业务字段，保留诊断但不参与映射`);
-  if(failures.length)throw new AppError(`采集异常：${failures.join('；')}`,{stage:'KDocs采集校验',code:'SOURCE_QUALITY_FAILED',details:{failures,warnings,rawNamedRows:named.length,namedProducts:products.length,conflictingNames:conflicting.map(product=>product.sourceName),endpoint:c.endpoint}});
+  if(failures.length)throw new AppError(`采集异常：${failures.join('；')}`,{stage:'KDocs采集校验',code:'SOURCE_QUALITY_FAILED',details:{failures,warnings,rawNamedRows:named.length,namedProducts:products.length,conflictingNames:conflicting.map(product=>product.sourceName),coreConflicts:coreConflicts.slice(0,20),endpoint:c.endpoint}});
   return {passed:true,namedProducts:products.length,rawNamedRows:named.length,totalBusinessRows:records.length,mergedDuplicateGroups:duplicateGroups.length,endpoint:c.endpoint,empty:{cost:named.filter(r=>!coreText(r.cost)).length,
     suggestedPrice:named.filter(r=>!coreText(r.suggestedPrice)).length,stock:named.filter(r=>!coreText(r.stock)).length},inStock:named.filter(r=>coreText(r.stock)==='有货').length,
     outOfStock:named.filter(r=>coreText(r.stock)==='无货').length,warnings};
@@ -74,5 +75,10 @@ export function makeSourceSnapshot(collection,quality,{capturedAt=new Date().toI
   const products=sourceProducts(collection.result);return {schemaVersion:3,status:'collected',capturedAt,sourceUrl:SOURCE_URL,sheet:SOURCE_SHEET,
     range:`A1:${collection.result.coverage.endpoint}`,products,quality,manifest:{initialEnd:collection.manifest.initialEnd,finalEnd:collection.manifest.finalEnd,
       reachedEnd:collection.manifest.reachedEnd,endpointVerified:collection.manifest.endpointVerified,scrollSteps:collection.manifest.scrollSteps,
-      sampleChecks:collection.manifest.sampleChecks,imageChecks:collection.manifest.imageChecks||[]}};
+      sampleChecks:collection.manifest.sampleChecks,imageChecks:collection.manifest.imageChecks||[],
+      ...(collection.manifest.scanStart?{scanStart:collection.manifest.scanStart}:{}),
+      ...(collection.manifest.probeVersion?{probeVersion:collection.manifest.probeVersion}:{}),
+      ...(collection.manifest.scrollDelta?{scrollDelta:collection.manifest.scrollDelta}:{}),
+      ...(collection.manifest.coverageRepair?{coverageRepair:{initialMissing:collection.manifest.coverageRepair.initialMissing,reads:collection.manifest.coverageRepair.reads,remaining:collection.manifest.coverageRepair.remaining}}:{}),
+      captureRetries:collection.manifest.captureRetries||0}};
 }

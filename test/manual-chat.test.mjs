@@ -64,9 +64,10 @@ test('inbox determines reply state from the last valid message rather than a Wha
  const a=new WhatsAppWebClient({userDataPath:'/tmp/fictional-inbox-state'});a.state={status:'online'};a.accountId='wa-phone:971500000001';
  const message=(timestamp,fromMe,type='chat')=>({timestamp,fromMe,type,body:type==='chat'?'Fixture message':''});
  const customerChat={id:{_serialized:'971500000002@c.us'},timestamp:1710000003,lastMessage:message(1710000003,false,'e2e_notification'),unreadCount:0,getContact:async()=>({pushname:'Customer'}),fetchMessages:async()=>[message(1710000001,true),message(1710000002,false),message(1710000003,false,'e2e_notification')]};
- const merchantChat={id:{_serialized:'971500000003@c.us'},timestamp:1710000013,lastMessage:message(1710000013,false,'revoked'),unreadCount:0,getContact:async()=>({pushname:'Merchant'}),fetchMessages:async()=>[message(1710000011,false),message(1710000012,true),message(1710000013,false,'revoked')]};
+ const merchantChat={id:{_serialized:'971500000003@c.us'},timestamp:1710000013,lastMessage:{...message(1710000013,false,'call_log'),_data:{callOutcome:'Missed',isVideoCall:false}},unreadCount:0,getContact:async()=>({pushname:'Merchant'}),fetchMessages:async()=>[message(1710000011,false),message(1710000012,true),message(1710000013,false,'call_log')]};
  a.client={getChats:async()=>[customerChat,merchantChat],getContactLidAndPhone:async()=>[]};
  const page=await a.inbox(),byPhone=new Map(page.items.map(item=>[item.phone,item]));
  assert.equal(byPhone.get('971500000002').lastValidDirection,'customer');assert.equal(byPhone.get('971500000002').direction,'customer');
  assert.equal(byPhone.get('971500000003').lastValidDirection,'merchant');assert.equal(byPhone.get('971500000003').direction,'merchant');
+ assert.equal(byPhone.get('971500000003').preview,'未接语音通话。');
 });

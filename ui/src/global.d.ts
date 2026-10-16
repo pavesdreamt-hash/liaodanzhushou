@@ -39,6 +39,7 @@ declare global {
       refreshReminders?: () => Promise<{ok: boolean; data?: unknown; error?: {message?: string}}>;
       dailySourceSync?: () => Promise<{ok: boolean; data?: unknown; error?: {message?: string}}>;
       onProgress?: (callback: (value: {stage?: string; message?: string; currentRow?: number; endRow?: number}) => void) => () => void;
+      onAssistantChanged?: (callback: (value: unknown) => void) => () => void;
       mappingStatus?: () => Promise<{ok: boolean; data?: unknown; error?: {message?: string}}>;
       submitMapping?: (answers: unknown, confirmFirstSync: boolean) => Promise<{ok: boolean; data?: unknown; error?: {message?: string}}>;
     };

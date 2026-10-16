@@ -242,6 +242,15 @@
 #chat-workbench-desktop .cwb-message-meta .cwb-message-delivery.is-read{color:#2788ce}
 #chat-workbench-desktop .cwb-message-meta .cwb-message-delivery.is-failed{color:#d84a4f}
 
+/* D-203: platform safety notices have no customer/merchant message chrome. */
+#chat-workbench-desktop .cwb-message.cwb-platform-notice{align-self:center;max-width:100%;width:fit-content}
+#chat-workbench-desktop .cwb-notice-card{max-width:560px;padding:10px 14px;border:1px solid var(--cwb-line);border-radius:9px;background:var(--cwb-soft);color:var(--cwb-muted);text-align:center;overflow-wrap:anywhere}
+#chat-workbench-desktop .cwb-notice-card.is-business{background:#e8f7ef;border-color:#d4ecdf;color:#32634d}
+#chat-workbench-desktop .cwb-notice-card.is-encryption{background:#fff6df;border-color:#f0e2bc;color:#766340}
+#chat-workbench-desktop .cwb-notice-heading{display:flex;justify-content:center;align-items:center;gap:5px;margin-bottom:4px;font-size:11px}
+#chat-workbench-desktop .cwb-notice-heading svg{width:13px;height:13px}
+#chat-workbench-desktop .cwb-notice-time{display:block;margin-top:5px;font-size:11px;opacity:.8}
+
 /* D-101: message actions stay beside the bubble and never add vertical message space. */
 #chat-workbench-desktop .cwb-message:focus{outline:0}
 #chat-workbench-desktop .cwb-message-row{position:relative;width:fit-content}
@@ -389,6 +398,25 @@
 
 /* D-088: customer corrections are confirmed field by field without changing address editing. */
 .cwb-customer-edit-dialog .cwb-edit-fields{display:grid;gap:11px}
+.cwb-customer-edit-dialog[open]{position:fixed;inset:auto;margin:0;z-index:500;display:flex;flex-direction:column;max-height:calc(100vh - 88px);padding:16px;max-width:calc(100vw - 24px);overflow:hidden}
+.cwb-customer-edit-dialog .cwb-editor-heading{display:flex;justify-content:space-between;align-items:center;gap:12px;cursor:move;touch-action:none;flex:none}
+.cwb-customer-edit-dialog .cwb-editor-heading h2{margin:0;font-size:16px}
+.cwb-customer-edit-dialog .cwb-editor-heading button{flex:none;padding:5px 10px;cursor:pointer}
+.cwb-customer-edit-dialog [data-editor-note]{margin:10px 0;flex:none}
+.cwb-customer-edit-dialog .cwb-edit-fields{overflow:auto;min-height:0;padding-right:4px}
+.cwb-customer-edit-dialog[open] .cwb-edit-fields>.cwb-edit-field-row{grid-template-columns:minmax(0,1fr) 68px;gap:5px 8px}
+.cwb-customer-edit-dialog .cwb-edit-field-row>span{grid-column:1/-1;font-size:12px}
+.cwb-customer-edit-dialog .cwb-edit-field-row input{grid-column:1;min-width:0}
+.cwb-customer-edit-dialog .cwb-field-confirm{grid-column:2;padding:8px 4px}
+.cwb-customer-edit-dialog>label{grid-template-columns:64px minmax(0,1fr);gap:8px;flex:none;margin:10px 0 0}
+.cwb-customer-edit-dialog footer{flex:none;margin-top:12px}
+.cwb-customer-edit-dialog.is-collapsed>:not(.cwb-editor-heading){display:none}
+.cwb-extract-reference{font-size:12px;color:#655b76;padding:8px;border:1px solid #e5dff0;border-radius:8px}
+.cwb-extract-reference summary{cursor:pointer}
+.cwb-extract-reference pre{max-height:160px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;user-select:text}
+#chat-workbench-desktop .cwb-profile-extract-actions{display:grid;grid-template-columns:minmax(70px,1fr) minmax(0,1.7fr);gap:6px}
+#chat-workbench-desktop .cwb-profile-extract-actions strong{grid-column:1/-1}
+#chat-workbench-desktop .cwb-profile-extract-actions>button{font-size:11px;white-space:nowrap}
 .cwb-customer-edit-dialog .cwb-edit-fields>.cwb-edit-field-row{display:grid;grid-template-columns:132px minmax(0,1fr) 74px;gap:14px;align-items:center}
 .cwb-customer-edit-dialog .cwb-edit-field-row>span{color:#3c3449}
 .cwb-customer-edit-dialog .cwb-field-confirm{min-height:34px;padding:0 8px;border:1px solid #d8c9ec!important;border-radius:7px!important;color:#7041ca!important;background:#faf8ff!important;font-size:12px;white-space:nowrap}

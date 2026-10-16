@@ -452,13 +452,43 @@ function settings(doc:Document){
   get<HTMLButtonElement>(doc,'#u36-key-toggle').onclick=async()=>{if(!ai)return;try{const result=await window.inventoryApp?.assistantSettings?.changeKey({provider:select.value,revision:ai.revision});if(!result?.ok)throw new Error(result?.error?.message||'密钥保存失败');await readAI();status(doc,main,'安全密钥操作已结束；应用不会显示密钥原文。');}catch(error){status(doc,main,(error as Error).message);}};
   get<HTMLButtonElement>(doc,'#u36-ai-save').onclick=async event=>{const button=event.currentTarget as HTMLButtonElement;if(!ai)return;button.disabled=true;try{const result=await window.inventoryApp?.assistantSettings?.save({provider:select.value,revision:ai.revision,model:model.value.trim()});if(!result?.ok)throw new Error(result?.error?.message||'AI 设置保存失败');await readAI();status(doc,main,'服务商和模型设置已保存；未自动启用 AI 回复。');}catch(error){status(doc,main,(error as Error).message);}finally{button.disabled=false;}};
   get<HTMLButtonElement>(doc,'#u36-ai-test').onclick=async event=>{const button=event.currentTarget as HTMLButtonElement;if(!ai)return;button.disabled=true;try{const result=await window.inventoryApp?.assistantSettings?.test({provider:select.value,revision:ai.revision});if(!result?.ok)throw new Error(result?.error?.message||'连接验证失败');await readAI();status(doc,main,'已使用虚构资料完成一次真实接口验证；没有读取客户消息。');}catch(error){status(doc,main,(error as Error).message);await readAI().catch(()=>{});}finally{button.disabled=false;}};
-  const readWhatsApp=async()=>{const value=await service('assistantConnection',{});const connected=value.status==='online';waStatus.textContent=connected?'已登录':'未登录';account.textContent=connected?(value.accountPhone||value.accountId||'已登录账号'):'尚未核对账号';accountLabel.textContent=connected?'工作台将统一读取真实会话':'请使用手机扫码连接';online.textContent=connected?'● 在线':'● 未在线';return value;};
+  const [loginMethod,lastOnline]=waCard.querySelectorAll<HTMLElement>('.meta-grid b');
+  let connectionRequest=0,closed=false,loginDialog:HTMLDialogElement|undefined;let stopLoginPolling=()=>{};
+  const paintWhatsApp=(value:any)=>{
+    const states:Record<string,{label:string;online:string;tone:string}>={
+      online:{label:'已登录',online:'● 在线',tone:'online'},
+      authenticated:{label:'已认证 · 连接中',online:'● 连接中',tone:'pending'},
+      connecting:{label:'连接中',online:'● 连接中',tone:'pending'},
+      reconnecting:{label:'重连中',online:'● 重连中',tone:'pending'},
+      qr:{label:'待扫码',online:'● 等待扫码',tone:'pending'},
+      disconnected:{label:'未登录',online:'● 未在线',tone:'offline'},
+      error:{label:'连接异常',online:'● 未在线',tone:'error'}
+    };
+    const state=states[value.status]||{label:'状态待核对',online:'● 待核对',tone:'unknown'};
+    waStatus.textContent=state.label;online.textContent=state.online;
+    waStatus.dataset.connectionState=online.dataset.connectionState=state.tone;
+    const phone=String(value.accountPhone||value.accountId||'').replace(/^wa-phone:/,'');
+    const identified=value.status==='online'||value.status==='authenticated';
+    account.textContent=identified?(/^\+?[1-9]\d{6,14}$/.test(phone)?`+${phone.replace(/^\+/,'')}`:'已登录账号'):'尚未核对账号';
+    accountLabel.textContent=value.status==='online'?'工作台将统一读取真实会话':value.message||'请使用手机扫码连接';
+    loginMethod.textContent=value.provider==='whatsapp-web.js'?'网页登录':value.status==='unknown'?'待核对':'未记录';
+    const at=typeof value.lastConnectedAt==='string'?new Date(value.lastConnectedAt):null;
+    lastOnline.textContent=at&&Number.isFinite(at.getTime())?at.toLocaleString('zh-CN',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}):value.status==='unknown'?'待核对':'未记录';
+    lastOnline.title=at&&Number.isFinite(at.getTime())?at.toLocaleString('zh-CN',{hour12:false}):'';
+  };
+  online.setAttribute('role','status');online.setAttribute('aria-live','polite');paintWhatsApp({status:'unknown'});
+  const readWhatsApp=async()=>{
+    const request=++connectionRequest;
+    try{const value=await service('assistantConnection',{});if(!closed&&request===connectionRequest)paintWhatsApp(value||{});return value;}
+    catch(error){if(!closed&&request===connectionRequest)paintWhatsApp({status:'unknown',message:'连接状态暂不可读取，请点击检测连接重试'});throw error;}
+  };
+  const unsubscribe=window.inventoryApp?.onAssistantChanged?.(()=>{void readWhatsApp().catch(()=>{});});
   void readWhatsApp().catch(error=>status(doc,main,`WhatsApp 状态暂不可读取：${(error as Error).message}`));
-  const openWhatsAppLogin=()=>{let timer:ReturnType<typeof setInterval>|undefined;const dialog=doc.createElement('dialog');dialog.className='live-dialog wa-login-dialog';dialog.innerHTML='<h2>WhatsApp 登录</h2><p class="wa-login-hint">请使用手机 WhatsApp 的“已关联设备”扫描二维码。登录成功后，聊单工作台会统一读取真实会话。</p><output aria-live="polite">正在准备登录…</output><img class="wa-login-qr" hidden alt="WhatsApp 登录二维码"><div class="wa-login-account" hidden></div><footer><button type="button" data-retry>重新获取二维码</button><button type="button" data-close>关闭</button></footer>';
+  const openWhatsAppLogin=()=>{let timer:ReturnType<typeof setInterval>|undefined;stopLoginPolling=()=>{if(timer)clearInterval(timer);timer=undefined;};const dialog=doc.createElement('dialog');loginDialog=dialog;dialog.className='live-dialog wa-login-dialog';dialog.innerHTML='<h2>WhatsApp 登录</h2><p class="wa-login-hint">请使用手机 WhatsApp 的“已关联设备”扫描二维码。登录成功后，聊单工作台会统一读取真实会话。</p><output aria-live="polite">正在准备登录…</output><img class="wa-login-qr" hidden alt="WhatsApp 登录二维码"><div class="wa-login-account" hidden></div><footer><button type="button" data-retry>重新获取二维码</button><button type="button" data-close>关闭</button></footer>';
     const output=dialog.querySelector<HTMLOutputElement>('output')!,qr=dialog.querySelector<HTMLImageElement>('.wa-login-qr')!,accountBox=dialog.querySelector<HTMLElement>('.wa-login-account')!,retry=dialog.querySelector<HTMLButtonElement>('[data-retry]')!;
-    const paint=async()=>{try{const value=await readWhatsApp();output.textContent=value.message||'正在检查连接状态…';if(value.qr){qr.src=value.qr;qr.hidden=false;}else {qr.removeAttribute('src');qr.hidden=true;}if(value.status==='online'){accountBox.hidden=false;accountBox.textContent=`已登录：${value.accountPhone||value.accountId||'账号已核对'}；工作台现在可读取真实会话。`;retry.hidden=true;if(timer)clearInterval(timer);}else {accountBox.hidden=true;retry.hidden=false;}}catch(error){output.textContent=(error as Error).message;}};
+    const paint=async()=>{try{const value=await readWhatsApp();output.textContent=value.message||'正在检查连接状态…';if(value.qr){qr.src=value.qr;qr.hidden=false;}else {qr.removeAttribute('src');qr.hidden=true;}if(value.status==='online'){accountBox.hidden=false;accountBox.textContent=`已登录：${account.textContent}；工作台现在可读取真实会话。`;retry.hidden=true;stopLoginPolling();}else {accountBox.hidden=true;retry.hidden=false;}}catch(error){output.textContent=(error as Error).message;}};
     const begin=async()=>{retry.disabled=true;output.textContent='正在连接 WhatsApp…';try{await service('openWhatsApp',{});}catch(error){output.textContent=(error as Error).message;}finally{retry.disabled=false;await paint();}};
-    retry.onclick=()=>void begin();dialog.querySelector<HTMLButtonElement>('[data-close]')!.onclick=()=>dialog.close();dialog.onclose=()=>{if(timer)clearInterval(timer);dialog.remove();};doc.body.append(dialog);dialog.showModal();timer=setInterval(()=>void paint(),800);void begin();};
+    retry.onclick=()=>void begin();dialog.querySelector<HTMLButtonElement>('[data-close]')!.onclick=()=>dialog.close();dialog.onclose=()=>{stopLoginPolling();if(loginDialog===dialog)loginDialog=undefined;dialog.remove();};doc.body.append(dialog);dialog.showModal();timer=setInterval(()=>void paint(),800);void begin();};
   get<HTMLButtonElement>(doc,'#u36-manage-wa').onclick=openWhatsAppLogin;
   waCard.querySelector<HTMLButtonElement>('[data-test]')!.onclick=async event=>{const button=event.currentTarget as HTMLButtonElement,original=button.textContent||'检测连接';button.disabled=true;button.textContent='检测中…';try{const value=await readWhatsApp();button.textContent=value.status==='online'?'已连接':'未连接';status(doc,main,value.status==='online'?'已重新读取实际 WhatsApp 连接状态：账号在线。':'已重新读取实际 WhatsApp 连接状态：尚未在线。');}catch(error){button.textContent='检测失败';status(doc,main,(error as Error).message);}finally{window.setTimeout(()=>{button.textContent=original;button.disabled=false;},1600);}};
   const readSheet=async()=>{const value=await call<any>(window.inventoryApp?.status,'连接状态读取');const connected=Boolean(value.google?.connected);sheetStatus.textContent=connected?'已授权':'未授权';sheetCard.querySelector<HTMLElement>('.card-head .desc')!.textContent=connected?'已授权 Google 表格':'尚未核对库存表授权';};sheetCard.querySelector<HTMLElement>('.card-head .desc')!.textContent='库存表授权待核对';
@@ -471,7 +501,7 @@ function settings(doc:Document){
   get<HTMLButtonElement>(doc,'#u36-backup').onclick=async event=>{const button=event.currentTarget as HTMLButtonElement;button.disabled=true;try{const value=await service('createBackup',{});status(doc,main,value.canceled?'已取消备份':`已验证并保存备份：${value.filename}`);if(!value.canceled)backupStatus.textContent=value.createdAt;}catch(error){status(doc,main,`备份失败：${(error as Error).message}`);}finally{button.disabled=false;}};
   get<HTMLButtonElement>(doc,'#u36-restore').onclick=async()=>{try{const candidate=await service('selectRestore',{});if(candidate.canceled)return;const d=dialog(doc,'确认恢复订单资料');const text=doc.createElement('p');text.textContent=`所选文件：${candidate.filename}；版本 ${candidate.schemaVersion}；${candidate.orderCount} 单。恢复会替换当前订单数据库，系统会先备份现有数据。请确认已核对文件。`;const foot=doc.createElement('footer'),cancel=doc.createElement('button'),confirm=doc.createElement('button');cancel.textContent='取消';confirm.textContent='确认恢复订单数据库';confirm.className='danger';cancel.onclick=()=>d.box.close();confirm.onclick=async()=>{confirm.disabled=true;try{await service('restoreBackup',candidate.token);d.box.close();status(doc,main,'订单数据库恢复完成，请重新打开订单管理核对。');}catch(error){d.result.textContent=(error as Error).message;confirm.disabled=false;}};foot.append(cancel,confirm);d.box.append(text,foot);d.box.showModal();}catch(error){status(doc,main,`无法选择备份：${(error as Error).message}`);}};
   forbid(get<HTMLButtonElement>(doc,'#u36-clear'),'当前没有可单独核对的缓存清理入口');const data=get(doc,'#ui036 [data-panel="data"]');for(const button of data.querySelectorAll<HTMLButtonElement>('[data-export]'))if(button.dataset.export==='利润核算')button.onclick=async()=>{try{const result=await service('exportProfit',{filters:{},includePending:false});status(doc,main,result.canceled?'已取消导出':`已导出利润：${result.filename}`);}catch(error){status(doc,main,(error as Error).message);}};else forbid(button,'当前未提供这一类 XLSX 导出');
-  data.querySelector<HTMLElement>('.version-row strong')!.textContent=version;get(doc,'#u36-login').remove();status(doc,main,'连接状态以实际服务为准；未核对时不会显示虚构账号、密钥或在线状态。');return()=>{};
+  data.querySelector<HTMLElement>('.version-row strong')!.textContent=version;get(doc,'#u36-login').remove();status(doc,main,'连接状态以实际服务为准；未核对时不会显示虚构账号、密钥或在线状态。');return()=>{closed=true;unsubscribe?.();stopLoginPolling();loginDialog?.close();};
 }
 
 export function installRestoredPage(doc:Document,win:Window,page:Page,options:Options):()=>void{

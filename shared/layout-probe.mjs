@@ -1,13 +1,19 @@
-// GENERATED from ../src/layout-probe.mjs; SHA256 4ce0c5ecf6b990393adc34ef08685fa232502cbf0b7091a8c23a897687514657; do not edit.
+// App-owned Canvas observer. D-204 adds effective parent clipping to the
+// validated original observer; no files outside this project are generated.
 // Phase 2: observe only the already-rendered main spreadsheet canvas.
 export function installLayoutProbe() {
   if (globalThis.__KD_LAYOUT) return;
   const state = { events: [], dropped: 0, limit: 60000, sequence: 0 };
   const paths = new WeakMap();
   const clips = new WeakMap();
+  const paintClips = new WeakMap();
+  const sizes = new WeakMap();
   const stacks = new WeakMap();
   const imageCache = new WeakMap();
   const target = ctx => ctx.canvas?.id === 'et_canvas';
+  const canvasBounds=ctx=>({x:0,y:0,width:ctx.canvas.width,height:ctx.canvas.height});
+  const intersection=(a,b)=>{const x=Math.max(a.x,b.x),y=Math.max(a.y,b.y);return {x,y,width:Math.max(0,Math.min(a.x+a.width,b.x+b.width)-x),height:Math.max(0,Math.min(a.y+a.height,b.y+b.height)-y)};};
+  const syncSize=ctx=>{const size=`${ctx.canvas.width}:${ctx.canvas.height}`;if(sizes.get(ctx)!==size){paths.delete(ctx);clips.delete(ctx);paintClips.delete(ctx);stacks.delete(ctx);sizes.set(ctx,size);}};
   const point = (ctx, x, y) => {
     const t = ctx.getTransform(); return { x: t.a * x + t.c * y + t.e, y: t.b * x + t.d * y + t.f };
   };
@@ -53,6 +59,7 @@ export function installLayoutProbe() {
     const original = CanvasRenderingContext2D.prototype[method];
     if (!original) return;
     CanvasRenderingContext2D.prototype[method] = function (...args) {
+      if(target(this))syncSize(this);
       const result = Reflect.apply(original, this, args);
       if (target(this)) { try { callback(this, args); } catch { /* preserve rendering */ } }
       return result;
@@ -66,12 +73,14 @@ export function installLayoutProbe() {
       font: ctx.font, align: ctx.textAlign, baseline: ctx.textBaseline,
       ascent: m.actualBoundingBoxAscent, descent: m.actualBoundingBoxDescent,
       clipRect: clips.get(ctx) || null,
+      paintBounds: paintClips.get(ctx) || canvasBounds(ctx),
       transform: { a: t.a, b: t.b, c: t.c, d: t.d, e: t.e, f: t.f } });
   });
   wrap('beginPath', ctx => paths.set(ctx, { lines: [], last: null }));
-  wrap('save', ctx => { const stack = stacks.get(ctx) || []; stack.push(clips.get(ctx) || null); stacks.set(ctx, stack); });
-  wrap('restore', ctx => { const stack = stacks.get(ctx); if (stack?.length) clips.set(ctx, stack.pop()); });
-  wrap('clip', ctx => { const rect = paths.get(ctx)?.rect; if (rect) clips.set(ctx, rect); });
+  wrap('save', ctx => { const stack = stacks.get(ctx) || []; stack.push({clip:clips.get(ctx)||null,paint:paintClips.get(ctx)||null}); stacks.set(ctx, stack); });
+  wrap('restore', ctx => { const stack = stacks.get(ctx);if(stack?.length){const prior=stack.pop();clips.set(ctx,prior.clip);paintClips.set(ctx,prior.paint);} });
+  wrap('clip', ctx => { const rect = paths.get(ctx)?.rect; if(rect){clips.set(ctx,rect);paintClips.set(ctx,intersection(paintClips.get(ctx)||canvasBounds(ctx),rect));} });
+  wrap('reset',ctx=>{paths.delete(ctx);clips.delete(ctx);paintClips.delete(ctx);stacks.delete(ctx);});
   wrap('moveTo', (ctx, a) => { const p = paths.get(ctx) || { lines: [] }; p.last = point(ctx, a[0], a[1]); paths.set(ctx, p); });
   wrap('lineTo', (ctx, a) => {
     const p = paths.get(ctx); const next = point(ctx, a[0], a[1]);
@@ -92,6 +101,7 @@ export function installLayoutProbe() {
     const p = point(ctx, a[start], a[start + 1]);
     const q = point(ctx, a[start] + (a[start + 2] ?? a[0]?.width ?? 0), a[start + 1] + (a[start + 3] ?? a[0]?.height ?? 0));
     push({ kind: 'image', ...p, width:q.x-p.x, height:q.y-p.y, clipRect:clips.get(ctx) || null,
+      paintBounds:paintClips.get(ctx)||canvasBounds(ctx),
       sourceType: a[0]?.constructor?.name || 'unknown', ...imageFingerprint(a[0], a) });
   });
   globalThis.__KD_LAYOUT = {
@@ -99,7 +109,7 @@ export function installLayoutProbe() {
     snapshot() {
       const canvas = document.getElementById('et_canvas');
       const rect = canvas?.getBoundingClientRect();
-      return { events: state.events, dropped: state.dropped, timestamp: Date.now(),
+      return { probeVersion:2,events: state.events, dropped: state.dropped, timestamp: Date.now(),
         canvas: canvas ? { width: canvas.width, height: canvas.height, clientWidth: canvas.clientWidth,
           clientHeight: canvas.clientHeight, x: rect.x, y: rect.y } : null };
     },

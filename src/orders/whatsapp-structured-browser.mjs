@@ -1,5 +1,7 @@
 import {WhatsAppBrowser,chatError} from './whatsapp-browser.mjs';
 import {randomUUID} from 'node:crypto';
+import {normalizeCallNotice} from '../../shared/whatsapp-call-notice.mjs';
+import {normalizeChatNotice} from '../../shared/whatsapp-system-notice.mjs';
 
 // Runs in the application's own WhatsApp page. No credentials, other-chat
 // enumeration, message listeners, send methods or customer bodies during identity checks.
@@ -42,7 +44,7 @@ export async function structuredOperation(input){
  };
  verify();
  if(input.op==='guard')return {verified:true};
- const models=()=>chat.msgs.getModelsArray().filter(m=>!m.isNotification&&m.type!=='e2e_notification');
+ const models=()=>chat.msgs.getModelsArray().filter(m=>!m.isNotification||['call_log','notification_template','e2e_notification'].includes(m.type));
  const boundary=()=>{const state=chat.msgs.msgLoadState,webTopLoaded=state?.noEarlierMsgs===true&&state.contextLoaded===true&&state.isLoadingEarlierMsgs===false&&state.isRepairingMsgHistory!==true;return {noEarlierMsgs:chat.noEarlierMsgs===true||webTopLoaded,endOfHistoryTransfer:chat.endOfHistoryTransfer===true,webTopLoaded,transferType:chat.endOfHistoryTransferType??null};};
  if(input.op==='snapshot'){
   const all=models();if(all.length>50000)throw Error('WHATSAPP_HISTORY_LIMIT');
@@ -52,7 +54,7 @@ export async function structuredOperation(input){
   const messages=all.slice(input.offset||0,(input.offset||0)+200).filter(m=>m.t*1000<=input.cutoff).map(m=>{
    const id=native(m);if(!/^(true|false)_[^_]+_.+/.test(id)||id.length>200||typeof m.id.fromMe!=='boolean'||!Number.isSafeInteger(m.t)||m.t<=0)throw Error('WHATSAPP_MESSAGE_INVALID');
    const text=m.body??'';if(typeof text!=='string'||text.length>16000)throw Error('WHATSAPP_MESSAGE_INVALID');
-   return {id,direction:m.id.fromMe?'merchant':'customer',sentAt:new Date(m.t*1000).toISOString(),type:m.type,text,quoted:!!(m.quotedStanzaID||m.quotedMsg),edited:!!m.isEdited};
+   return {id,direction:m.id.fromMe?'merchant':'customer',sentAt:new Date(m.t*1000).toISOString(),type:m.type,text,quoted:!!(m.quotedStanzaID||m.quotedMsg),edited:!!m.isEdited,...(['notification_template','e2e_notification'].includes(m.type)&&typeof m.subtype==='string'&&/^[a-z0-9_]{1,120}$/i.test(m.subtype)?{subtype:m.subtype}:{}),...(m.type==='call_log'?{callLog:{outcome:typeof m.callOutcome==='string'?m.callOutcome.slice(0,80):undefined,isVideo:typeof m.isVideoCall==='boolean'?m.isVideoCall:undefined}}:{})};
   });verify();
   return {messages,total:all.length,boundary:boundary(),fingerprint:all.map(m=>native(m)+':'+m.type).join('|')};
  }
@@ -84,6 +86,8 @@ export async function structuredOperation(input){
 }
 
 export function structuredMessage(m,{accountId,chatId},media=[]){
+ if(['notification_template','e2e_notification'].includes(m.type))return normalizeChatNotice({id:m.id,accountId,chatId,direction:m.direction,sentAt:m.sentAt,text:m.text,metadata:{source:'whatsapp-structured',timePrecision:'second',messageType:m.type,...(m.subtype?{notificationSubtype:m.subtype}:{})}});
+ if(m.type==='call_log')return normalizeCallNotice({id:m.id,accountId,chatId,direction:m.direction,sentAt:m.sentAt,text:m.text,metadata:{source:'whatsapp-structured',timePrecision:'second',messageType:m.type,callLog:m.callLog}});
  const placeholder=m.type==='ciphertext',unsupported=m.type!=='chat',incomplete=unsupported||m.quoted||m.edited||!m.text.trim();
  return {id:m.id,accountId,chatId,direction:m.direction,sentAt:m.sentAt,text:placeholder?'[等待 WhatsApp 解密此消息]':m.text|| (m.type==='image'?'[图片]':'[非文字消息，请在 WhatsApp 查看]'),metadata:{source:'whatsapp-structured',timePrecision:'second',messageType:m.type,media,incomplete:Boolean(incomplete),note:placeholder?'WhatsApp 尚未提供这条消息的正文；保留占位，不用于资料提取。':m.type==='image'?'图片可查看；图片内容尚未用于 AI 理解。':incomplete?'此消息的附件、引用或编辑内容需在 WhatsApp 核对。':null}};
 }

@@ -100,8 +100,8 @@ test('聊天工作台默认先读取当前页缓存，再自动翻译未译消�
   const customerDialog=frame.locator('dialog.cwb-order-edit-dialog').filter({hasText:'客户信息校正'});
   await customerDialog.getByRole('heading',{name:'客户信息校正',exact:true}).waitFor();
   const customerDialogBox=await customerDialog.boundingBox(),customerInputBox=await customerDialog.locator('.cwb-edit-fields input').first().boundingBox();
-  assert.ok(customerDialogBox&&customerDialogBox.width>=640,'客户资料校正弹窗提供更宽的编辑空间');
-  assert.ok(customerInputBox&&customerInputBox.width>=400,'客户资料输入框占满标签右侧的可用宽度');
+  assert.ok(customerDialogBox&&customerDialogBox.width>=260,'客户资料浮窗保留可用编辑空间');
+  assert.ok(customerInputBox&&customerInputBox.width>=160,'客户资料浮窗输入框保留可读宽度');
   await customerDialog.getByRole('button',{name:'关闭',exact:true}).click();
   await orderPanel.getByRole('button',{name:'编辑&确认',exact:true}).nth(1).click();
   const orderEditor=frame.locator('dialog.cwb-order-edit-dialog').filter({hasText:'编辑订单信息'});

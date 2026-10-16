@@ -1,3 +1,4 @@
+import {generatedNoticeText} from '../../shared/whatsapp-system-notice.mjs';
 // Only platform-native corrections are allowed. An edited existing body is
 // still a conflict; neither a different direction nor a different minute can be rewritten.
 export function structuredUpgrade(old,m){
@@ -8,7 +9,9 @@ export function structuredUpgrade(old,m){
  const recovered=native&&sameMinute&&sameDirection&&['whatsapp-structured','whatsapp-wwebjs'].includes(previous.source)&&previous.messageType==='ciphertext'&&previous.incomplete&&next.messageType==='chat'&&m.text.trim();
  const decrypted=recovered&&!next.incomplete;
  const imageLabel=native&&sameMinute&&sameDirection&&previous.source==='whatsapp-web'&&previous.incomplete&&previous.media?.some(i=>i.type==='image')&&old.body===''&&next.messageType==='image'&&m.text==='[图片]';
- const body=old.body===m.text||Boolean(recovered)||Boolean(imageLabel);
+ const callNotice=native&&sameMinute&&sameDirection&&['whatsapp-structured','whatsapp-wwebjs'].includes(previous.source)&&previous.messageType==='call_log'&&next.messageType==='call_log'&&(!old.body.trim()||/^\[(?:未知类型消息|非文字消息[^\]]*)\]$/.test(old.body.trim())||/^(?:未接(?:语音|视频)?通话|(?:语音|视频)?通话记录)。$/.test(old.body.trim()));
+ const securityNotice=native&&sameMinute&&sameDirection&&['whatsapp-structured','whatsapp-wwebjs'].includes(previous.source)&&['notification_template','e2e_notification'].includes(previous.messageType)&&previous.messageType===next.messageType&&generatedNoticeText(old.body);
+ const body=old.body===m.text||Boolean(recovered)||Boolean(imageLabel)||Boolean(callNotice)||Boolean(securityNotice);
  const time=old.sent_at===m.sentAt||native&&sameMinute&&sameDirection&&previous.source==='whatsapp-web'&&previous.timePrecision==='minute';
  return {allowed:body&&time&&sameDirection,decrypted:Boolean(decrypted),changed:old.body!==m.text||old.sent_at!==m.sentAt};
 }

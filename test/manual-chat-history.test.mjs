@@ -8,6 +8,30 @@ import {ManualChat} from '../src/manual-chat.mjs';
 import {ManualChatHistory} from '../src/manual-chat-history.mjs';
 import {WhatsAppWebClient} from '../src/orders/whatsapp-web-client.mjs';
 const accountId='wa-phone:971500000001',chatId='wa-phone:971500000002';
+test('legacy safety notices read without migration; native subtype enrichment survives repeat old reads',async t=>{
+ const directory=await mkdtemp(path.join(os.tmpdir(),'safety-notice-cache-')),store=new ManualChatHistory(directory);t.after(async()=>{store.database?.close();await rm(directory,{recursive:true,force:true});});
+ const old={id:'false_971500000002@c.us_security',direction:'customer',sentAt:'2026-10-16T07:12:30.000Z',text:'WhatsApp 加密通知。',metadata:{source:'whatsapp-wwebjs',timePrecision:'second',messageType:'e2e_notification',media:[{type:'image',status:'unavailable'}]}};
+ const hosted={...old,id:'true_971500000002@c.us_hosted',direction:'merchant',text:'WhatsApp 商业账号类型已变更。',metadata:{...old.metadata,messageType:'notification_template'}};
+ const db=await store.open(),insert=db.prepare('INSERT INTO messages(account_id,chat_id,message_id,canonical_id,sent_at,payload) VALUES(?,?,?,?,?,?)');for(const m of [old,hosted])insert.run(accountId,chatId,m.id,m.id.replace(/^(true|false)_[^_]+_/,'$1_'),m.sentAt,JSON.stringify(m));
+ const cached=await store.page(accountId,chatId);assert.equal(cached.messages.find(m=>m.id===old.id).text,'WhatsApp 安全通知。');assert.equal(cached.messages.find(m=>m.id===hosted.id).text,'此商家正使用 Meta 提供的安全服务来管理此聊天。');assert.ok(cached.messages.every(m=>m.metadata.media.length===0));assert.equal(db.prepare('SELECT payload FROM messages WHERE message_id=?').get(old.id).payload,JSON.stringify(old));
+ await store.save(accountId,chatId,[{...old,text:'消息和通话现已进行端到端加密。只有此聊天中的成员可以查看、收听或分享。',metadata:{...old.metadata,notificationSubtype:'encrypt_now',media:[]}}]);await store.save(accountId,chatId,[old]);
+ const next=await store.page(accountId,chatId);assert.equal(next.messages.length,2);const row=next.messages.find(m=>m.id===old.id);assert.equal(row.text,'消息和通话现已进行端到端加密。只有此聊天中的成员可以查看、收听或分享。');assert.equal(row.metadata.notificationSubtype,'encrypt_now');assert.equal(row.sentAt,old.sentAt);
+});
+test('legacy call cache displays offline without destructive migration and enriches the same row after repeat reads',async t=>{
+ const directory=await mkdtemp(path.join(os.tmpdir(),'call-notice-cache-'));const store=new ManualChatHistory(directory);
+ t.after(async()=>{store.database?.close();await rm(directory,{recursive:true,force:true});});
+ const id='false_971500000002@c.us_call_fixture',sentAt='2026-09-30T07:26:00.000Z';
+ const old={id,accountId,chatId,direction:'customer',sentAt,text:'[未知类型消息]',metadata:{source:'whatsapp-wwebjs',timePrecision:'second',messageType:'call_log',media:[{type:'call_log',status:'unavailable'}],incomplete:true,note:'未知类型消息内容请在 WhatsApp 查看。'}};
+ const db=await store.open(),payload=JSON.stringify(old);
+ db.prepare('INSERT INTO messages(account_id,chat_id,message_id,canonical_id,sent_at,payload) VALUES(?,?,?,?,?,?)').run(accountId,chatId,id,'false_call_fixture',sentAt,payload);
+ const page=await store.page(accountId,chatId),cached=await store.message(accountId,chatId,id);
+ assert.equal(page.messages[0].text,'通话记录。');assert.deepEqual(cached.metadata.media,[]);assert.equal(cached.id,id);assert.equal(cached.sentAt,sentAt);
+ assert.equal(db.prepare('SELECT payload FROM messages WHERE message_id=?').get(id).payload,payload);
+ const live={...old,id:'false_123456789@lid_call_fixture',text:'未接语音通话。',metadata:{...old.metadata,media:[],callLog:{outcome:'Missed',isVideo:false},incomplete:false,note:null}};
+ await store.save(accountId,chatId,[live]);await store.save(accountId,chatId,[old]);
+ const after=await store.page(accountId,chatId);assert.equal(after.messages.length,1);assert.equal(after.messages[0].text,'未接语音通话。');assert.deepEqual(after.messages[0].metadata.callLog,{outcome:'Missed',isVideo:false});assert.deepEqual(after.messages[0].metadata.media,[]);
+ assert.deepEqual((await store.page(accountId,'wa-phone:971500000003')).messages,[]);
+});
 const rows=[1,2,3].map(n=>({id:`true_971500000002@c.us_${n}`,accountId,chatId,direction:n===3?'customer':'merchant',sentAt:`2026-09-01T10:0${n}:00.000Z`,text:`real-read-${n}`,metadata:{messageType:n===2?'image':'chat',media:n===2?[{type:'image',status:'cached',dataUrl:'data:image/png;base64,eA=='}]:[]}}));
 const adapter=(messages)=>({status:()=>({status:'online'}),openInbox:async()=>({accountId,chatId,identityVerified:true,binding:{}}),resolve:async value=>value,recent:async()=>({messages,hasMore:false})});
 test('verified chat rows survive a browser returning only one message; previously viewed image bytes remain local',async t=>{

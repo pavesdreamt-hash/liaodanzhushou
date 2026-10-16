@@ -1,6 +1,7 @@
 import {DatabaseSync} from 'node:sqlite';
 import {mkdir,chmod} from 'node:fs/promises';
 import path from 'node:path';
+import {normalizeChatNotice} from '../shared/whatsapp-system-notice.mjs';
 
 const defaultMediaRetentionDays=30,defaultMediaCacheBytes=1024*1024*1024,displayableMedia=/^data:(image\/(?:png|jpeg|webp|gif)|video\/mp4);base64,([A-Za-z0-9+/]+=*)$/i;
 const dataBytes=value=>{const body=String(value||'').split(',',2)[1]||'';return Math.floor(body.length*3/4)-(body.endsWith('==')?2:body.endsWith('=')?1:0);};
@@ -62,7 +63,7 @@ export class ManualChatHistory {
       const saved=status==='cached'?cachedData(dataUrl):null;
       return saved?{...item,status:'cached',dataUrl:saved,mediaCachedAt:Number.isFinite(Date.parse(mediaCachedAt))?mediaCachedAt:now}:{...item,status:status==='cached'?'unavailable':status,...(mediaCachedAt?{mediaCachedAt}:{} )};
     });
-    return {...message,metadata:{...message.metadata,...(media?{media}:{})}};
+    return normalizeChatNotice({...message,metadata:{...message.metadata,...(media?{media}:{})}});
   }
   static quality(message){
     const value=String(message?.text||'').trim();
@@ -81,7 +82,7 @@ export class ManualChatHistory {
     const firstMedia=primary.metadata?.media||[],otherMedia=secondary.metadata?.media||[];
     const media=firstMedia.some(item=>item.dataUrl)?firstMedia:otherMedia.some(item=>item.dataUrl)?otherMedia:firstMedia.length?firstMedia:otherMedia;
     const primaryAck=ManualChatHistory.deliveryAck(primary.metadata?.deliveryAck),secondaryAck=ManualChatHistory.deliveryAck(secondary.metadata?.deliveryAck);
-    return {...primary,metadata:{...secondary.metadata,...primary.metadata,media,...(primaryAck===null&&secondaryAck!==null?{deliveryAck:secondaryAck}:{})}};
+    return normalizeChatNotice({...primary,metadata:{...secondary.metadata,...primary.metadata,media,...(primary.metadata?.messageType==='call_log'?{callLog:{...secondary.metadata?.callLog,...primary.metadata?.callLog}}:{}),...(primaryAck===null&&secondaryAck!==null?{deliveryAck:secondaryAck}:{})}});
   }
   async save(accountId,chatId,messages){
     if(!messages.length)return;
@@ -104,7 +105,7 @@ export class ManualChatHistory {
     const payload=JSON.parse(row.payload),accessedAt=new Date(this.now()).toISOString();let changed=false;
     for(const media of payload.metadata?.media||[])if(media.status==='cached'&&cachedData(media.dataUrl)&&media.mediaCachedAt!==accessedAt){media.mediaCachedAt=accessedAt;changed=true;}
     if(changed)db.prepare('UPDATE messages SET payload=? WHERE rowid=?').run(JSON.stringify(payload),row.id);
-    return payload;
+    return normalizeChatNotice(payload);
   }
   cleanupMediaCache(db=this.database){
     if(!db)return;
@@ -131,7 +132,7 @@ export class ManualChatHistory {
     const query=before&&beforeId?'SELECT payload FROM messages WHERE account_id=? AND chat_id=? AND (sent_at<? OR (sent_at=? AND canonical_id<?)) ORDER BY sent_at DESC,canonical_id DESC LIMIT ?':before?'SELECT payload FROM messages WHERE account_id=? AND chat_id=? AND sent_at<? ORDER BY sent_at DESC,canonical_id DESC LIMIT ?':'SELECT payload FROM messages WHERE account_id=? AND chat_id=? ORDER BY sent_at DESC,canonical_id DESC LIMIT ?';
     const cursorId=canonicalMessageId(beforeId);
     const rows=before&&beforeId?db.prepare(query).all(accountId,chatId,before,before,cursorId,count+1):before?db.prepare(query).all(accountId,chatId,before,count+1):db.prepare(query).all(accountId,chatId,count+1);
-    return {messages:rows.slice(0,count).map(row=>JSON.parse(row.payload)).reverse(),hasMore:rows.length>count};
+    return {messages:rows.slice(0,count).map(row=>normalizeChatNotice(JSON.parse(row.payload))).reverse(),hasMore:rows.length>count};
   }
   async hiddenChatIds(accountId){
     const db=await this.open();

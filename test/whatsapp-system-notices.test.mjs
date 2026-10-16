@@ -1,15 +1,42 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {WhatsAppWebClient} from '../src/orders/whatsapp-web-client.mjs';
+import {structuredMessage} from '../src/orders/whatsapp-structured-browser.mjs';
+import {structuredUpgrade} from '../src/orders/assistant-message-upgrade.mjs';
 const remote='971500000002@c.us';
 const target={accountId:'wa-phone:971500000001',chatId:'wa-phone:971500000002',aliases:new Set([remote])};
 const make=(type,extra={})=>({id:{_serialized:`false_${remote}_fixture`,remote},timestamp:1789990804,fromMe:false,type,body:'',...extra});
+test('observed call_log Missed schema yields a voice notice, never downloads stale media, and preserves identity',async()=>{
+ const adapter=new WhatsAppWebClient({userDataPath:'/tmp/unused-call-fixture'});
+ const msg=make('call_log',{_data:{callOutcome:'Missed',isVideoCall:false,callCreator:'not-retained',callLinkToken:'not-retained'},hasMedia:true});
+ adapter.mediaCache.set(target.accountId+':'+msg.id._serialized,{type:'image',status:'cached',dataUrl:'data:image/png;base64,eA=='});
+ const row=adapter.normalize(msg,target);
+ assert.equal(row.text,'未接语音通话。');assert.deepEqual(row.metadata.callLog,{outcome:'Missed',isVideo:false});assert.deepEqual(row.metadata.media,[]);assert.equal(row.metadata.incomplete,false);
+ assert.equal(row.id,msg.id._serialized);assert.equal(row.sentAt,new Date(msg.timestamp*1000).toISOString());assert.equal(row.direction,'customer');
+ let calls=0;msg.downloadMedia=async()=>{calls++;};adapter.scheduleMedia(msg,target,0);assert.equal(await adapter.downloadImage(msg,target,0,{manual:true}),null);assert.equal(calls,0);assert.equal(adapter.mediaQueue.length,0);
+});
+test('call states remain evidence-based; real deleted text and genuine unknown/media are preserved',()=>{
+ const a=new WhatsAppWebClient({userDataPath:'/tmp/unused-call-fixture'});
+ assert.equal(a.normalize(make('call_log'),target).text,'通话记录。');
+ assert.equal(a.normalize(make('call_log',{_data:{callOutcome:'FutureOutcome',isVideoCall:true}}),target).text,'视频通话记录。');
+ assert.equal(a.normalize(make('call_log',{_data:{callOutcome:'Missed',isVideoCall:true}}),target).text,'未接视频通话。');
+ assert.equal(a.normalize(make('call_log',{body:'通话记录已删除'}),target).text,'通话记录已删除');
+ assert.equal(a.normalize(make('future_unknown'),target).text,'[未知类型消息]');
+ assert.equal(a.normalize(make('unknown',{hasMedia:true}),target).metadata.media[0].type,'image');
+ const s=structuredMessage({id:'false_971500000002@c.us_fixture',direction:'customer',sentAt:'2026-09-23T08:00:00.000Z',type:'call_log',text:'',callLog:{outcome:'Missed',isVideo:false}},target,[{type:'image',status:'unavailable'}]);
+ assert.equal(s.text,'未接语音通话。');assert.deepEqual(s.metadata.media,[]);assert.equal(s.metadata.incomplete,false);
+ const previous={body:'[未知类型消息]',direction:s.direction,sent_at:s.sentAt,metadata:JSON.stringify({source:'whatsapp-wwebjs',timePrecision:'second',messageType:'call_log',incomplete:true})};
+ assert.equal(structuredUpgrade(previous,s).allowed,true);
+ assert.equal(structuredUpgrade({...previous,body:'Genuine original text'},s).allowed,false);
+ assert.equal(structuredUpgrade(previous,{...s,direction:'merchant'}).allowed,false);
+ assert.equal(structuredUpgrade(previous,{...s,sentAt:'2026-09-23T08:02:00.000Z'}).allowed,false);
+});
 test('real observed notification schema is rendered as a notice even with stale media cache',async()=>{
  const adapter=new WhatsAppWebClient({userDataPath:'/tmp/unused-notice-fixture'});
  const msg=make('notification_template',{_data:{subtype:'biz_account_type_changed_to_hosted'},hasMedia:false});
  adapter.mediaCache.set(msg.id._serialized,{type:'image',status:'cached',dataUrl:'data:image/png;base64,eA=='});
  const row=adapter.normalize(msg,target);
- assert.equal(row.text,'WhatsApp 商业账号类型已变更。');assert.deepEqual(row.metadata.media,[]);
+ assert.equal(row.text,'此商家正使用 Meta 提供的安全服务来管理此聊天。');assert.equal(row.metadata.notificationSubtype,'biz_account_type_changed_to_hosted');assert.deepEqual(row.metadata.media,[]);
  assert.equal(row.id,msg.id._serialized);assert.equal(row.sentAt,new Date(msg.timestamp*1000).toISOString());assert.equal(row.direction,'customer');
  let calls=0;msg.downloadMedia=async()=>{calls++;};
  assert.equal(await adapter.downloadImage(msg,target,0,{manual:true}),null);assert.equal(calls,0);
@@ -21,5 +48,16 @@ test('unknown notification subtype is neutral, actual notification body retained
  const revoked=a.normalize(make('revoked',{body:'Old removed content',hasMedia:true}),target);
  assert.equal(revoked.text,'此消息已撤回。');assert.deepEqual(revoked.metadata.media,[]);
  assert.equal(a.normalize(make('image',{hasMedia:true}),target).metadata.media[0].type,'image');
- const encrypted=a.normalize(make('e2e_notification',{_data:{subtype:'encrypt'},hasMedia:false}),target);assert.equal(encrypted.text,'WhatsApp 加密通知。');assert.deepEqual(encrypted.metadata.media,[]);
+ const encrypted=a.normalize(make('e2e_notification',{_data:{subtype:'encrypt'},hasMedia:false}),target);assert.equal(encrypted.text,'消息和通话现已进行端到端加密。只有此聊天中的成员可以查看、收听或分享。');assert.deepEqual(encrypted.metadata.media,[]);
+});
+test('observed encrypt_now, native subtype preservation and conservative unknown safety notice',()=>{
+ const a=new WhatsAppWebClient({userDataPath:'/tmp/unused-security-fixture'});
+ const row=a.normalize(make('e2e_notification',{_data:{subtype:'encrypt_now',unrelatedSensitiveField:'not-retained'}}),target);
+ assert.equal(row.text,'消息和通话现已进行端到端加密。只有此聊天中的成员可以查看、收听或分享。');assert.equal(row.metadata.notificationSubtype,'encrypt_now');assert.equal('unrelatedSensitiveField' in row.metadata,false);
+ assert.equal(a.normalize(make('e2e_notification',{_data:{subtype:'future_security'}}),target).text,'WhatsApp 安全通知。');
+ assert.equal(a.normalize(make('e2e_notification'),target).text,'WhatsApp 安全通知。');
+ const s=structuredMessage({id:row.id,direction:row.direction,sentAt:row.sentAt,type:'e2e_notification',subtype:'encrypt_now',text:''},target,[{type:'image',status:'cached'}]);
+ assert.equal(s.text,row.text);assert.deepEqual(s.metadata.media,[]);assert.equal(s.metadata.incomplete,false);
+ const old={body:'WhatsApp 加密通知。',direction:row.direction,sent_at:row.sentAt,metadata:JSON.stringify({source:'whatsapp-wwebjs',timePrecision:'second',messageType:'e2e_notification'})};
+ assert.equal(structuredUpgrade(old,s).allowed,true);assert.equal(structuredUpgrade({...old,body:'Actual original notice'},s).allowed,false);assert.equal(structuredUpgrade(old,{...s,direction:'merchant'}).allowed,false);
 });

@@ -1,4 +1,5 @@
-// GENERATED from ../src/reconstruct.mjs; SHA256 8d8445cdaf843fae426ebfd3670523561c4e029529aa142dc7f3488e42ba27b7; do not edit.
+// App-owned Canvas decoder. D-204 excludes fully masked parent-clipped draws;
+// legacy snapshots without paintBounds retain the validated decoding path.
 // Canvas-only decoder. It never imports the manually supplied validation answers.
 export const columnNumber = label => [...label].reduce((n, c) => n * 26 + c.charCodeAt(0) - 64, 0);
 export function columnLabel(n) { let s = ''; while (n) { n--; s = String.fromCharCode(65 + n % 26) + s; n = Math.floor(n / 26); } return s; }
@@ -28,6 +29,12 @@ export function decodeLayout(snapshot) {
   const rows = new Map(), columns = new Map(), events = [], imageEvents = [];
   let fallbackRect = null;
   for (const event of snapshot.events) {
+    if(event.paintBounds&&(event.paintBounds.width<=0||event.paintBounds.height<=0))continue;
+    if(event.kind==='text'&&event.paintBounds){
+      const p=event.paintBounds,scale=Math.hypot(event.transform?.c||0,event.transform?.d??1),left=event.align==='center'?event.x-event.width/2:['right','end'].includes(event.align)?event.x-event.width:event.x;
+      if(Number.isFinite(event.ascent)&&Number.isFinite(event.descent)&&(event.y+event.descent*scale<=p.y||event.y-event.ascent*scale>=p.y+p.height))continue;
+      if(Number.isFinite(event.width)&&(left+event.width<=p.x||left>=p.x+p.width))continue;
+    }
     if (event.kind === 'rect') fallbackRect = event;
     if (event.kind === 'image') { imageEvents.push(event); continue; }
     if (event.kind !== 'text') continue;
@@ -35,22 +42,22 @@ export function decodeLayout(snapshot) {
     if (!clip) continue;
     if (event.font.includes('ET-HEADERS-FONT')) {
       if (/^\d+$/.test(event.text) && clip.x === 0 && clip.width < 50)
-        rows.set(Number(event.text), { row: Number(event.text), top: clip.y, bottom: clip.y + clip.height + 1, height: clip.height + 1 });
+        rows.set(Number(event.text), { row: Number(event.text), top: clip.y, bottom: clip.y + clip.height + 1, height: clip.height + 1,...(event.paintBounds?{paintTop:event.paintBounds.y,paintBottom:event.paintBounds.y+event.paintBounds.height}:{}) });
       if (/^[A-Z]+$/.test(event.text) && clip.y === 0 && clip.height < 30)
-        columns.set(event.text, { column: event.text, left: clip.x, right: clip.x + clip.width + 1, width: clip.width + 1 });
+        columns.set(event.text, { column: event.text, left: clip.x, right: clip.x + clip.width + 1, width: clip.width + 1,...(event.paintBounds?{paintLeft:event.paintBounds.x,paintRight:event.paintBounds.x+event.paintBounds.width}:{}) });
     } else events.push({ ...event, clip });
   }
   const rowList = [...rows.values()].sort((a,b) => a.row-b.row);
   const colList = [...columns.values()].sort((a,b) => columnNumber(a.column)-columnNumber(b.column));
   const headerBottom = Math.min(...rowList.filter(r => r.bottom > 24).map(r=>Math.max(24,r.top)));
-  const completeRows = rowList.filter(r => r.top >= 24 && r.bottom <= snapshot.canvas.height + 0.1).map(r=>r.row);
-  const completeColumns = colList.filter(c=>c.left >= 40 && c.right <= snapshot.canvas.width + 0.1).map(c=>c.column);
+  const completeRows = rowList.filter(r => r.top >= 24 && r.bottom <= snapshot.canvas.height + 0.1&&(r.paintTop===undefined||r.paintTop<=r.top+0.1&&r.paintBottom>=r.bottom-1-0.1)).map(r=>r.row);
+  const completeColumns = colList.filter(c=>c.left >= 40 && c.right <= snapshot.canvas.width + 0.1&&(c.paintLeft===undefined||c.paintLeft<=c.left+0.1&&c.paintRight>=c.right-1-0.1)).map(c=>c.column);
   const groups = new Map(), issues = [], incompleteCells = new Set();
   for (const event of events) {
     const { clip } = event;
     // A clip's origin, not the glyph baseline, identifies wrapped/merged cells.
-    const row = rowList.find(r=>near(r.top,clip.y));
-    const col = colList.find(c=>near(c.left,clip.x));
+    const row = rowList.find(r=>near(r.top,clip.y)&&(!event.paintBounds||r.paintTop===undefined||near(r.paintTop,event.paintBounds.y)));
+    const col = colList.find(c=>near(c.left,clip.x)&&(!event.paintBounds||c.paintLeft===undefined||near(c.paintLeft,event.paintBounds.x)));
     if (!row || !col) { issues.push({ type:'unmapped-text', text:event.text, clip }); continue; }
     if (!completeRows.includes(row.row) || !completeColumns.includes(col.column)) continue;
     const key = `${col.column}${row.row}`;
@@ -93,10 +100,11 @@ export function decodeLayout(snapshot) {
   }
   for (const event of imageEvents) {
     const clip = event.clipRect;
+    if(clip&&event.paintBounds){const p=event.paintBounds;if(clip.x<p.x-0.1||clip.y<p.y-0.1||clip.x+clip.width>p.x+p.width+0.1||clip.y+clip.height>p.y+p.height+0.1)continue;}
     const centerX = clip ? clip.x + clip.width / 2 : event.x + event.width / 2;
     const centerY = clip ? clip.y + clip.height / 2 : event.y + event.height / 2;
-    const row = clip ? rowList.find(r=>near(r.top,clip.y)) : rowList.find(r=>centerY>=r.top&&centerY<=r.bottom);
-    const col = clip ? colList.find(c=>near(c.left,clip.x)) : colList.find(c=>centerX>=c.left&&centerX<=c.right);
+    const row = clip ? rowList.find(r=>near(r.top,clip.y)&&(!event.paintBounds||r.paintTop===undefined||near(r.paintTop,event.paintBounds.y))) : rowList.find(r=>centerY>=r.top&&centerY<=r.bottom);
+    const col = clip ? colList.find(c=>near(c.left,clip.x)&&(!event.paintBounds||c.paintLeft===undefined||near(c.paintLeft,event.paintBounds.x))) : colList.find(c=>centerX>=c.left&&centerX<=c.right);
     if (!row || !col || !completeRows.includes(row.row) || !completeColumns.includes(col.column)) continue;
     if (!event.fingerprint) continue;
     images.push({address:`${col.column}${row.row}`,row:row.row,column:col.column,fingerprint:event.fingerprint,

@@ -25,6 +25,13 @@ async function fixture(t,options={}){
  const connector=new WhatsAppStructuredBrowser({page,limits:{waitMs:options.delayed?50:5,stalls:options.delayed?6:2,deadlineMs:10000}}),current=await connector.currentIdentity();
  return {page,connector,current};
 }
+test('native security notification models are retained with verified subtype and never treated as attachments',async t=>{
+ const f=await fixture(t,{pages:1});
+ await f.page.evaluate(()=>{for(const [i,type,subtype] of [[0,'notification_template','biz_account_type_changed_to_hosted'],[1,'e2e_notification','encrypt_now']]){const m=window.rawMessages[i];m.type=type;m.subtype=subtype;m.isNotification=true;Object.defineProperty(m,'body',{value:'',configurable:true});}});
+ const rows=[];await f.connector.readHistory({...f.current,binding:f.current,onBatch:async batch=>rows.push(...batch)});
+ const notices=[...new Map(rows.filter(m=>['notification_template','e2e_notification'].includes(m.metadata.messageType)).map(m=>[m.id,m])).values()];
+ assert.equal(notices.length,2);assert.equal(notices.find(m=>m.metadata.messageType==='notification_template').text,'此商家正使用 Meta 提供的安全服务来管理此聊天。');assert.equal(notices.find(m=>m.metadata.messageType==='e2e_notification').metadata.notificationSubtype,'encrypt_now');assert.ok(notices.every(m=>m.metadata.media.length===0&&m.metadata.incomplete===false));assert.equal(await f.page.evaluate(()=>window.fixture.downloads),0);
+});
 test('structured real-browser fixture loads 60 store pages despite missing DOM timestamps, recovers waiting text and downloads bytes once',async t=>{
  const f=await fixture(t,{waiting:true,decrypt:true,image:true}),database=new DatabaseSync(':memory:');migrateOrderDatabase(database);t.after(()=>database.close());const app=new OrderAppService({database,chatAdapter:f.connector}),one=app.drafts.create({requestId:'native-store-one'});
  // Candidate selection is still required by the existing association contract.

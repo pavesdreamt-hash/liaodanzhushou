@@ -101,10 +101,21 @@ export const loginKdocs=(profile,url,options)=>workspace.login(profile,url,optio
 export const openKdocs=(profile,url,options)=>workspace.openForCollection(profile,url,options);
 export async function goTo(page,address){
   if(!/^[A-Z]{1,3}[1-9]\d{0,5}$/.test(address))throw new Error('单元格地址超出安全范围');
-  const box=page.locator('input.edit-box');await box.fill(address);await box.press('Enter');await delay(450);
-  if((await box.inputValue()).toUpperCase()!==address)throw new Error(`无法定位到${address}`);
+  const box=page.locator('input.edit-box');
+  for(let attempt=1;attempt<=3;attempt++){
+    await box.fill(address);await box.press('Enter');
+    try{await page.waitForFunction(address=>{const input=document.querySelector('input.edit-box'),active=document.activeElement;return input?.value?.toUpperCase()===address&&(active?.classList?.contains('edit-proxy-runs')||active===document.querySelector('#et_canvas'));},address,{timeout:3000});await delay(450);
+      if((await box.inputValue()).toUpperCase()===address&&await box.evaluate(()=>document.activeElement?.classList?.contains('edit-proxy-runs')||document.activeElement===document.querySelector('#et_canvas')))return;
+    }catch(error){if(page.isClosed?.())throw error;}
+  }
+  throw new AppError(`来源表尚未确认定位到 ${address}，请稍后重试；上次有效资料保留`,{stage:'KDocs采集',code:'KDOCS_NAVIGATION_UNVERIFIED'});
 }
-export async function usedEnd(page){await goTo(page,'A1');await page.keyboard.press('Meta+End');await delay(1500);return (await page.locator('input.edit-box').inputValue()).toUpperCase();}
+export async function usedEnd(page){
+  await goTo(page,'A1');await page.keyboard.press('Meta+End');await delay(1500);
+  const box=page.locator('input.edit-box'),first=(await box.inputValue()).toUpperCase();await delay(300);const next=(await box.inputValue()).toUpperCase();
+  if(first!==next||await box.evaluate(input=>document.activeElement===input))throw new AppError('来源末端定位尚未稳定，已停止采集并保留上次有效资料',{stage:'KDocs采集',code:'KDOCS_ENDPOINT_UNSTABLE'});
+  return next;
+}
 export async function captureLayout(page,label){
   await page.evaluate(()=>globalThis.__KD_LAYOUT.reset());const viewport=page.viewportSize()||await page.evaluate(()=>({width:Math.round(innerWidth),height:Math.round(innerHeight)}));
   if(!viewport?.width||!viewport?.height)throw new Error('浏览器viewport不可用');

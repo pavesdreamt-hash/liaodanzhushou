@@ -9,7 +9,8 @@ import path from 'node:path';
 test('notifications including stale attachment metadata show no media or translation; genuine image still renders',async()=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'notice-ui-'));let app;
  try{
-  app=await electron.launch({executablePath:electronPath,args:['.',`--orders-test-user-data=${directory}`],cwd:path.resolve('.'),env:{...process.env,NODE_ENV:'test'}});
+  const executable=process.env.KDOCS_TEST_EXECUTABLE;
+  app=await electron.launch({executablePath:executable||electronPath,args:[...(executable?[]:['.']),`--orders-test-user-data=${directory}`,`--isolated-user-data=${directory}`],cwd:path.resolve('.'),env:{...process.env,NODE_ENV:'test'}});
   const page=await app.firstWindow();
   await app.evaluate(({ipcMain})=>{
    const rows=[
@@ -24,7 +25,7 @@ test('notifications including stale attachment metadata show no media or transla
    ipcMain.removeHandler('manual-chat');ipcMain.handle('manual-chat',async(_e,{action,payload={}})=>{
     if(action==='status')return {ok:true,data:{status:'online'}};
     if(action==='inbox')return {ok:true,data:{items:[{phone:'971500000002',chatId:'wa-phone:971500000002',name:'Notice Fixture',updatedAt:'2026-09-23T08:04:00.000Z',preview:'Hello',direction:'customer',unreadCount:0}],total:1,hasMore:false}};
-    if(action==='openInbox'||action==='recent')return {ok:true,data:{token:'notice-fixture',accountId:'wa-phone:971500000001',chatId:'wa-phone:971500000002',phone:'971500000002',messages:rows,hasMore:false}};
+    if(action==='openInbox'||action==='recent')return {ok:true,data:{token:'notice-fixture',accountId:'wa-phone:971500000001',chatId:'wa-phone:971500000002',phone:'971500000002',identityVerified:true,messages:rows,hasMore:false}};
     if(action==='media'){globalThis.__noticeCalls.media.push(payload.messageId);return {ok:true,data:{...rows.find(row=>row.id==='actual-image-fixture'),metadata:{messageType:'image',media:[{type:'image',status:'cached',dataUrl:'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9JkXQAAAAASUVORK5CYII='}]}}};}
     return {ok:true,data:null};
    });
@@ -34,11 +35,11 @@ test('notifications including stale attachment metadata show no media or transla
   await frame.locator('.cwb-message-image').waitFor();
   for(const width of [1280,1440]){
    await app.evaluate(({BrowserWindow},width)=>BrowserWindow.getAllWindows()[0].setSize(width,width===1280?820:1000),width);
-   for(const [id,copy] of [['notice-real-shape','WhatsApp 商业账号类型已变更。'],['notice-old-cache','WhatsApp 系统通知。'],['revoked','此消息已撤回。'],['encrypt-notice','WhatsApp 加密通知。']]){
+   for(const [id,copy] of [['notice-real-shape','此商家正使用 Meta 提供的安全服务来管理此聊天。'],['notice-old-cache','WhatsApp 系统通知。'],['revoked','此消息已撤回。'],['encrypt-notice','WhatsApp 安全通知。']]){
     const row=frame.locator(`[data-message-id="${id}"]`);await row.evaluate(el=>el.scrollIntoView({block:"nearest"}));
     assert.equal(await row.locator('.cwb-message-text').textContent(),copy);
     assert.equal(await row.locator('.cwb-message-media-status, .cwb-message-image, .cwb-translation-line button').count(),0);
-    assert.equal(await row.locator('.cwb-translation-line').textContent(),'');
+    if(id==='revoked')assert.equal(await row.locator('.cwb-translation-line').textContent(),'');else assert.equal(await row.locator('.cwb-translation-line, .cwb-message-avatar, .cwb-message-meta, .cwb-message-actions').count(),0);
    }
   }
   const calls=await app.evaluate(()=>globalThis.__noticeCalls);

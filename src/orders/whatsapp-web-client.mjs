@@ -5,6 +5,8 @@ import {randomUUID} from 'node:crypto';
 import {execFile as execFileCallback} from 'node:child_process';
 import {promisify} from 'node:util';
 import {findChrome} from '../core/chrome-path.mjs';
+import {whatsappCallNotice} from '../../shared/whatsapp-call-notice.mjs';
+import {whatsappSystemNotice} from '../../shared/whatsapp-system-notice.mjs';
 
 const error=(message,code='WHATSAPP_CONNECTION')=>Object.assign(new Error(message),{code,stage:'WhatsApp 只读连接'});
 const number=value=>{const s=String(value||'').replace(/^wa-phone:/,'').replace(/[+ ()-]/g,'');if(!/^[1-9]\d{6,14}$/.test(s))throw error('请输入包含国家区号的 WhatsApp 电话号码');return s;};
@@ -15,8 +17,8 @@ const execFile=promisify(execFileCallback);
 const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const orphanedProfileBrowsers=async profile=>{const {stdout}=await execFile('/bin/ps',['-axo','pid=,ppid=,command='],{maxBuffer:1024*1024});return stdout.split('\n').map(line=>line.match(/^\s*(\d+)\s+(\d+)\s+(.*)$/)).filter(Boolean).map(match=>({pid:Number(match[1]),ppid:Number(match[2]),command:match[3]})).filter(row=>row.ppid===1&&row.command.includes(`--user-data-dir=${profile}`)&&/(?:Google Chrome|Chromium)/.test(row.command));};
 const messageType=value=>String(value||'chat').toLowerCase();
-const systemMessageType=type=>['notification_template','e2e_notification','revoked'].includes(type);
-const systemMessageText=message=>messageType(message.type)==='revoked'?'此消息已撤回。':messageType(message.type)==='e2e_notification'?'WhatsApp 加密通知。':(message.subtype??message._data?.subtype)==='biz_account_type_changed_to_hosted'?'WhatsApp 商业账号类型已变更。':'WhatsApp 系统通知。';
+const systemMessageType=type=>['notification_template','e2e_notification','revoked','call_log'].includes(type);
+const systemMessageText=message=>whatsappCallNotice(message)?.text??whatsappSystemNotice(message)?.text??(messageType(message.type)==='revoked'?'此消息已撤回。':'WhatsApp 系统通知。');
 // A WhatsApp system notice does not itself need a merchant response. When it is
 // the latest row, inspect only a short recent window to find the last actual
 // customer/merchant message rather than treating the notice as customer text.
@@ -180,7 +182,7 @@ export class WhatsAppWebClient {
  normalize(message,target){
   const id=serialized(message.id),remote=serialized(message.id?.remote),sentAt=new Date(Number(message.timestamp)*1000).toISOString();if(!id||id.length>200||!target.aliases.has(remote)||typeof message.fromMe!=='boolean'||!id.startsWith((message.fromMe?'true_':'false_')+remote+'_')||!Number.isSafeInteger(message.timestamp)||message.timestamp<=0)throw error('消息标识或时间无法核对');
   let text=message.body||'';if(typeof text!=='string'||text.length>16000)throw error('消息正文超过安全限制');const type=messageType(message.type);
-  if(systemMessageType(type))return {id,accountId:target.accountId,chatId:target.chatId,direction:message.fromMe?'merchant':'customer',sentAt,text:type==='revoked'?systemMessageText(message):text||systemMessageText(message),metadata:{source:'whatsapp-wwebjs',timePrecision:'second',messageType:type,media:[],incomplete:false,note:null}};
+  if(systemMessageType(type)){const call=whatsappCallNotice(message),notice=whatsappSystemNotice(message);return {id,accountId:target.accountId,chatId:target.chatId,direction:message.fromMe?'merchant':'customer',sentAt,text:notice?.text??call?.text??(type==='revoked'?systemMessageText(message):text||systemMessageText(message)),metadata:{source:'whatsapp-wwebjs',timePrecision:'second',messageType:type,media:[],incomplete:false,note:null,...(call?{callLog:call.callLog}:{}),...(notice?.subtype?{notificationSubtype:notice.subtype}:{})}};}
   const kind=mediaKindFor(message,type),displayType=kind||type,cached=this.mediaCache.get(target.accountId+':'+id);
   if(!text)text=messageFallback(displayType,message);
   const incomplete=Boolean(message.isEdited)||Boolean(message.hasQuotedMsg)||type!=='chat'&&!(kind&&cached);
@@ -203,7 +205,7 @@ export class WhatsAppWebClient {
  }
  scheduleMedia(message,target,generation,{trusted=false}={}){
   const id=serialized(message.id),type=messageType(message.type),key=target.accountId+':'+id;
-  if(!(mediaKindFor(message,type)||message.hasMedia)||typeof message.downloadMedia!=='function'||this.mediaCache.has(key)||this.mediaQueue.length>=200||this.mediaQueue.some(job=>!job.manual&&job.generation===generation&&serialized(job.message.id)===id))return;
+  if(systemMessageType(type)||!(mediaKindFor(message,type)||message.hasMedia)||typeof message.downloadMedia!=='function'||this.mediaCache.has(key)||this.mediaQueue.length>=200||this.mediaQueue.some(job=>!job.manual&&job.generation===generation&&serialized(job.message.id)===id))return;
   this.mediaQueue.push({message,target,generation,trusted});this.drainMedia();
  }
  drainMedia(){
