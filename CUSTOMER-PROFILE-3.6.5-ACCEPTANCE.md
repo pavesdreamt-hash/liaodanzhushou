@@ -33,7 +33,7 @@ D-088逐项确认继续有效；客户确认、地址配送确认、订单和报
 
 最终App于20:17:38正常启动，内部packaged=true／3.6.5／x64，主窗口显示，使用原`Liaodan Assistant Live`资料目录；20:18:29只读核对WhatsApp为online。未请求真实客户提取、发送消息或调用AI。正常打开后原正式商品资料三个文件哈希保持，所有写入验证在隔离虚构订单中完成。
 
-本次达到第5次提交节点，提交范围为3.6.1～3.6.5，保留原6次积压补交7d03ff0的历史记录；GitHub推送结果完成后据实登记。
+本次第5次提交节点已完成，3.6.1～3.6.5的51个源码／测试／必要文档文件已提交并推送，发布提交`0ec9af9a7190533cb576e5633bc320e8917e9103`（[GitHub提交](https://github.com/pavesdreamt-hash/liaodanzhushou/commit/0ec9af9a7190533cb576e5633bc320e8917e9103)），远端main已核对一致。构建物、验收截图、依赖、正式资料和凭据未纳入。下一批次当前0次；原6次积压补交7d03ff0保持历史记录。首次直连GitHub失败，使用本机已配置代理的本次Git连接完成推送，没有改全局Git或系统代理配置。文档登记随后同步推送，不新增应用版本。
 
 成品：`/Users/apple/Documents/ChatGPT/网站料单Skill/liaodan-assistant-next/交付/聊单助手3.6.5/聊单助手.app`。直接双击，无需脚本或测试资料目录。app.asar SHA-256：`979befeda988018db5f385eb53cd1090836dc49688b84c3067b949b186c537c1`；执行文件：`08684c11929004e1b3a0625e5d58b1f94d5c0836f38fa9332db7b936a4fe68ef`，同目录附`SHA256.txt`。
 

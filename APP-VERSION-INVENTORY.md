@@ -5,7 +5,8 @@
 - 编号规则：连续加一、逢9进位；详见 [AGENTS.md](AGENTS.md)。历史错误编号只作实际记录保留。
 - 最新源码与已交付成品为3.6.5，由3.6.4连续加一，最终成品启动与9项操作回归已验证；下次实际版本为3.6.6。
 - 最新成品路径：`/Users/apple/Documents/ChatGPT/网站料单Skill/liaodan-assistant-next/交付/聊单助手3.6.5/聊单助手.app`。3.6.4及更早App、旧dist App保留。
-- 最后成功提交并推送：`7d03ff0fdc16dd6519893806fa5d07beb8315226`，2026-10-16，`release: backfill six delivered updates through 3.6.0`，已核对远端main一致。
+- 最新应用发布提交：`0ec9af9a7190533cb576e5633bc320e8917e9103`，2026-10-16，`release: ship five delivered updates through 3.6.5`，已成功推送并核对远端main；随后同步的文档登记不产生新应用迭代。
+- 截至3.6.0的6次历史积压补交仍为`7d03ff0fdc16dd6519893806fa5d07beb8315226`，保留原核验记录。
 - 该次补交的父提交为2026-10-03的`9565503`（3.3.0）；下面6次交付的原节点遗漏保留，不补造逐版历史提交。
 
 | 原累计交付次数 | 实际历史标号 | 对应交付记录 | 当前提交／GitHub状态 |
@@ -17,15 +18,15 @@
 | 5 | 3.5.3 | NEW-PRODUCT-REMINDER-3.5.3-ACCEPTANCE.md | 原第五次节点遗漏；现已补交7d03ff0 |
 | 6 | 3.6.0 | REMINDER-CONTROLS-3.6.0-ACCEPTANCE.md | 已补交7d03ff0 |
 
-**截至3.6.0的6次积压已经补交完成。** 新批次从该次成功补交后累计；3.6.1至3.6.5已交付，记为第5次，不因开发、中途修正或文档修改重复计数。本轮达到5次节点，正在整理提交并推送；完成后按真实结果登记。
+**截至3.6.0的6次积压已经补交完成。** 新批次从该次成功补交后累计；3.6.1至3.6.5已交付，记为第5次，不因开发、中途修正或文档修改重复计数。本轮5次已提交并推送0ec9af9且远端核对一致；下一批次当前0次，不重算或删除这批真实交付记录。
 
 | 新批次累计次数 | 实际交付标号 | 验收记录 | 本地提交／GitHub状态 |
 | --- | --- | --- | --- |
-| 1 | 3.6.1 | WHATSAPP-SETTINGS-STATUS-3.6.1-ACCEPTANCE.md | 尚未提交／推送；未到5次节点 |
-| 2 | 3.6.2 | WHATSAPP-CALL-NOTICES-3.6.2-ACCEPTANCE.md | 尚未提交／推送；未到5次节点 |
-| 3 | 3.6.3 | WHATSAPP-SYSTEM-NOTICES-3.6.3-ACCEPTANCE.md | 尚未提交／推送；未到5次节点 |
-| 4 | 3.6.4 | KDOCS-SYNC-STABILITY-3.6.4-ACCEPTANCE.md | 尚未提交／推送；未到5次节点 |
-| 5 | 3.6.5 | CUSTOMER-PROFILE-3.6.5-ACCEPTANCE.md | 本轮达到5次节点，提交／推送待核验 |
+| 1 | 3.6.1 | WHATSAPP-SETTINGS-STATUS-3.6.1-ACCEPTANCE.md | 已随本批次提交并推送0ec9af9，远端已核对 |
+| 2 | 3.6.2 | WHATSAPP-CALL-NOTICES-3.6.2-ACCEPTANCE.md | 已随本批次提交并推送0ec9af9，远端已核对 |
+| 3 | 3.6.3 | WHATSAPP-SYSTEM-NOTICES-3.6.3-ACCEPTANCE.md | 已随本批次提交并推送0ec9af9，远端已核对 |
+| 4 | 3.6.4 | KDOCS-SYNC-STABILITY-3.6.4-ACCEPTANCE.md | 已随本批次提交并推送0ec9af9，远端已核对 |
+| 5 | 3.6.5 | CUSTOMER-PROFILE-3.6.5-ACCEPTANCE.md | 已随本批次提交并推送0ec9af9，远端已核对 |
 
 ## 历史清理与交付记录
 
