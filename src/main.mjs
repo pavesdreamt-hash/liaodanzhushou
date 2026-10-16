@@ -22,6 +22,7 @@ import {publicError} from './core/errors.mjs';
 import {DesktopOAuth} from './google/oauth.mjs';
 import {SheetsClient} from './google/sheets.mjs';
 import {Orchestrator} from './services/orchestrator.mjs';
+import {runDailyInventorySync} from './inventory/daily-sync.mjs';
 import {configureGoogleNetwork} from './core/network.mjs';
 import {APP_NAME,DISPLAY_NAME,SOURCE_URL,TARGET_SPREADSHEET_ID,TARGET_SPREADSHEET_URL,TARGET_TITLE} from './config.mjs';
 import {openOrderDatabase,orderDatabasePath} from './orders/database.mjs';
@@ -383,7 +384,11 @@ async function bootstrap(){
   handler('orders:configure-order-sync-schedule',payload=>{const schedule=orders().configureOrderSyncSchedule(payload);scheduleShopPlusOrderSync();return schedule;});
   handler('orders:shopplus-sync-attention',()=>orders().shopPlusSyncAttention());
   handler('orders:acknowledge-shopplus-sync-attention',payload=>orders().acknowledgeShopPlusSyncAttention(payload));
-  const shopPlusProductStatus=async()=>({catalog:await shopPlusProductCatalog.getView(),status:await shopPlusConnection.status()});
+  const shopPlusProductStatus=async()=>{const catalog=await shopPlusProductCatalog.getView();return {catalog,sourceChanges:await orchestrator.sourceChanges(catalog),status:await shopPlusConnection.status()};};
+  handler('source:changes',async()=>orchestrator.sourceChanges(await shopPlusProductCatalog.getView()));
+  handler('source:refresh-reminders',async()=>orchestrator.localStore.refreshReviewedReminders());
+  handler('source:review-task',async payload=>{await orchestrator.localStore.reviewSourceTask(payload||{});return orchestrator.sourceChanges(await shopPlusProductCatalog.getView());});
+  handler('source:decide-replacement',async payload=>{await orchestrator.localStore.decideReplacement(payload||{});return orchestrator.sourceChanges(await shopPlusProductCatalog.getView());});
   handler('orders:shopplus-product-catalog',shopPlusProductStatus);
   handler('orders:chat-product-catalog',async payload=>{
     const token=typeof payload?.token==='string'?payload.token:'',bound=manualChat?.bindings.get(token);
@@ -413,18 +418,7 @@ async function bootstrap(){
       if(login?.state!=='ready')return {outcome:'login_required',login,reason:'等待来源资料登录超过 5 分钟，请重新点击一键同步'};
     }
     emitProgress({stage:'一键同步',message:'来源资料登录已确认，正在同步来源资料…',phase:'source-sync'});
-    const source=await orchestrator.syncSourceLocal();await refreshOrderInventory();
-    const summary=source?.mapping?.summary||source?.summary||{},needsConfirmation=Number(summary.needsConfirmation||0),pendingNumber=Number(summary.pendingNumber||0);
-    if(source?.action!=='complete'||needsConfirmation>0||pendingNumber>0)return {outcome:'mapping_required',source,mapping:await orchestrator.mappingStatus(),needsConfirmation,pendingNumber};
-    emitProgress({stage:'一键同步',message:'来源映射已确认，正在读取网站商品目录…',phase:'website-catalog'});
-    const mappingCatalog=await shopPlusProductCatalog.syncMappingCatalog({listPage:request=>shopPlusConnection.listProductsPage(request)});
-    const local=await orchestrator.localInventory();
-    if(!local?.current?.capturedAt||local.current.capturedAt!==local?.latestCollection?.capturedAt)throw new Error('最新来源资料尚未完成本机映射确认；请先在来源资料完成匹配。');
-    emitProgress({stage:'一键同步',message:'正在核对已确认商品并更新本机库存状态…',phase:'reconcile'});
-    await shopPlusProductCatalog.reconcileSourceAndWebsite({sourceProducts:local.current.products||[],sourceSnapshotProducts:local.latestCollection?.products||[],sourceUpdatedAt:local.current.savedAt||local.updatedAt||null,listPage:request=>shopPlusConnection.listProductsPage(request)});
-    const catalog=await shopPlusProductCatalog.applyReconciliation(),pending=Array.isArray(catalog?.dailyPending)?catalog.dailyPending:[],pendingSummary={replenish:pending.filter(item=>item.kind==='replenish').length,publish:pending.filter(item=>item.kind==='publish').length,unpublish:pending.filter(item=>item.kind==='unpublish').length};await shopPlusConnection.markProductVerified('已通过来源与网站一键核对验证');
-    emitProgress({stage:'完成',message:`一键同步完成：正常库存 ${catalog?.products?.length||0} 款，待处理 ${pending.length} 项。`,phase:'complete'});
-    return {outcome:'complete',catalog,status:await shopPlusConnection.status(),mappingCatalogCaptured:mappingCatalog?.mappingCatalogRun?.captured||0,pendingSummary};
+    return runDailyInventorySync({orchestrator,catalog:shopPlusProductCatalog,connection:shopPlusConnection,progress:emitProgress,refreshInventory:refreshOrderInventory});
   });
   handler('orders:update-shopplus-product',async payload=>({catalog:await shopPlusProductCatalog.update(payload),status:await shopPlusConnection.status()}));
   const detailProduct=detail=>detail?.productVO||detail?.product||detail;

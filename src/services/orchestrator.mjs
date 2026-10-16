@@ -10,6 +10,8 @@ import {readJSON,writeJSON,listJSON,timestampName,appendLog,stableHash} from '..
 import {unlink} from 'node:fs/promises';
 import {AppError,publicError} from '../core/errors.mjs';
 import {LocalInventoryStore} from '../inventory/local-store.mjs';
+import {assignSourceKeys} from '../mapping/source-key.mjs';
+import {sameSourceIdentity} from '../sync/source-changes.mjs';
 const GOOGLE_AUTH_ERROR_CODES=new Set(['GOOGLE_AUTH_EXPIRED','GOOGLE_INVALID_GRANT','GOOGLE_NOT_CONNECTED','GOOGLE_REFRESH_TOKEN_MISSING','TOKEN_DECRYPT_FAILED']);
 export function isGoogleAuthorizationError(error){const code=error?.code||'',message=String(error?.message||'');return GOOGLE_AUTH_ERROR_CODES.has(code)||(code==='GOOGLE_API_FAILED'&&/\binvalid_grant\b/i.test(message));}
 export class Orchestrator {
@@ -34,6 +36,18 @@ export class Orchestrator {
   async latestSource(){
     const files=(await listJSON(this.paths.snapshots,'source_')).reverse();for(const name of files){const value=await readJSON(path.join(this.paths.snapshots,name));if(value?.quality?.passed)return value;}return null;
   }
+  async confirmedSourceProducts(){
+    const pending=await this.loadPending(),local=await this.localStore.getView();
+    if(!pending||pending.source?.capturedAt!==local.latestCollection?.capturedAt)return local.current?.products||[];
+    const document=await this.localStore.read(),reviews=(document.sourceChanges?.tasks||[]).filter(task=>task.kind==='review'&&(!task.resolved||task.completion?.notificationOnly));
+    const byKey=new Map(assignSourceKeys(pending.source.products).map(row=>[row.sourceKey,row])),oldById=new Map((local.current?.products||[]).map(row=>[row.businessId,row])),active=new Set(pending.mappingState.rows.filter(row=>row.status==='正常'&&row.businessId).map(row=>row.businessId));
+    return pending.mappingState.rows.filter(row=>row.businessId&&(row.status==='正常'||row.status==='来源已移除'&&!active.has(row.businessId))).map(row=>row.status==='来源已移除'?{...oldById.get(row.businessId),...row,stock:'来源已移除',removed:!pending.source.products.some(source=>sameSourceIdentity(source,row))&&!reviews.some(task=>task.before&&sameSourceIdentity(task.before,row)),identityUncertain:pending.source.products.some(source=>sameSourceIdentity(source,row))||reviews.some(task=>task.before&&sameSourceIdentity(task.before,row))}:{...byKey.get(row.sourceKey),businessId:row.businessId,removed:false});
+  }
+  async sourceChanges(catalog,websiteCheck=null,options={}){
+    const pending=await this.loadPending(),local=await this.localStore.getView();
+    const mappings=pending?.source?.capturedAt===local.latestCollection?.capturedAt?pending.mappingState.rows:null;
+    return this.localStore.refreshSourceChanges({catalog,mappings,websiteCheck,...options});
+  }
   async preparePending(source,{writePlan=true,useGoogle=null}={}){
     const shouldUseGoogle=useGoogle===null?Boolean((await this.oauth.status()).connected):Boolean(useGoogle);
     this.pendingStorage=shouldUseGoogle?'google':'local';
@@ -56,7 +70,7 @@ export class Orchestrator {
     try{
       const googleConnected=Boolean((await this.oauth.status()).connected),previous=await this.latestSource();this.progress({stage:'KDocs采集',message:'正在打开KDocs...'});
       const source=await collectKdocs({profile:this.paths.profile,paths:this.paths,previous,onProgress:v=>this.progress(v)});
-      await this.localStore.recordCollection(source.snapshot);
+      await this.localStore.recordCollection(source.snapshot,{previous});
       this.progress({stage:'商品映射',message:'正在检查商品映射...'});const {mappingState,plan}=await this.preparePending(source.snapshot,{useGoogle:googleConnected});
       if(mappingState.firstRun||plan.requiresInput){this.progress({stage:'同步计划',message:mappingState.firstRun?'首次映射准备完成，等待一次确认':'发现待编号或待确认商品'});return {action:mappingState.firstRun?'first-confirmation':'mapping-input',warnings:source.snapshot.quality.warnings||[],plan:planFileView(plan),mapping:mappingState};}
       return await this.executePending();
@@ -73,7 +87,7 @@ export class Orchestrator {
       const previous=await this.latestSource();
       this.progress({stage:'KDocs采集',message:'正在读取来源资料到本机资料库...'});
       const source=await collectKdocs({profile:this.paths.profile,paths:this.paths,previous,onProgress:v=>this.progress(v)});
-      await this.localStore.recordCollection(source.snapshot);
+      await this.localStore.recordCollection(source.snapshot,{previous});
       const {mappingState,plan}=await this.preparePending(source.snapshot,{useGoogle:false});
       if(mappingState.firstRun||plan.requiresInput){
         this.progress({stage:'商品映射',message:mappingState.firstRun?'首次资料映射已准备，等待确认':'发现需要确认的资料映射'});

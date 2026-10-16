@@ -302,7 +302,7 @@ test('来源与网站变化先形成待确认差异，确认后才更新本机�
     assert.equal(pending.reconciliation.status,'pending');
     assert.deepEqual(pending.reconciliation.summary,{mapped:2,changed:2,sourceChanged:1,websiteChanged:1,conflicts:0,sourceMissing:1,websiteMissing:1,newSource:0,removedSource:0,firstBaseline:true});
     assert.equal(pending.products.find(item=>item.remoteProductId===one.remoteProductId).websitePriceAed,300,'生成差异时不得覆盖已应用的网站售价');
-    const applied=await catalog.applyReconciliation(),appliedOne=applied.archivedProducts.find(item=>item.remoteProductId===one.remoteProductId),appliedTwo=applied.products.find(item=>item.remoteProductId===two.remoteProductId);
+    const applied=await catalog.applyReconciliation(),appliedOne=applied.archivedProducts.find(item=>item.remoteProductId===one.remoteProductId),appliedTwo=applied.archivedProducts.find(item=>item.remoteProductId===two.remoteProductId);
     assert.equal(applied.reconciliation.status,'applied');
     assert.equal(appliedOne.costPriceAed,110);assert.equal(appliedOne.suggestedPriceAed,220);assert.equal(appliedOne.sourcePricing.sourceStock,'无货');assert.equal(appliedOne.websitePriceAed,333);assert.equal(appliedOne.stockQuantity,0);assert.equal(appliedOne.publishStatus,0);
     assert.equal(appliedTwo.websitePriceAed,320,'网站未返回时保留已应用的网站资料');assert.equal(appliedTwo.sourcePricing.status,'source_removed','来源消失时保留旧来源值并标记提醒');

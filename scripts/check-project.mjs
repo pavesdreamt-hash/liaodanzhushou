@@ -11,7 +11,7 @@ if(!oauth.installed?.client_id?.endsWith('.apps.googleusercontent.com')||typeof 
 if(!pkg.build.extraResources?.some(x=>x.from==='resources/google-oauth.json'&&x.to==='google-oauth.json'))throw new Error('OAuth resource is not mapped to App Resources');
 const renderer=await readFile(new URL('renderer/index.html',root),'utf8');if(/导入\s*Desktop\s*OAuth|import-google/i.test(renderer))throw new Error('Obsolete OAuth file picker is still visible');
 const forbidden=/(?:ya29\.[A-Za-z0-9._~-]{12,}|Bearer\s+[A-Za-z0-9._~-]{12,}|-----BEGIN (?:RSA )?PRIVATE KEY-----|"(?:access_token|refresh_token|client_secret)"\s*:\s*"[^"\r\n]{8,}")/i;
-async function walk(directory){for(const entry of await readdir(directory,{withFileTypes:true})){if(['node_modules','dist'].includes(entry.name))continue;const p=join(directory,entry.name);if(entry.isDirectory())await walk(p);else if(/\.(?:mjs|js|cjs|json|md|html|css)$/.test(entry.name)&&p!==oauthResource){const text=await readFile(p,'utf8');
+async function walk(directory){for(const entry of await readdir(directory,{withFileTypes:true})){if(['node_modules','dist'].includes(entry.name)||directory===rootPath&&entry.name==='交付')continue;const p=join(directory,entry.name);if(entry.isDirectory())await walk(p);else if(/\.(?:mjs|js|cjs|json|md|html|css)$/.test(entry.name)&&p!==oauthResource){const text=await readFile(p,'utf8');
 // Extraction verification retains the exact, already-approved bundled OAuth resource.
 const verifiedBundleCopy=p.startsWith(join(rootPath,'artifacts')+'/')&&p.endsWith('.app/Contents/Resources/google-oauth.json')&&text===oauthText;
 if(forbidden.test(text)&&entry.name!=='check-project.mjs'&&!verifiedBundleCopy)throw new Error(`Possible credential in ${p}`);}}}

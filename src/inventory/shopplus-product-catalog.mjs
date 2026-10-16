@@ -1,6 +1,7 @@
 import {createHash} from 'node:crypto';
 import {mkdir,readFile,rename,unlink,writeFile} from 'node:fs/promises';
 import path from 'node:path';
+import {sourceRows} from '../sync/source-changes.mjs';
 
 // This is deliberately an independent local catalog. It must not reuse the
 // KDocs inventory snapshot or product_profiles before a person has checked a
@@ -64,10 +65,13 @@ const copied=value=>JSON.parse(JSON.stringify(value));
 const same=(left,right)=>JSON.stringify(left??null)===JSON.stringify(right??null);
 const sourceStock=value=>['有货','无货'].includes(text(value,40))?text(value,40):null;
 const normalInventoryProduct=product=>{
+  if(['source_removed','source_ambiguous'].includes(product?.sourcePricing?.status))return false;
   const source=sourceStock(product?.sourcePricing?.sourceStock),listed=product?.publishStatus===1,stocked=Boolean(product?.stockKnown)&&Number(product?.stockQuantity)>0;
   return source?source==='有货'&&listed&&stocked:listed&&stocked;
 };
 const pendingInventoryAction=product=>{
+  if(product?.sourcePricing?.status==='source_ambiguous')return {kind:'review',label:'人工核对',reason:'来源身份或替换关系待核对；不按行号继承商品关系。'};
+  if(product?.sourcePricing?.status==='source_removed')return product.publishStatus===1?{kind:'unpublish',label:'手动下架',reason:'来源商品已删除，网站仍上架；请人工下架。'}:null;
   const source=sourceStock(product?.sourcePricing?.sourceStock),listed=product?.publishStatus===1,stocked=Boolean(product?.stockKnown)&&Number(product?.stockQuantity)>0;
   if(source==='有货'&&(!product?.stockKnown||!stocked))return {kind:'replenish',label:'补网站库存',reason:product?.stockKnown?'来源有货，但网站库存为 0；请先补具体变体库存。':'来源有货，但网站库存未返回；请先核对并补具体变体库存。'};
   if(source==='有货'&&!listed)return {kind:'publish',label:'手动上架',reason:'来源有货、网站库存已大于 0，但网站当前已下架。'};
@@ -76,7 +80,7 @@ const pendingInventoryAction=product=>{
 };
 const sourceKey=value=>text(value?.sourceKey??value?.businessId??value?.sourceName,300).normalize('NFKC').toLocaleUpperCase('en-US').replace(/\s+/gu,' ');
 const websiteFields=product=>({websitePriceAed:product?.websitePriceAed??null,stockKnown:Boolean(product?.stockKnown),stockQuantity:product?.stockKnown?Number(product?.stockQuantity??0):null,publishStatus:[0,1].includes(product?.publishStatus)?product.publishStatus:null,variants:Array.isArray(product?.variants)?product.variants:[]});
-const sourceFields=row=>({businessId:text(row?.businessId,160)||null,sourceName:text(row?.sourceName,240)||null,costPriceAed:aedAmount(row?.cost),suggestedPriceAed:aedAmount(row?.suggestedPrice),sourceStock:sourceStock(row?.stock),removed:Boolean(row?.removed)||text(row?.stock,40)==='来源已移除'});
+const sourceFields=row=>({sourceRow:Number(row?.sourceRow)||null,sourceRows:sourceRows(row),businessId:text(row?.businessId,160)||null,sourceName:text(row?.sourceName,240)||null,costPriceAed:aedAmount(row?.cost),suggestedPriceAed:aedAmount(row?.suggestedPrice),sourceStock:sourceStock(row?.stock),identityUncertain:Boolean(row?.identityUncertain),removed:Boolean(row?.removed)||text(row?.stock,40)==='来源已移除'});
 
 function catalogError(message,code='SHOPPLUS_PRODUCT_CATALOG'){
   return Object.assign(new Error(message),{code,stage:'商品库存试采集'});
@@ -515,7 +519,8 @@ export class ShopPlusProductCatalog {
       const rows=[];let sourceChanged=0,websiteChanged=0,conflicts=0,sourceMissing=0,websiteMissing=0;
       for(const {row,product} of scoped){
         const nextSource=sourceFields(row),nextWebsite=websiteById.get(product.remoteProductId),website=nextWebsite?websiteFields(nextWebsite):null,beforeSource={costPriceAed:product.costPriceAed??null,suggestedPriceAed:product.suggestedPriceAed??null,sourceStock:sourceStock(product.sourcePricing?.sourceStock)},beforeWebsite=websiteFields(product),changes=[];
-        if(nextSource.removed){changes.push('来源资料已消失；保留已应用的成本、建议售价和库存状态');sourceMissing++;}
+        if(nextSource.identityUncertain){changes.push('来源身份待核对；保留原资料，不判定为已删除');sourceChanged++;}
+        else if(nextSource.removed){changes.push('来源资料已消失；保留已应用的成本、建议售价和库存状态');sourceMissing++;}
         else {
           if(!product.sourcePricing||product.sourcePricing.status==='unmatched')changes.push('来源资料尚未融入本机平台');
           if(!same(beforeSource.costPriceAed,nextSource.costPriceAed))changes.push('来源成本发生变化');
@@ -547,8 +552,9 @@ export class ShopPlusProductCatalog {
       if(!pending||pending.status!=='pending'||!Array.isArray(pending.rows))throw catalogError('请先读取网站最新资料并生成差异','SHOPPLUS_RECONCILIATION_NOT_READY');
       const byRemote=new Map(pending.rows.map(row=>[row.remoteProductId,row])),at=this.now().toISOString(),apply=(product=>{
         const row=byRemote.get(product.remoteProductId);if(!row)return product;const next={...product};
-        if(row.source?.removed)next.sourcePricing={...(product.sourcePricing||{}),status:'source_removed',at,reason:'最新来源资料未出现；已保留上次应用的来源价格和库存状态'};
-        else if(row.source){const costPriceAed=row.source.costPriceAed,suggestedPriceAed=row.source.suggestedPriceAed;next.costPriceAed=costPriceAed;next.suggestedPriceAed=suggestedPriceAed;next.sourcePricing={status:costPriceAed===null&&suggestedPriceAed===null?'matched_empty':'matched',at,method:'已确认来源商品映射',sourceBusinessId:row.source.businessId,sourceName:row.source.sourceName,sourceStock:row.source.sourceStock,costPriceAed,suggestedPriceAed};}
+        if(row.source?.identityUncertain)next.sourcePricing={...(product.sourcePricing||{}),status:'source_ambiguous',at,reason:'来源身份或替换关系待人工核对'};
+        else if(row.source?.removed)next.sourcePricing={...(product.sourcePricing||{}),status:'source_removed',at,reason:'最新来源资料未出现；已保留上次应用的来源价格和库存状态'};
+        else if(row.source){const costPriceAed=row.source.costPriceAed,suggestedPriceAed=row.source.suggestedPriceAed;next.costPriceAed=costPriceAed;next.suggestedPriceAed=suggestedPriceAed;next.sourcePricing={status:costPriceAed===null&&suggestedPriceAed===null?'matched_empty':'matched',at,method:'已确认来源商品映射',sourceBusinessId:row.source.businessId,sourceName:row.source.sourceName,sourceRow:row.source.sourceRow,sourceRows:row.source.sourceRows,sourceStock:row.source.sourceStock,costPriceAed,suggestedPriceAed};}
         if(row.website){next.websitePriceAed=row.website.websitePriceAed;next.stockKnown=row.website.stockKnown;next.stockQuantity=row.website.stockQuantity??0;next.publishStatus=row.website.publishStatus;next.variants=row.website.variants;next.refresh={status:'reconciled',at};}
         next.updatedAt=at;return next;
       });

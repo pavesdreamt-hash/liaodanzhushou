@@ -3,7 +3,7 @@ import path from 'node:path';
 import {openKdocs,goTo,usedEnd,captureLayout,captureCellImageFingerprint,delay} from './browser.mjs';
 import {decodeLayout,combineLayouts,columnNumber} from '../../shared/reconstruct.mjs';
 import {coreText} from '../../shared/text.mjs';
-import {SOURCE_URL,SOURCE_SHEET,SOURCE_RULES,SOURCE_EXPECTED_RAW_ROWS} from '../config.mjs';
+import {SOURCE_URL,SOURCE_SHEET,SOURCE_RULES} from '../config.mjs';
 import {sourceRecords,validateCollection,makeSourceSnapshot} from './quality.mjs';
 import {timestampName,writeJSON} from '../core/files.mjs';
 import {AppError,appError} from '../core/errors.mjs';
@@ -95,7 +95,7 @@ export async function collectKdocs({profile,paths,previous=null,onProgress=()=>{
     manifest.finalEnd=await usedEnd(page);const after=await capture('endpoint-after');layouts.push(after);
     manifest.endpointVerified=manifest.finalEnd===manifest.initialEnd&&after.completeRows.includes(endRow)&&after.completeColumns.includes(endColumn);
     const result=combineLayouts(layouts,manifest.initialEnd);result.imageFingerprints=imageFingerprints;
-    const collection={manifest,result},quality=validateCollection(collection,previous,{...SOURCE_RULES,expectedRawRows:SOURCE_EXPECTED_RAW_ROWS,rejectConflictingDuplicateNames:true}),snapshot=makeSourceSnapshot(collection,quality);
+    const collection={manifest,result},quality=validateCollection(collection,previous,{...SOURCE_RULES,rejectConflictingDuplicateNames:true}),snapshot=makeSourceSnapshot(collection,quality);
     const file=path.join(paths.snapshots,timestampName('source',new Date(snapshot.capturedAt)));await writeJSON(file,snapshot);
     onProgress({stage:'KDocs采集',message:`已采集 ${quality.rawNamedRows} 行资料，整理为 ${quality.namedProducts} 个来源商品...`});
     if(!keepEvidence)await rm(runDir,{recursive:true,force:true});else await writeJSON(path.join(runDir,'collection.json'),collection);

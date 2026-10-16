@@ -2,6 +2,8 @@ import {coreText} from '../../shared/text.mjs';
 import {assignSourceKeys,normalizedSourceName} from './source-key.mjs';
 import {MAPPING_HEADERS,MAPPING_STATUSES} from '../config.mjs';
 import {AppError} from '../core/errors.mjs';
+import {sameSourceIdentity} from '../sync/source-changes.mjs';
+import {stableHash} from '../core/files.mjs';
 export function parseMappingRows(values){
   if(!values?.length)return [];
   if(MAPPING_HEADERS.some((h,i)=>coreText(values[0]?.[i])!==h))throw new AppError('商品映射表头不一致',{stage:'商品映射',code:'MAPPING_HEADER_INVALID'});
@@ -61,7 +63,7 @@ export function reconcileMappings(sourceProducts,existing){
   const current=assignSourceKeys(sourceProducts.filter(r=>coreText(r.sourceName))),byKey=new Map(existing.map(r=>[r.sourceKey,r])),matchedOld=new Set();
   const continuityName=value=>normalizedSourceName(value).replace(/\([^)]*[a-z]{1,8}\d[a-z0-9-]*[^)]*\)/gi,'').replace(/\s+/g,' ').trim();
   const fallbackGroups=Map.groupBy(existing,r=>continuityName(r.sourceName)),matches=new Map();
-  for(const record of current){const exact=byKey.get(record.sourceKey);if(exact&&!matchedOld.has(exact.sourceKey)){matches.set(record.sourceKey,exact);matchedOld.add(exact.sourceKey);}}
+  for(const record of current){const exact=byKey.get(record.sourceKey);if(exact&&!matchedOld.has(exact.sourceKey)&&sameSourceIdentity(exact,record)&&existing.filter(old=>sameSourceIdentity(old,record)&&old.status!=='来源已移除').length<=1&&current.filter(peer=>sameSourceIdentity(peer,record)).length===1){matches.set(record.sourceKey,exact);matchedOld.add(exact.sourceKey);}}
   // A new snapshot may consolidate several old row-level entries into one
   // named source product. Never let their former order choose a website product
   // silently. We only carry a single already-confirmed relationship forward;
@@ -78,16 +80,16 @@ export function reconcileMappings(sourceProducts,existing){
   }
   // sourceKey may legitimately change when KDocs removes a displayed model or
   // stops painting an image. Preserve confirmed business IDs by normalized
-  // name and previous relative order; changing D/E/F/G never affects identity.
-  for(const record of current){if(matches.has(record.sourceKey))continue;const name=continuityName(record.sourceName),old=(fallbackGroups.get(name)||[]).find(candidate=>!matchedOld.has(candidate.sourceKey));
+  // unique identity; changing D/E/F/G never affects identity.
+  for(const record of current){if(matches.has(record.sourceKey))continue;const name=continuityName(record.sourceName),candidates=(fallbackGroups.get(name)||[]).filter(candidate=>!matchedOld.has(candidate.sourceKey)&&sameSourceIdentity(candidate,record)),active=candidates.filter(candidate=>candidate.status!=='来源已移除'),available=active.length?active:candidates,old=available.length===1&&current.filter(peer=>sameSourceIdentity(peer,record)).length===1?available[0]:null;
     if(old){matches.set(record.sourceKey,old);matchedOld.add(old.sourceKey);}}
   const rows=current.map(record=>{
     const old=matches.get(record.sourceKey);
     if(!old)return {businessId:'',sourceKey:record.sourceKey,sourceName:record.sourceName,status:'待编号',note:collapsedNotes.get(record.sourceKey)||'新来源商品，等待业务编号',sourceRow:record.sourceRow};
-    const renamed=coreText(old.sourceName)!==coreText(record.sourceName),keyChanged=old.sourceKey!==record.sourceKey,status=old.status==='本机已忽略'?'本机已忽略':old.businessId?'正常':'待编号',businessId=status==='本机已忽略'?'':old.businessId;return {...old,businessId,sourceKey:record.sourceKey,sourceName:record.sourceName,status,
+    const renamed=coreText(old.sourceName)!==coreText(record.sourceName),keyChanged=old.sourceKey!==record.sourceKey,status=old.status==='本机已忽略'?'本机已忽略':old.status==='待确认'?'待确认':old.businessId?'正常':'待编号',businessId=status==='本机已忽略'?'':old.businessId;return {...old,businessId,sourceKey:record.sourceKey,sourceName:record.sourceName,status,
       note:renamed||keyChanged?`${old.note?old.note+'；':''}来源标识已自动连续匹配`:old.note,sourceRow:record.sourceRow,nameChanged:renamed};
   });
-  for(const old of existing)if(!matchedOld.has(old.sourceKey))rows.push({...old,status:'来源已移除',note:`${old.note?old.note+'；':''}本次来源未出现`});
+  for(const old of existing)if(!matchedOld.has(old.sourceKey))rows.push({...old,sourceKey:rows.some(row=>row.sourceKey===old.sourceKey)?`${old.sourceKey}|REMOVED:${stableHash(old.sourceName).slice(0,12)}`:old.sourceKey,status:'来源已移除',note:`${old.note?old.note+'；':''}本次来源未出现`});
   const used=new Map();for(const row of rows)if(row.status==='正常'&&row.businessId){if(used.has(row.businessId)&&used.get(row.businessId)!==row.sourceKey)throw new AppError(`业务编号${row.businessId}映射到多个来源`,{stage:'商品映射',code:'DUPLICATE_BUSINESS_ID'});used.set(row.businessId,row.sourceKey);}
   return {firstRun:false,total:current.length,automatic:rows.filter(r=>r.status==='正常').length,needsConfirmation:rows.filter(r=>r.status==='待确认').length,
     pendingNumber:rows.filter(r=>r.status==='待编号').length,ignored:rows.filter(r=>r.status==='本机已忽略').length,removed:rows.filter(r=>r.status==='来源已移除').length,rows,review:rows.filter(r=>['待编号','待确认'].includes(r.status))};

@@ -158,10 +158,10 @@ test('商品库存页仅在明确操作后读取全部已上架有货目录，�
   assert.match(await manager.locator('output').textContent()||'',/补网站库存 1、手动上架 0、手动下架 0/,'完成弹窗明确给出待处理分类数量');
   assert.equal(await frame.locator('#ui011-source-pending').isVisible(),true,'一键同步后在库存首页集中展示人工待处理项');
   assert.match(await frame.locator('#ui011-source-pending').textContent()||'',/037（虚构下架）.*补网站库存/,'待处理项明确说明人工动作');
-  assert.equal(await frame.locator('#ui011-source-pending button').allTextContents().then(items=>items.join(',')),'补网站库存');
+  assert.equal(await frame.locator('#ui011-source-pending button').allTextContents().then(items=>items.join(',')),'刷新,补网站库存');
   await manager.getByRole('button',{name:'关闭',exact:true}).click();
-  assert.deepEqual(await frame.locator('#ui011-inventory thead th').allTextContents(),['序号','商品名称','网站售价（AED）','网站库存','上架状态','操作']);
-  assert.deepEqual(await frame.locator('#ui011-rows tr').allTextContents(),['1KY40 黑色（虚构）AED 300.00有库存 · 20已上架商品操作','2KY40 白色（虚构）AED 320.00有库存 · 8待同步商品操作']);
+  assert.deepEqual(await frame.locator('#ui011-inventory thead th').allTextContents(),['来源行','商品名称','网站售价（AED）','网站库存','上架状态','操作']);
+  assert.deepEqual(await frame.locator('#ui011-rows tr').allTextContents(),['待匹配KY40 黑色（虚构）AED 300.00价格待核对有库存 · 20已上架商品操作','待匹配KY40 白色（虚构）AED 320.00价格待核对有库存 · 8待同步商品操作']);
   assert.equal(await frame.locator('#ui011-product-manager').innerText(),'商品同步与更新','顶部入口覆盖日常同步、首次采集和局部刷新');
   assert.equal(await frame.locator('#ui011-source-library').innerText(),'来源同步与核对','来源入口明确包含同步和人工核对');
   assert.equal(await frame.locator('#ui011-rows tr').first().getByRole('button',{name:'商品操作',exact:true}).count(),1,'单商品操作不再与顶部批量入口同名');
@@ -294,7 +294,7 @@ test('商品库存页仅在明确操作后读取全部已上架有货目录，�
   assert.equal(await application.evaluate(()=>globalThis.__sourceSyncCalls),1,'来源资料页的明确同步只在用户点击后读取来源资料');
   await waitFor(async()=>!(await frame.locator('#source-sync').isDisabled()));
   assert.equal(await frame.locator('#source-source-snapshot').evaluate(node=>node.open),true,'来源同步完成后自动展开来源快照');
-  assert.match(await frame.locator('#source-source-snapshot-table').textContent()||'',/当前显示 3 个来源商品；来源表原始资料 3 行（应为 199 行，异常）/,'来源快照表尾应区分筛选后的来源商品数与原始资料行数，并明确提示总行数异常');
+  assert.match(await frame.locator('#source-source-snapshot-table').textContent()||'',/当前显示 3 个来源商品；来源表原始资料 3 行（完整采集已验证）/,'来源快照表尾应区分筛选后的来源商品数与原始资料行数，并确认完整采集');
   if(process.env.KDOCS_SOURCE_SNAPSHOT_SCREENSHOT){await mkdir(path.dirname(process.env.KDOCS_SOURCE_SNAPSHOT_SCREENSHOT),{recursive:true});await frame.locator('#source-source-snapshot').scrollIntoViewIfNeeded();await page.screenshot({path:process.env.KDOCS_SOURCE_SNAPSHOT_SCREENSHOT});}
   assert.equal(await frame.locator('#source-website-sync').isDisabled(),false,'来源快照完成后才解锁网站产品快照');
   const websiteSyncClick=frame.locator('#source-website-sync').click();
@@ -432,7 +432,7 @@ test('商品库存页仅在明确操作后读取全部已上架有货目录，�
   await refreshManager.locator('#ui011-manager-close').click();
   await application.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().find(window=>window.isVisible())?.setContentSize(1280,820));
   await page.waitForTimeout(180);
-  const wide=await frame.locator('#ui011-inventory .table-wrap').evaluate(node=>({clientWidth:node.clientWidth,scrollWidth:node.scrollWidth}));assert.ok(wide.scrollWidth<=wide.clientWidth,'1280×820 应直接显示五列');
+  const wide=await frame.locator('#ui011-inventory .table-wrap').evaluate(node=>({clientWidth:node.clientWidth,scrollWidth:node.scrollWidth,tableMin:getComputedStyle(node.querySelector('table')).minWidth,tableWidth:node.querySelector('table').getBoundingClientRect().width,appClass:node.closest('#ui011-inventory').className}));assert.ok(wide.scrollWidth<=wide.clientWidth,`1280×820 应直接显示六列：${JSON.stringify(wide)}`);
   const overviewLayout=await frame.locator('#ui011-inventory .overview').evaluate(node=>{const parent=node.parentElement,action=node.querySelector('.overview-actions'),main=node.closest('.main');if(!parent||!action||!main)throw new Error('missing inventory overview layout');const overview=node.getBoundingClientRect(),workspace=parent.getBoundingClientRect(),actionRect=action.getBoundingClientRect(),mainRect=main.getBoundingClientRect();return {viewport:window.innerHeight,mainHeight:mainRect.height,mainScrollHeight:main.scrollHeight,workspaceTop:workspace.top,workspaceHeight:workspace.height,overviewWidth:overview.width,overviewBottom:overview.bottom,workspaceBottom:workspace.bottom,buttonGap:overview.bottom-actionRect.bottom};});
   assert.ok(overviewLayout.overviewWidth>=338&&overviewLayout.overviewWidth<=342,`1280×820 商品概览卡片扩展为 340px：${JSON.stringify(overviewLayout)}`);
   assert.ok(Math.abs(overviewLayout.overviewBottom-overviewLayout.workspaceBottom)<2,'概览外层卡片随工作区延伸到底部');
@@ -442,6 +442,11 @@ test('商品库存页仅在明确操作后读取全部已上架有货目录，�
   assert.ok(Math.abs(listLayout.rowHeights[0]-listLayout.rowHeights[1])<2,`两款试采集商品在列表可用高度中均匀分布：${JSON.stringify(listLayout)}`);
   if(process.env.KDOCS_INVENTORY_SOURCE_PRICING_SCREENSHOT){await mkdir(path.dirname(process.env.KDOCS_INVENTORY_SOURCE_PRICING_SCREENSHOT),{recursive:true});await page.mouse.move(2,2);await page.screenshot({path:process.env.KDOCS_INVENTORY_SOURCE_PRICING_SCREENSHOT});}
   await page.screenshot({path:path.join(directory,'inventory-1280x820.png')});
+  await application.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().find(window=>window.isVisible())?.setContentSize(1440,1000));
+  const large=await frame.locator('#ui011-inventory .table-wrap').evaluate(node=>({clientWidth:node.clientWidth,scrollWidth:node.scrollWidth}));assert.ok(large.scrollWidth<=large.clientWidth,'1440×1000 商品主表完整直显');
+  const overviewLarge=await frame.locator('#ui011-inventory .workspace').evaluate(node=>({workspaceBottom:node.getBoundingClientRect().bottom,overviewBottom:node.querySelector('.overview').getBoundingClientRect().bottom,overviewWidth:node.querySelector('.overview').getBoundingClientRect().width}));assert.ok(Math.abs(overviewLarge.workspaceBottom-overviewLarge.overviewBottom)<2);assert.ok(Math.abs(overviewLarge.overviewWidth-340)<2);
+  if(process.env.KDOCS_INVENTORY_SOURCE_PRICING_SCREENSHOT)await page.screenshot({path:process.env.KDOCS_INVENTORY_SOURCE_PRICING_SCREENSHOT.replace(/\.png$/,'-1440.png')});
+
   await application.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().find(window=>window.isVisible())?.setContentSize(820,640));
   await page.waitForTimeout(180);
   const narrow=await frame.locator('#ui011-inventory .table-wrap').evaluate(node=>({clientWidth:node.clientWidth,scrollWidth:node.scrollWidth}));assert.ok(narrow.scrollWidth>narrow.clientWidth,'820×640 应通过表格横向滚动保持五列独立');

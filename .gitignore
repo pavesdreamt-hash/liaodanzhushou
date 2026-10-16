@@ -46,3 +46,6 @@ artifacts/
 # not be treated as source files.
 /app.js
 /preload.cjs
+
+# User requested project-local App delivery, kept out of source control.
+/交付/

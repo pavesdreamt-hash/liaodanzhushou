@@ -33,6 +33,10 @@ declare global {
       kdocsLoginStatus?: () => Promise<{ok: boolean; data?: unknown; error?: {message?: string}}>;
       sync?: () => Promise<unknown>;
       syncSourceLocal?: () => Promise<{ok: boolean; data?: unknown; error?: {message?: string}}>;
+      sourceChanges?: () => Promise<{ok: boolean; data?: unknown; error?: {message?: string}}>;
+      decideSourceReplacement?: (payload: unknown) => Promise<{ok: boolean; data?: unknown; error?: {message?: string}}>;
+      reviewSourceTask?: (payload: unknown) => Promise<{ok: boolean; data?: unknown; error?: {message?: string}}>;
+      refreshReminders?: () => Promise<{ok: boolean; data?: unknown; error?: {message?: string}}>;
       dailySourceSync?: () => Promise<{ok: boolean; data?: unknown; error?: {message?: string}}>;
       onProgress?: (callback: (value: {stage?: string; message?: string; currentRow?: number; endRow?: number}) => void) => () => void;
       mappingStatus?: () => Promise<{ok: boolean; data?: unknown; error?: {message?: string}}>;

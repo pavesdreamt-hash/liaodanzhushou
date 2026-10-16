@@ -46,18 +46,18 @@ export function validateCollection(collection,previous=null,rules=SOURCE_RULES){
   fail(c.conflicts.some(x=>coreAddress(x.address)&&new Set(x.variants.map(v=>coreText(v.text))).size>1),'关键单元格出现冲突，可能采集期间来源变化');
   fail(c.clipped.some(coreAddress),'A/D/E/F/G存在文字裁剪风险');fail(c.dropped>0,`Canvas事件溢出：${c.dropped}`);
   fail(named.length<rules.minimumNamedProducts,`有效来源资料行仅${named.length}条，低于首次安全门限${rules.minimumNamedProducts}`);
-  if(Number.isSafeInteger(rules.expectedRawRows)&&rules.expectedRawRows>0)fail(named.length!==rules.expectedRawRows,`来源表原始资料行异常：应为${rules.expectedRawRows}行，实际${named.length}行`);
+  if(previous?.quality?.rawNamedRows&&named.length!==previous.quality.rawNamedRows)warnings.push(`来源原始资料行数变化：${previous.quality.rawNamedRows}→${named.length}；请在本次变化明细核对商品增删`);
   if(rules.rejectConflictingDuplicateNames)fail(conflicting.length>0,`同名来源资料的核心字段不一致：${conflicting.slice(0,8).map(product=>product.sourceName).join('、')}`);
   for(const field of ['cost','suggestedPrice','stock'])fail(!named.length||named.filter(r=>!coreText(r[field])).length/named.length>rules.maximumEmptyRatio,`${field}大量为空`);
   fail(!named.length||named.filter(r=>/^[-+]?\d/.test(coreText(r.cost))).length/named.length<0.8,'成本列大多不是正常显示数值，可能列错位');
   fail(!named.length||named.filter(r=>['有货','无货'].includes(coreText(r.stock))).length/named.length<0.8,'库存列大多不是有货/无货，可能列错位');
-  fail(!Array.isArray(manifest.sampleChecks)||manifest.sampleChecks.length<20||new Set(manifest.sampleChecks.map(x=>x.row)).size<20||manifest.sampleChecks.some(x=>x.passed!==true),'独立复访不足20行或值不一致');
+  fail(!Array.isArray(manifest.sampleChecks)||manifest.sampleChecks.length<Math.min(20,named.length)||new Set(manifest.sampleChecks.map(x=>x.row)).size<Math.min(20,named.length)||manifest.sampleChecks.some(x=>x.passed!==true),'独立复访不足本次抽样行数或值不一致');
   const duplicateGroups=[...countNames(named)].filter(([,count])=>count>1);
   if(duplicateGroups.length)warnings.push(`已按名称合并${duplicateGroups.length}组同名来源资料；原始行与图片仍保留在本机快照中`);
   if(previous?.products?.length){
     const old=previous.products.filter(r=>coreText(r.sourceName)),oldCounts=countNames(old),nowCounts=countNames(named);
     const retained=[...oldCounts].reduce((n,[name,count])=>n+Math.min(count,nowCounts.get(name)||0),0);
-    fail(named.length/old.length<rules.minimumPreviousRatio,`来源商品数量异常下降：${old.length}→${named.length}`);
+    if(named.length/old.length<rules.minimumPreviousRatio)warnings.push(`来源资料数量明显下降：${old.length}→${named.length}；已通过完整采集检查，请优先核对删除／替换明细`);
     if(retained/old.length<rules.minimumPreviousRatio)warnings.push(`来源名称与上次完全一致${retained}/${old.length}个，未连续匹配项必须在商品映射中人工复核`);
     for(const field of ['cost','suggestedPrice','stock']){
       const newlyEmpty=named.filter(r=>!coreText(r[field])).length-old.filter(r=>!coreText(r[field])).length;

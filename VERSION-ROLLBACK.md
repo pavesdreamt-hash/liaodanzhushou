@@ -1,6 +1,12 @@
+# 历史版本回溯资料（2026-10-09 适用范围更正）
+
+当前最新成品实际标号为 `3.6.0`，位于本项目 `交付/聊单助手3.6.0/聊单助手.app`。本次没有重新编号、打包、回退、迁移或清理任何 App 与资料。现行编号／交付规则见 [AGENTS.md](AGENTS.md)，版本和 GitHub 状态见 [APP-VERSION-INVENTORY.md](APP-VERSION-INVENTORY.md)。
+
+下方保留不同历史产品的回溯说明、Bundle ID、资料目录与端口。各处“当前应用／当前版”仅指当时，不是当前正在使用的软件；不能据此切换身份、迁移资料、恢复旧库、推导下一版本号或默认创建 ZIP。实际需要回退时仍须核对目标版本与数据兼容性，不能覆盖正式资料。
+
 # 聊单助手 1.0.12 回溯说明
 
-当前应用：`聊单助手 1.0.12.app`，Bundle ID：`com.liaodan.assistant.rebuild`，资料目录：`~/Library/Application Support/Liaodan Assistant Rebuild`，端口：43876。
+当时应用：`聊单助手 1.0.12.app`，Bundle ID：`com.liaodan.assistant.rebuild`，资料目录：`~/Library/Application Support/Liaodan Assistant Rebuild`，端口：43876。
 
 1.0.12 只修复手机消息身份与译文显示，并在资料目录 `orders/manual-chat/chat-translations.json` 增加逐条译文缓存；不迁移订单数据库，不改变发送记录。1.0.11 安装包保留，旧版会忽略新缓存。回退前先退出新版 App，勿清理或覆盖本机资料目录。
 
@@ -16,7 +22,7 @@
 
 # 版本隔离与回溯
 
-## 当前版 8.8.0
+## 历史版 8.8.0
 
 - 应用：`KDocs订单助手 8.8.0.app`
 - Bundle ID：`com.kdocs.orderassistant`

@@ -1,30 +1,52 @@
-# Project delivery rules
+# 聊单助手：现行项目规则
 
-## Confirmed UI baseline and change control
+更正日期：2026-10-09。此次按用户要求纠正文档，不修改应用代码、版本、成品或正式资料。
 
-- Before changing any application UI, read `CONFIRMED-UI-BASELINE.md`. The user's newest explicit instruction takes precedence; update the affected baseline clause when a new requirement is given, and record the allowed scope and protected neighboring elements before or as part of implementation. A discussion-only request does not authorize application code changes.
-- Treat the baseline as the target design, not as proof that the current build already complies. Preserve confirmed structure, typography, icons, sizing, positions, interactions, data, and unaffected pages. Do not copy a known current defect or an older conflicting mockup into the baseline.
-- After a UI change, inspect the actual changed files and run the relevant application checks. Compare the resulting UI and behavior against the baseline across affected layouts; restore accidental unrelated changes before delivery. Record what passed and what remains unverified. Do not delegate screenshot comparisons or regression detection to the user.
-- Before calling a UI page complete, check every confirmed baseline item for that page in a freshly extracted final package. Mark each as passed, failed, or not checked; not checked is not passed. A targeted fix may be delivered only as a clearly labeled partial fix while any known mismatch remains. Put the remaining mismatch in the opening delivery paragraph, not only in a buried limitation. Do not use a successful targeted test to claim full-page acceptance.
-- For every completed task, actually re-read `CONFIRMED-UI-BASELINE.md` and this `AGENTS.md`, compare the work and final deliverable with their applicable rules, and record any failed or unchecked item honestly. Only after that real check, end the final user response with the exact sentence **“已真实核验基准文档和项目规则”**. This sentence is a personal verification claim, never an automatic footer; if the check was not performed, do not claim completion or append it.
-- Documentation-only baseline updates do not change the application version or require packaging; application changes still follow the release and handoff rules below.
+## 用户要求与文档的关系
 
-## Release and handoff
+- 用户最新的明确要求优先。用户此前明确、且未被本人取消或替代的要求继续有效，包括归档聊天中的要求；不能把“重新规划”“继续”“修改功能”解释为取消已有编号、提交或交付约束。
+- 修改前核对相关历史聊天（包含归档）、本文件和 `CONFIRMED-UI-BASELINE.md`。区分用户原话、助手判断、历史实测和未完成项；助手写入文档的内容不等于用户授权。
+- 本文件负责版本、GitHub、交付与修改边界；`CONFIRMED-UI-BASELINE.md` 负责已确认的界面和功能要求；`APP-VERSION-INVENTORY.md` 记录真实成品标号、交付次数和提交欠项。三者有冲突时回查用户要求并纠正文档，不能选择方便执行的一条。
+- `RELEASE-NOTES.md`、版本验收报告、旧阶段计划和回溯说明用于追溯历史。旧版的编号理由、ZIP／桌面／dist 路径、“只本地提交、不推送”及旧提醒逻辑，不得覆盖现行要求。历史功能要求未被用户替代的部分继续保留。
+- 本次撤销此前自行写入的“按功能大小选择大版本、小版本、补丁版本”规则；撤销“当前基准 2.4.15、下一功能版 2.5.0、紧急修复 2.4.16”等过期发布指令。保留实际历史标号与验收记录，不重写历史事实。
 
-- Historical 1.x packages keep their real historical versions; do not rebuild, rename or use them to decide the next version. The current verified release baseline is **2.4.15**. `package.json` is the only source of truth for a new release number; the displayed version, `package-lock.json`, user guide, release notes and bundled App must match it. A ZIP is made only when the user explicitly requests one; never rename an existing App or ZIP to imply a different internal version.
-- **Version planning:** use `MAJOR.MINOR.PATCH`. A `PATCH` fixes a released behavior without expanding the user-visible workflow or changing persisted-data compatibility. A `MINOR` is a coherent, user-visible feature bundle or a new business workflow; it is not raised once for every small discussion or isolated UI adjustment. A `MAJOR` is reserved for a deliberate incompatible data/workflow break or broad product reset. The planned next feature release after 2.4.15 is **2.5.0**; an urgent correction to the already delivered 2.4 line would be **2.4.16**. Do not reset back to 1.x or skip to an arbitrary number.
-- **Release-candidate freeze:** discussion, design notes, baseline updates, tests and intermediate source edits do not change the version or create an App. Select the target version only when preparing a user-deliverable candidate. Corrections made before that candidate is handed to the user are rebuilt into the same candidate version; after delivery, any code or bundled-document change requires the next planned version. Never leave two different user-accessible artifacts with the same version and different contents.
-- Keep the version synchronized in package metadata, the interface, the user guide, and release notes.
-- Do not call an application change complete after editing source files. Run the relevant automated checks, build the fixed current Mac x64 App, verify that exact App launches, and confirm the displayed version. Create and verify a ZIP or DMG only when the user explicitly requests that format; neither format substitutes for direct App startup verification.
-- Deliver the exact artifact path, checksum, test result, Git status, opening instructions, and a concise usage guide. Normal use must start by opening the App, without a .command launcher or a mandatory evaluation database.
-- The user must not need to inspect source code, find build output, or work out how to launch the application.
-- If packaging is blocked, do not substitute an older artifact. Report the blocker and identify the last verified usable release.
-- Use disposable fictional data for automated destructive, migration, and fault-injection tests; the user must not operate a special isolated test edition. Do not collect real KDocs data or write Google Sheets. Access to normal user data follows the user's explicit scope and applicable approvals, without proactively clearing data.
-- The user has authorized bounded connection verification: read only a user-confirmed WhatsApp chat and time range, never send messages, and use only fictional material for real AI development requests. Keep credentials in local secure storage. Initial AI verification is limited to 5 requests total, 20 seconds per request, with no automatic retry.
+## 版本编号：连续加一，逢 9 进位
 
-## Current staged work
+- 依据：2026-09-23 用户说明“1.6.9 之后，是 1.7.0，三位数数字顺序增加，中间加点”；2026-09-25 再次明确第三位永不出现两位数，“1.1.9 下一个是 1.2.0，就像 119 后边是 120”；2026-10-02 纠正“2.10.0 版本应该是 3.0.0 版本”。
+- 每次实际应用改动形成新的交付版本时，只按顺序加一：`3.4.0 → 3.4.1`、`3.4.9 → 3.5.0`、`3.9.9 → 4.0.0`。后两段为单个数字，不出现 `3.4.10` 或 `3.10.0`。功能增加、缺陷修复、界面调整均遵守同一进位方式，不能因“完整功能包”而跳号。
+- 讨论、纯文档更正和测试不创建应用版本。同一尚未交付候选内部的修正不重复占用版本；已交付 App 的代码或包内文档要更改时，使用下一个连续版本，不能留下同版本不同内容的成品。
+- `package.json` 记录实际应用标号；发布时界面、锁文件、用户指南、发布说明与 App 内版本必须一致。它不能替代用户的编号规则，也不能用于追认历史跳号。
+- 现有源码和最新成品实际标号仍为 `3.6.0`，这是历史现状，不表示此前跳号符合要求。本次不重编号、不重命名、不重新打包；没有新的明确重编号要求时，下一次实际应用交付从现有标号连续加一为 `3.6.1`。不能补造不存在的历史版本或仅改文件名冒充内部版本改变。
 
-- Follow DELIVERY-PLAN.md and PHASE-01-CONNECTION-DESIGN.md. Preserve all pre-existing worktree and index changes.
-- Distinguish configured, authenticated, target-confirmed, and read-verified states. A mock response or configured adapter is not a successful real connection.
-- Stop dependent work at an outstanding human gate; do not ask the user to repeatedly run routine tests. Continue only independent work within the current requested phase.
-- Documentation, baseline capture, and environment checks alone do not change the application version or require a new application package. Do not reissue the unchanged App as a new release.
+## GitHub：每累计 5 个版本迭代提交并推送
+
+- 依据：用户多次明确“每 5 个版本迭代就提交一次”，2026-09-29、2026-09-30 又追问并纠正遗漏。该要求继续有效，不因旧计划写着“不推送”而失效。
+- 按真实交付次数累计；不能把一次跳号当成多次交付，也不能把编号末位为 0／5 当作已履行提交的证明。每累计 5 个版本完成相关核验、整理对应改动、创建 Git 提交并推送 GitHub，不能等用户再次催促。
+- 分清“工作区已修改”“本地已提交”“已成功推送”。推送成功后核对远端提交；失败时准确说明已完成到哪一步及原因。工作区有混合改动需要整理，不是遗漏提交节点的理由。
+- 当前最后成功提交并推送的记录是 `9565503`，2026-10-03，实际标号 `3.3.0`。此后 `3.4.0、3.5.0、3.5.1、3.5.2、3.5.3、3.6.0` 共 6 次应用交付未提交、未推送，第 5 次提交节点已经遗漏。具体台账见 `APP-VERSION-INVENTORY.md`。
+- 本次纯文档更正不产生新的应用迭代，也不清零积压计数。后续应用开发／发布前应优先整理补交积压，不能再等待 5 个新版本；未实际提交推送前，状态始终写“待补交”。
+- 提交只包含对应范围的源码、测试和必要文档；不纳入生成 App、依赖、缓存、正式资料或凭据。保留现有工作区、暂存区和无关修改，不用重置或覆盖解决整理问题。
+
+## 修改范围、界面与验收
+
+- 只修改用户授权的页面、组件和行为。修改前记录允许范围与受保护部分；讨论只讨论，文档更正只改文档，不能顺带修改应用。
+- 修改 UI 前读 `CONFIRMED-UI-BASELINE.md`。已确认的结构、字体、图标、尺寸、位置、交互、数据和未涉及页面继续保留；旧稿中的已知缺陷不能反过来成为目标。
+- 修改后核对实际文件差异，执行相关检查，并在最终成品中检查受影响布局和行为。开发者负责对照与复验，不把例行找错、截图或测试交给用户。
+- 只对有证据的项目记“通过”；失败与未检查明确记录。局部通过不代表整页或整套应用通过，不能以版本号或测试数量掩盖已知缺口。
+- 每次任务结束前实际重读本文件和 `CONFIRMED-UI-BASELINE.md`，按本次范围记录通过、失败和未检查项。只有完成真实核对，最终回复才以“已真实核验基准文档和项目规则”结尾；该句不代表所有规则已经履行或整个软件通过验收，发现的冲突和欠项必须同时说明。
+
+## 直接可用交付与位置
+
+- 应用代码修改完成后，构建可直接双击的 Mac x64 `聊单助手.app`，验证交付的那一份 App 启动、版本和相关功能，再提供准确绝对路径、使用步骤、校验值、验收边界和 Git 状态。源码差异或检查结果不能替代 App。
+- 用户已明确反对未经指定将安装包放在桌面。后续成品放在本项目 `交付/聊单助手<实际版本>/聊单助手.app`；只有用户新明确指定时才使用其他位置。旧桌面 App 与旧 `dist` App 保留，未经新指示不迁移、覆盖或清理。
+- 默认交付 App；只有用户明确要求 ZIP／DMG 时才生成并验证对应格式。不能因旧文档或旧构建命令默认输出压缩包、DMG 或桌面副本。
+- 普通使用直接打开 App，不要求 `.command` 启动器、终端命令或专门的测试数据库。构建或启动受阻时准确报告阻塞及最后可用产物，不用旧版冒充新版。
+- 纯文档更正不升应用版本、不重新打包、不暗改已交付 App 内文件。本次更正的是工作区文档；旧 App 内置文档仍是当时的副本，下次实际应用交付时按连续编号一并同步。
+
+## 数据与外部访问边界（本次未调整）
+
+- 自动破坏性、迁移和故障测试使用可丢弃的虚构资料；不得清空用户正式资料或让用户使用隔离测试版代替正式 App。
+- 不因规则文档更正自动读取真实 KDocs、写 Google Sheets、操作网站商品或发送消息；正常资料访问按用户已授权的实际范围执行。
+- 既有有限连接验证仍仅限用户确认的 WhatsApp 会话与时间段，不发送消息；真实 AI 开发请求只用虚构资料，凭据保存在本机安全存储中。早期阶段的有限验证额度只属于当时指定的验证，不作为现行业务调用上限；用户已在 D-034 要求取消应用内部 5 次／每日 20 次限制。开发验证仍按用户已授权的实际范围与预算执行，本次不新增外部调用。
+- 配置存在、已认证、目标已确认、读取已验证分别表述；模拟响应不代表真实连接成功。真正缺少必要人工信息或授权时，只暂停依赖部分，继续独立工作，不重复索要用户已经提供的许可。
+- `DELIVERY-PLAN.md`、`PHASE-01-CONNECTION-DESIGN.md` 等旧阶段文件保留作历史资料；其中旧版阶段、交付格式与提交限制不再作为当前执行指令。未被用户新要求替代的业务和数据安全约束继续有效。

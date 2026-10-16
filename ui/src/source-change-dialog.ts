@@ -1,0 +1,74 @@
+import {sortSourceEntries} from './source-order';
+type Options={doc:Document;changes:any;load:()=>Promise<any>;review:(payload:any)=>Promise<any>;decide:(payload:any)=>Promise<any>;openSource:()=>void;openProduct:(key:string)=>void;onChanged:(changes:any)=>void};
+const stamp=(value:any)=>value?new Date(value).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai',hour12:false}):'尚无记录';
+const labels:Record<string,string>={added:'新增',removed:'删除',replacement:'替换（已确认）',suspected:'疑似替换',modified:'资料变化',moved:'仅移行',review:'身份待核对',baseline:'首次基准',unmapped:'待匹配',price:'价格待确认',catalog:'库存待处理'};
+const actions:Record<string,string>={create:'人工新增／匹配',publish:'人工上架',unpublish:'人工下架',replenish:'补网站库存',review:'人工核对',verify:'核对网站状态',price:'核对价格'};
+const fields:Record<string,string>={stock:'来源库存',cost:'成本',suggestedPrice:'建议售价',websitePriceAed:'网站售价',additionalInfo:'附加资料',sourceName:'名称'};
+const fieldValue=(value:any)=>value===null||value===undefined||value===''?'空白':String(value);
+const location=(product:any)=>product?`第 ${(product.sourceRows?.length?product.sourceRows:[product.sourceRow]).filter(Boolean).join('、')||'未知'} 行`:'—';
+const description=(product:any)=>product?`${location(product)} · ${product.sourceName}${product.businessId?` · 本机商品编号 ${product.businessId}`:''}\n来源库存：${product.stock||'待核对'}`:'—';
+export const sourceReviewLabel=(task:any)=>task.reviewed?'已查看':'待查看';
+const reminderLabels:Record<string,string>={continue:'持续提醒','close-ready':'关闭提醒','close-pending':'已关闭 · 待刷新'};
+export const sourceReminderLabel=(task:any)=>reminderLabels[task.reminder?.mode]||'待提醒';
+type TaskOptions={doc:Document;task:any;review:(payload:any)=>Promise<any>;onChanged:(changes:any)=>void};
+export function openSourceTaskView({doc,task,review,onChanged,openSource,openProduct,openChanges}:TaskOptions&{openSource:()=>void;openProduct:(key:string)=>void;openChanges?:()=>void}){
+  const box=doc.createElement('dialog'),title=doc.createElement('h2'),copy=doc.createElement('p'),result=doc.createElement('p'),foot=doc.createElement('footer'),close=doc.createElement('button'),handle=doc.createElement('button');
+  box.className='live-dialog source-review-dialog source-task-view';title.textContent='商品变化详情';
+  const website=task.website,delta=(task.fields||[]).map((field:any)=>`${fields[field.field]||field.field}：${fieldValue(field.before)} → ${fieldValue(field.after)}`);
+  const source=(product:any)=>product?`${description(product)}\n成本：${fieldValue(product.cost)}；建议售价：${fieldValue(product.suggestedPrice)}`:'—';
+  copy.textContent=[`${task.sheet||'Sheet1'} · ${task.newProductPending?'新增商品':labels[task.kind]||'商品提醒'} · ${stamp(task.createdAt)}`,`原来源：\n${source(task.before)}`,`当前来源：\n${source(task.current||task.after)}`,...delta,website?`网站：${website.name||'已保存商品'}${task.remoteProductId?` · 商品 ID ${task.remoteProductId}`:''}\n${website.publishStatus===1?'已上架':website.publishStatus===0?'已下架':'上架状态未知'}；库存：${website.stockKnown?website.stockQuantity:'未知'}；售价：${fieldValue(website.websitePriceAed)}`:'本机尚未确认对应网站商品；你可以人工核对后关闭本次提醒。',task.reason,'关闭此窗口只记为已查看，提醒开关保持原选择。'].join('\n\n');copy.style.whiteSpace='pre-line';
+  let busy=false;const finish=async(next?:()=>void)=>{if(busy)return;busy=true;for(const button of foot.querySelectorAll('button'))button.disabled=true;try{onChanged(await review({taskId:task.id,operation:'view'}));box.close();next?.();}catch(error){result.textContent=(error as Error).message;busy=false;for(const button of foot.querySelectorAll('button'))button.disabled=false;}};
+  close.type='button';close.textContent='关闭';close.onclick=()=>{void finish();};handle.type='button';handle.textContent=actions[task.action]||'人工核对';handle.onclick=()=>{void finish(()=>task.remoteProductId&&['publish','unpublish','replenish','price'].includes(task.action)?openProduct(`shopplus:${task.remoteProductId}`):openSource());};foot.append(handle);
+  if(openChanges){const all=doc.createElement('button');all.type='button';all.textContent='全部变化与待办';all.onclick=()=>{void finish(openChanges);};foot.append(all);}foot.append(close);box.append(title,copy,result,foot);doc.body.append(box);box.addEventListener('cancel',event=>{event.preventDefault();void finish();});box.addEventListener('close',()=>box.remove(),{once:true});box.showModal();
+}
+export function changeSourceReminder({doc,task,review,onChanged}:TaskOptions){
+  const mode=task.reminder?.mode;
+  if(mode!=='close-ready'){
+    void review({taskId:task.id,operation:mode==='continue'?'exit':'continue'}).then(onChanged).catch(error=>{const box=doc.createElement('dialog'),text=doc.createElement('p'),close=doc.createElement('button');box.className='live-dialog source-review-dialog';text.textContent=`提醒设置未保存：${(error as Error).message}`;close.textContent='关闭';close.onclick=()=>box.close();box.append(text,close);doc.body.append(box);box.addEventListener('close',()=>box.remove(),{once:true});box.showModal();});return;
+  }
+  const box=doc.createElement('dialog'),title=doc.createElement('h2'),copy=doc.createElement('p'),result=doc.createElement('p'),foot=doc.createElement('footer'),no=doc.createElement('button'),yes=doc.createElement('button');box.className='live-dialog source-review-dialog source-reminder-close';title.textContent='确定关闭这条提醒？';
+  copy.textContent=`${(task.current||task.after||task.before)?.sourceName||task.website?.name||'该商品'}\n${task.kind==='price'?'选择“是”表示你已人工核对这次价格变化，并关闭本次价格提醒。':'选择“是”关闭本次提醒，即使系统尚未确认网站对应关系。'}\n刷新后移走并保留人工关闭记录。相同状态不再提醒，新变化重新提醒；不修改网站、来源资料或商品对应关系。`;copy.style.whiteSpace='pre-line';no.type='button';no.textContent='否';yes.type='button';yes.textContent='是';yes.className='primary';
+  const save=async(operation:string)=>{yes.disabled=true;no.disabled=true;try{onChanged(await review({taskId:task.id,operation,confirmed:operation==='close',...(operation==='close'?{fingerprint:task.reminder?.fingerprint}:{})}));box.close();}catch(error){result.textContent=(error as Error).message;yes.disabled=false;no.disabled=false;}};no.onclick=()=>{void save('continue');};yes.onclick=()=>{void save('close');};box.addEventListener('cancel',event=>{event.preventDefault();void save('continue');});foot.append(no,yes);box.append(title,copy,result,foot);doc.body.append(box);box.addEventListener('close',()=>box.remove(),{once:true});box.showModal();
+}
+export function sourceChangeSummary(changes:any){
+  if(!changes?.report)return '尚未生成来源变化报告';
+  const report=changes.report,s=report.summary||{};
+  return `${report.firstBaseline?'首次建立比较基准；':'本次变化：'}新增 ${s.added||0}、删除 ${s.removed||0}、替换 ${s.replaced||0}、疑似替换 ${s.suspected||0}、库存变化 ${s.stock||0}、价格变化 ${s.price||0}；仅移行 ${s.moved||0}。未处理 ${changes.pending?.length||0} 项${changes.pending?.some((task:any)=>task.newProductPending)?`，其中新增商品待网站对应 ${changes.pending.filter((task:any)=>task.newProductPending).length} 项`:''}。`;
+}
+export function openSourceChangeDialog(options:Options){
+  const {doc}=options,box=doc.createElement('dialog'),title=doc.createElement('h2'),summary=doc.createElement('p'),meta=doc.createElement('p'),intro=doc.createElement('p'),tools=doc.createElement('div'),filter=doc.createElement('select'),history=doc.createElement('select'),search=doc.createElement('input'),wrap=doc.createElement('div'),table=doc.createElement('table'),head=doc.createElement('thead'),body=doc.createElement('tbody'),result=doc.createElement('p'),foot=doc.createElement('footer'),refresh=doc.createElement('button'),source=doc.createElement('button'),close=doc.createElement('button');
+  box.className='live-dialog source-change-dialog';box.id='source-change-dialog';title.textContent='同步变化与人工待办';summary.className='product-sync-summary';meta.className='snapshot-meta';intro.className='source-change-intro';intro.textContent='新品请先在网站后台创建，再到来源页保存对应关系；已有网站商品可直接匹配。上下架与补库存在详情逐件确认，完成后回读状态。';tools.className='source-change-tools';search.type='search';search.placeholder='搜索商品、编号或行号';search.setAttribute('aria-label','搜索变化明细');filter.setAttribute('aria-label','变化分类');history.setAttribute('aria-label','同步历史');
+  for(const [value,label] of [['changes','变化明细'],['pending','全部未处理'],['moved','仅移行记录'],['completed','完成记录']]){const option=doc.createElement('option');option.value=value;option.textContent=label;filter.append(option);}
+  wrap.className='source-change-table-wrap';table.className='source-change-table';const headings=doc.createElement('tr');for(const label of ['类型','原来源位置与商品','当前来源位置与商品','变化／网站状态','处理']){const th=doc.createElement('th');th.textContent=label;headings.append(th);}head.append(headings);table.append(head,body);wrap.append(table);result.className='source-change-result';refresh.textContent='刷新';refresh.title='只移走已确认关闭的本机提醒，不读取来源表或网站';source.textContent='来源同步与核对';close.textContent='关闭';foot.append(refresh,source,close);tools.append(filter,history,search);box.append(title,summary,meta,intro,tools,wrap,result,foot);doc.body.append(box);
+  let changes=options.changes;
+  const populateHistory=()=>{const value=history.value;history.replaceChildren();for(const report of changes?.history||[]){const option=doc.createElement('option');option.value=report.id;option.textContent=stamp(report.at);history.append(option);}if([...history.options].some(option=>option.value===value))history.value=value;};
+  const update=async()=>{refresh.disabled=true;result.textContent='正在刷新本机提醒…';try{changes=await options.load();options.onChanged(changes);populateHistory();paint();result.textContent='本机提醒已刷新；已确认关闭项移入完成记录，其余提醒保留。没有读取来源表或网站。';}catch(error){result.textContent=(error as Error).message;}finally{refresh.disabled=false;}};
+  const cell=(row:HTMLTableRowElement,text:string)=>{const td=doc.createElement('td');td.textContent=text;row.append(td);return td;};
+  const actionButton=(host:HTMLElement,label:string,run:()=>void)=>{const button=doc.createElement('button');button.textContent=label;button.type='button';button.onclick=run;host.append(button);return button;};
+  const paint=()=>{
+    const report=(changes?.history||[]).find((item:any)=>item.id===history.value)||changes?.report;summary.textContent=sourceChangeSummary(report?{report,pending:changes.pending}:changes);history.disabled=['pending','completed'].includes(filter.value);meta.textContent=report?`${report.sheet} · 对比 ${stamp(report.previousAt)} → ${stamp(report.at)} · 原始资料 ${report.previousRawRows??'—'} → ${report.rawRows} 行 · ${changes.report.websiteCheck==='verified'?`网站核对：${stamp(changes.report.websiteCheckedAt)}`:'网站尚未成功核对；保留来源变化，不能确认网站操作已完成。'}`:'请先完成一次来源同步。';
+    const query=search.value.trim().toLowerCase(),entries=filter.value==='pending'?(changes?.pending||[]):filter.value==='completed'?(changes?.reviewHistory||[]):(report?.rows||[]).filter((row:any)=>filter.value==='moved'?row.moved:row.kind!=='moved'&&row.kind!=='baseline');body.replaceChildren();
+    for(const entry of sortSourceEntries(entries.filter((row:any)=>JSON.stringify(row).toLowerCase().includes(query)))){
+      const tr=doc.createElement('tr');tr.dataset.changeId=entry.id;const tasks=['pending','completed'].includes(filter.value)?[entry]:entry.tasks||[];cell(tr,entry.newProductPending?'新增商品 · 待网站对应':labels[entry.kind]||entry.kind);cell(tr,description(entry.before));cell(tr,description(entry.current||entry.after));
+      const delta=(entry.fields||[]).map((field:any)=>`${fields[field.field]||field.field}：${fieldValue(field.before)} → ${fieldValue(field.after)}`),website=tasks.find((task:any)=>task.website)?.website;
+      if(entry.moved)delta.push(`位置：${location(entry.before)} → ${location(entry.after)}（本机位置已更新）`);
+      if(website)delta.push(`网站：${website.name}${tasks.find((task:any)=>task.website)?.remoteProductId?` · 商品 ID ${tasks.find((task:any)=>task.website).remoteProductId}`:''} · ${website.publishStatus===1?'已上架':website.publishStatus===0?'已下架':'状态未知'} · 库存 ${website.stockKnown?website.stockQuantity:'未知'}`);
+      cell(tr,[...delta,...tasks.map((task:any)=>`${task.reason}${!task.resolved?`（${sourceReviewLabel(task)} · ${sourceReminderLabel(task)}）`:''}${task.completion?`（${task.completion.type==='manual'?'人工关闭提醒':'系统核对'} · ${stamp(task.completion.at)}）`:''}`)].join('\n')||'请核对前后商品');const controls=cell(tr,'');controls.className='source-change-actions';
+      if(entry.kind==='suspected'||entry.kind==='review'&&entry.before&&entry.after){
+        for(const [decision,label] of [['replacement','确认替换'],['separate','分别删除／新增']])actionButton(controls,label,()=>{void(async()=>{for(const button of controls.querySelectorAll('button'))button.disabled=true;try{changes=await options.decide({changeId:entry.changeId||entry.id,decision});options.onChanged(changes);populateHistory();paint();}catch(error){result.textContent=(error as Error).message;for(const button of controls.querySelectorAll('button'))button.disabled=false;}})();});
+      }else{
+        const pending=filter.value==='completed'?[]:tasks.filter((task:any)=>!task.resolved),unique=new Set<string>();
+        for(const task of pending){const label=actions[task.action]||'人工核对';if(unique.has(label))continue;unique.add(label);actionButton(controls,label,()=>{box.close();task.remoteProductId&&['publish','unpublish','replenish','price'].includes(task.action)?options.openProduct(`shopplus:${task.remoteProductId}`):options.openSource();});}
+        if(!pending.length)controls.textContent=entry.kind==='moved'?'已更新位置，无需上下架':tasks.length?'已处理／无需操作':'仅记录';
+      }
+      if(filter.value!=='completed')for(const task of tasks.filter((item:any)=>!item.resolved)){
+        const onChanged=(value:any)=>{changes=value;options.onChanged(changes);populateHistory();paint();};
+        actionButton(controls,sourceReviewLabel(task),()=>openSourceTaskView({doc,task,review:options.review,onChanged,openSource:()=>{box.close();options.openSource();},openProduct:key=>{box.close();options.openProduct(key);}}));
+        const toggle=actionButton(controls,sourceReminderLabel(task),()=>changeSourceReminder({doc,task,review:options.review,onChanged}));toggle.title=task.reminder?.mode==='continue'?'点击退出持续提醒':task.reminder?.mode==='close-pending'?'点击恢复持续提醒':'选择是否保留这条提醒';
+      }
+      body.append(tr);
+    }
+    if(!body.children.length){const tr=doc.createElement('tr'),td=cell(tr,filter.value==='pending'?'暂无未处理事项。':report?.firstBaseline?'已建立首次基准；后续同步会显示前后变化。':'本次没有符合筛选条件的变化。');td.colSpan=5;body.append(tr);}
+  };
+  populateHistory();paint();filter.onchange=paint;history.onchange=paint;search.oninput=paint;refresh.onclick=()=>{void update();};source.onclick=()=>{box.close();options.openSource();};close.onclick=()=>box.close();box.addEventListener('close',()=>box.remove(),{once:true});box.showModal();
+}

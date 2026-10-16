@@ -29,7 +29,7 @@ export function buildSyncPlan({sourceSnapshot,mappingState,inventoryValues,mappi
     // A user may number a mapping after the last inventory baseline and the
     // source may disappear before its first inventory write. Do not create a
     // ghost "added" row whose only value is 来源已移除.
-    if(row.status==='来源已移除'&&!old)continue;
+    if(row.status==='来源已移除'&&(!old||mappingState.rows.some(active=>active.status==='正常'&&active.businessId===row.businessId)))continue;
     if(row.status==='来源已移除'||!source)current={businessId:row.businessId,sourceName:row.sourceName,cost:old?.cost||'',suggestedPrice:old?.suggestedPrice||'',stock:'来源已移除',additionalInfo:old?.additionalInfo||'',removed:true};
     else{counts.matched++;current={businessId:row.businessId,sourceName:source.sourceName,cost:source.cost,suggestedPrice:source.suggestedPrice,stock:source.stock,additionalInfo:source.additionalInfo||'',sourceRow:source.sourceRow,removed:false};}
     const change=compareBusiness(old,current);if(change.kind==='added')counts.added++;if(change.kind==='removed')counts.removed++;
