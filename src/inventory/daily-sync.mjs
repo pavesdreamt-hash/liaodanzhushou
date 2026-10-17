@@ -1,6 +1,6 @@
 // This pipeline has no website mutation capability. Unresolved source entries
 // do not prevent read-only reconciliation of already confirmed relationships.
-export async function runDailyInventorySync({orchestrator,catalog,connection,progress=()=>{},refreshInventory=async()=>{}}){
+export async function runDailyInventorySync({orchestrator,catalog,connection,progress=()=>{},refreshInventory=async()=>{},closeSource=async()=>{}}){
   const source=await orchestrator.syncSourceLocal();await refreshInventory();
   const mapping=source.mapping||{},needsConfirmation=Number(mapping.needsConfirmation||0),pendingNumber=Number(mapping.pendingNumber||0);
   try{
@@ -18,6 +18,7 @@ export async function runDailyInventorySync({orchestrator,catalog,connection,pro
     }else view=await catalog.getView();
     const sourceChanges=await orchestrator.sourceChanges(view,'verified',{applyReviewed:true}),pending=view.dailyPending||[],pendingSummary={replenish:pending.filter(item=>item.kind==='replenish').length,publish:pending.filter(item=>item.kind==='publish').length,unpublish:pending.filter(item=>item.kind==='unpublish').length};
     await connection.markProductVerified('已通过来源与网站一键核对验证');
+    await closeSource();
     progress({stage:'完成',message:`来源与网站核对完成；变化明细和 ${sourceChanges?.pending?.length||0} 项来源待办已保存。`,phase:'complete'});
     return {outcome:'complete',catalog:view,sourceChanges,status:await connection.status(),mappingCatalogCaptured:mappingCatalog.mappingCatalogRun?.captured||0,pendingSummary,needsConfirmation,pendingNumber};
   }catch(error){

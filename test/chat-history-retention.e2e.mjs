@@ -10,7 +10,7 @@ const row=n=>({id:`history-${n}`,direction:n%2?'merchant':'customer',text:`Histo
 test('a short refresh does not erase visible messages or already loaded older pages',async()=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'history-retention-'));let app;
  try{
-  app=await electron.launch({executablePath:electronPath,args:['.',`--orders-test-user-data=${directory}`],cwd:path.resolve('.'),env:{...process.env,NODE_ENV:'test'}});
+  app=await electron.launch({executablePath:process.env.KDOCS_TEST_EXECUTABLE||electronPath,args:[...(process.env.KDOCS_TEST_EXECUTABLE?[]:['.']),`--orders-test-user-data=${directory}`],cwd:path.resolve('.'),env:{...process.env,NODE_ENV:'test'}});
   const page=await app.firstWindow();
   await app.evaluate(({ipcMain})=>{
    globalThis.__historyFixture={short:false,calls:[]};

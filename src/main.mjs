@@ -1,3 +1,5 @@
+import {sameSourceIdentity} from './sync/source-changes.mjs';
+import {ProductSyncWorkflow} from './inventory/sync-workflow.mjs';
 import {ManualChat} from './manual-chat.mjs';
 import {translateManualReply,backTranslateManualReply,generateFacebookReplyDraft,generateManualAssistantDraft,recognizeImageText,ChatTranslationCache,translateChatMessages} from './manual-translation.mjs';
 import {AdsPowerInboxScanner,AdsPowerScanSessions} from './adspower-inbox.mjs';
@@ -8,6 +10,8 @@ import {AssistantSettings} from './orders/assistant-settings.mjs';
 import {asyncSecretStorage} from './core/async-secret-storage.mjs';
 import {promptForApiKey} from './core/native-secret-prompt.mjs';
 import {createReadyOpener} from './core/ready-opener.mjs';
+import {openExternalWebLink} from './core/external-link.mjs';
+import {QuickReplies} from './quick-replies.mjs';
 import {fictionalAssistantConnectors} from './orders/assistant-test-fixture.mjs';
 import {loadAssistantConnectors} from './orders/assistant-connectors.mjs';
 import {app,BrowserWindow,ipcMain,safeStorage,shell,dialog,screen,session,Tray,Menu,nativeImage,clipboard} from 'electron';
@@ -223,7 +227,7 @@ async function bootstrap(){
   });
   // The local dashboard bridge reaches this same bounded handler only after its
   // loopback origin and per-instance token checks; it never receives raw IPC.
-  operations.set('manual-reply-translation',handleManualReplyTranslation);
+  operations.set('manual-reply-translation',async request=>{const result=await handleManualReplyTranslation(request);if(!result.ok)throw new Error(result.error||'翻译失败');return result.data;});
   handler('adspower:scan',()=>adsPowerSessions.scan());
   handler('adspower:translate',payload=>adsPowerSessions.translateRows(payload));
   handler('adspower:clear',payload=>adsPowerSessions.clear(payload?.token));
@@ -302,6 +306,10 @@ async function bootstrap(){
   });
   lifecycle('startup','正在准备应用目录');
   paths=await ensureDirectories(app.getPath('userData'));
+  const quickReplies=new QuickReplies(paths.base);
+  handler('quick-replies:list',()=>quickReplies.list());
+  handler('quick-replies:save',payload=>quickReplies.save(payload));
+  handler('quick-replies:remove',payload=>quickReplies.remove(payload));
   const addressConfiguration=await loadAddressVerificationConfiguration(paths.base);addressVerifier=testAddressDeliverable?new AddressDeliveryVerifier({apiKey:'test-only',range:{cities:['Example City','Dubai']},fetchImpl:async()=>({ok:true,json:async()=>({status:'OK',results:[{formatted_address:'Fictional normalized address',geometry:{location:{lat:25.2,lng:55.3},location_type:'ROOFTOP'},address_components:[{long_name:'Example City',short_name:'Example City',types:['locality']}]}]})})}):new AddressDeliveryVerifier(addressConfiguration);
   startupLogFile=path.join(paths.logs,`startup-${new Date().toISOString().slice(0,10)}.jsonl`);lifecycle('startup','启动日志已启用',{packaged:app.isPackaged,version:app.getVersion(),platform:process.platform,arch:process.arch,osVersion:os.release(),osEdition:os.version(),userData:app.getPath('userData')});
   assistantConnectors=testMode?{}:await loadAssistantConnectors(paths.base);
@@ -359,6 +367,7 @@ async function bootstrap(){
   if(process.argv.includes('--sync-latest-source')){const source=await orchestrator.latestSource();if(!source)throw new Error('没有可用的KDocs来源快照');const pending=await orchestrator.preparePending(source);
     if(pending.plan.requiresInput||pending.mappingState.firstRun)throw new Error('最新来源仍需商品映射确认，已停止写入');const result=await orchestrator.executePending();console.log(JSON.stringify({completed:true,sourceCapturedAt:source.capturedAt,action:result.action,result:result.result}));app.quit();return;}
   for(const [method,operation] of Object.entries({'usage-mode':p=>assistantSettings.setUsageMode(p),get:()=>assistantSettings.get(),recheck:()=>assistantSettings.recheck(),save:p=>assistantSettings.save(p),'change-key':p=>assistantSettings.changeKey(p),'remove-key':p=>assistantSettings.removeKey(p),test:p=>assistantSettings.test(p)}))handler('assistant-settings:'+method,operation);
+  handler('app:open-external-link',payload=>openExternalWebLink(payload?.url,url=>shell.openExternal(url)));
   handler('app:status',()=>orchestrator.status());handler('kdocs:open-external',async()=>{await shell.openExternal(SOURCE_URL);return {opened:true};});handler('shopplus:open-product',async payload=>{const productId=String(payload?.remoteProductId||'').trim();if(!/^[A-Za-z0-9_-]{1,80}$/.test(productId))throw new Error('ShopPlus 商品 ID 无效，无法打开商品后台');const url=`https://portal.shoplus.net/admin/products/${encodeURIComponent(productId)}`;await shell.openExternal(url);return {opened:true,url};});handler('kdocs:login',()=>orchestrator.login());handler('kdocs:login-status',()=>orchestrator.kdocsLoginStatus());
   const refreshOrderInventory=async()=>{const view=await orchestrator.localInventory();orderApp?.syncInventoryProducts(view?.current?.products||[]);return view;};
   handler('google:connect',()=>orchestrator.connectGoogle());handler('google:open',async()=>{await shell.openExternal(TARGET_SPREADSHEET_URL);return {opened:true,url:TARGET_SPREADSHEET_URL};});handler('sync:start',async()=>{const result=await orchestrator.sync();await refreshOrderInventory();return result;});handler('source:sync-local',async()=>{const result=await orchestrator.syncSourceLocal();await refreshOrderInventory();return result;});handler('sync:mapping',async p=>{const result=await orchestrator.submitMapping(p?.answers,p||{});await refreshOrderInventory();return result;});
@@ -385,7 +394,8 @@ async function bootstrap(){
   handler('orders:configure-order-sync-schedule',payload=>{const schedule=orders().configureOrderSyncSchedule(payload);scheduleShopPlusOrderSync();return schedule;});
   handler('orders:shopplus-sync-attention',()=>orders().shopPlusSyncAttention());
   handler('orders:acknowledge-shopplus-sync-attention',payload=>orders().acknowledgeShopPlusSyncAttention(payload));
-  const shopPlusProductStatus=async()=>{const catalog=await shopPlusProductCatalog.getView();return {catalog,sourceChanges:await orchestrator.sourceChanges(catalog),status:await shopPlusConnection.status()};};
+  const productSyncWorkflow=new ProductSyncWorkflow(paths);
+  const shopPlusProductStatus=async()=>{const catalog=await shopPlusProductCatalog.getView();return {catalog,sourceChanges:await orchestrator.sourceChanges(catalog),workflow:await productSyncWorkflow.view(),status:await shopPlusConnection.status()};};
   handler('source:changes',async()=>orchestrator.sourceChanges(await shopPlusProductCatalog.getView()));
   handler('source:refresh-reminders',async()=>orchestrator.localStore.refreshReviewedReminders());
   handler('source:review-task',async payload=>{await orchestrator.localStore.reviewSourceTask(payload||{});return orchestrator.sourceChanges(await shopPlusProductCatalog.getView());});
@@ -397,15 +407,28 @@ async function bootstrap(){
     const {token:ignored,...request}=payload||{};
     return projectChatProductCatalog(await shopPlusProductCatalog.getView(),request);
   });
-  handler('orders:sync-shopplus-products',async payload=>{try{const listPage=request=>shopPlusConnection.listProductsPage(request),catalog=payload?.scope==='published-in-stock'?await shopPlusProductCatalog.collectPublishedInStock({listPage}):await shopPlusProductCatalog.collect({target:payload?.target,listPage});await shopPlusConnection.markProductVerified('已通过 ShopPlus 商品读取验证');return {catalog,status:await shopPlusConnection.status(),collected:true};}catch(error){await shopPlusConnection.markProductFailed(`商品读取失败：${String(error?.message||error)}`).catch(()=>{});throw error;}});
+  handler('orders:sync-shopplus-products',payload=>productSyncWorkflow.run('website',async()=>{try{
+    const listPage=request=>shopPlusConnection.listProductsPage(request);let catalog=payload?.scope==='published-in-stock'?await shopPlusProductCatalog.collectPublishedInStock({listPage}):await shopPlusProductCatalog.collect({target:payload?.target,listPage});
+    // A full matching read also checks unlisted/zero-stock products; a filtered list cannot prove completion.
+    catalog=await shopPlusProductCatalog.syncMappingCatalog({listPage});
+    const sourceChanges=await orchestrator.sourceChanges(catalog,'verified',{applyReviewed:true});
+    await shopPlusConnection.markProductVerified('已通过 ShopPlus 商品读取验证');return {catalog,sourceChanges,status:await shopPlusConnection.status(),collected:true};
+  }catch(error){await shopPlusConnection.markProductFailed(`商品读取失败：${String(error?.message||error)}`).catch(()=>{});throw error;}}));
   handler('orders:sync-shopplus-mapping-catalog',async()=>{try{const catalog=await shopPlusProductCatalog.syncMappingCatalog({listPage:request=>shopPlusConnection.listProductsPage(request)});await shopPlusConnection.markProductVerified('已通过 ShopPlus 商品匹配目录读取验证');return {catalog,status:await shopPlusConnection.status(),synced:true};}catch(error){await shopPlusConnection.markProductFailed(`商品匹配目录读取失败：${String(error?.message||error)}`).catch(()=>{});throw error;}});
-  handler('orders:refresh-shopplus-products',async()=>{try{const catalog=await shopPlusProductCatalog.refresh({listPage:request=>shopPlusConnection.listProductsPage(request)});await shopPlusConnection.markProductVerified('已通过 ShopPlus 商品资料更新验证');return {catalog,status:await shopPlusConnection.status(),refreshed:true};}catch(error){await shopPlusConnection.markProductFailed(`商品资料更新失败：${String(error?.message||error)}`).catch(()=>{});throw error;}});
+  handler('orders:refresh-shopplus-products',()=>productSyncWorkflow.run('details',async()=>{try{
+    let catalog=await shopPlusProductCatalog.refresh({listPage:request=>shopPlusConnection.listProductsPage(request)});
+    const confirmed=await orchestrator.confirmedSourceProducts(),local=await orchestrator.localInventory();
+    const sourceProducts=confirmed.flatMap(row=>{const matches=(local.latestCollection?.products||[]).filter(item=>sameSourceIdentity(row,item));return !row.removed&&!row.identityUncertain&&matches.length===1?[{...matches[0],businessId:row.businessId}]:[];});
+    if(sourceProducts.length)catalog=await shopPlusProductCatalog.integrateSourcePricing({sourceProducts,sourceUpdatedAt:local.latestCollection?.capturedAt});
+    const sourceChanges=await orchestrator.sourceChanges(catalog);
+    await shopPlusConnection.markProductVerified('已通过 ShopPlus 商品资料更新验证');return {catalog,sourceChanges,status:await shopPlusConnection.status(),refreshed:true};
+  }catch(error){await shopPlusConnection.markProductFailed(`商品资料更新失败：${String(error?.message||error)}`).catch(()=>{});throw error;}}));
   handler('orders:sync-shopplus-product-media',async payload=>{try{const catalog=await shopPlusProductCatalog.collectMedia({listPage:request=>shopPlusConnection.listProductsPage(request),remoteProductIds:payload?.remoteProductIds});await shopPlusConnection.markProductVerified('已通过 ShopPlus 商品图片只读采集验证');return {catalog,status:await shopPlusConnection.status(),collected:true};}catch(error){await shopPlusConnection.markProductFailed(`商品图片读取失败：${String(error?.message||error)}`).catch(()=>{});throw error;}});
   handler('orders:import-shopplus-product-media',async payload=>{const remoteProductId=String(payload?.remoteProductId||'').trim();if(!remoteProductId)throw new Error('未选择需要导入图片的商品');const selected=await openDialog({title:'从电脑导入商品图片',properties:['openFile','multiSelections'],filters:[{name:'商品图片',extensions:['jpg','jpeg','png','webp','gif']}]});if(selected.canceled)return {catalog:await shopPlusProductCatalog.getView(),canceled:true};const images=[];for(const file of selected.filePaths.slice(0,20)){const original=await readFile(file),source=nativeImage.createFromPath(file);if(source.isEmpty())continue;const size=source.getSize(),large=original.length>3*1024*1024,limit=large?1600:2400,scale=Math.min(1,limit/Math.max(size.width,size.height)),resized=scale<1?source.resize({width:Math.max(1,Math.round(size.width*scale)),height:Math.max(1,Math.round(size.height*scale)),quality:'good'}):source;let bytes=resized.toJPEG(large?80:86);if(bytes.length>3*1024*1024)bytes=resized.resize({width:Math.max(1,Math.round(resized.getSize().width*.7)),height:Math.max(1,Math.round(resized.getSize().height*.7)),quality:'good'}).toJPEG(72);images.push({sourceName:path.basename(file),originalByteLength:original.length,thumbnail:large||bytes.length<original.length,data:bytes.toString('base64')});}const catalog=await shopPlusProductCatalog.importLocalMedia({remoteProductId,images});return {catalog,status:await shopPlusConnection.status(),imported:images.length};});
   handler('orders:integrate-shopplus-source-pricing',async()=>{const local=await orchestrator.localInventory(),catalog=await shopPlusProductCatalog.integrateSourcePricing({sourceProducts:local?.current?.products||[],sourceUpdatedAt:local?.current?.savedAt||local?.updatedAt||null});return {catalog,status:await shopPlusConnection.status(),sourcePricing:true};});
   handler('orders:reconcile-shopplus-source-data',async()=>{const local=await orchestrator.localInventory();if(!local?.current?.capturedAt||local.current.capturedAt!==local?.latestCollection?.capturedAt)throw new Error('最新来源资料尚未完成本机映射确认；请先保存对应关系后再核对网站变化');const catalog=await shopPlusProductCatalog.reconcileSourceAndWebsite({sourceProducts:local.current.products||[],sourceSnapshotProducts:local.latestCollection?.products||[],sourceUpdatedAt:local.current.savedAt||local.updatedAt||null,listPage:request=>shopPlusConnection.listProductsPage(request)});await shopPlusConnection.markProductVerified('已通过 ShopPlus 已映射商品资料核对验证');return {catalog,status:await shopPlusConnection.status(),reconciled:true};});
   handler('orders:apply-shopplus-source-reconciliation',async()=>({catalog:await shopPlusProductCatalog.applyReconciliation(),status:await shopPlusConnection.status(),applied:true}));
-  handler('inventory:daily-source-sync',async()=>{
+  handler('inventory:daily-source-sync',()=>productSyncWorkflow.run('source',async()=>{
     let login=await orchestrator.kdocsLoginStatus();
     if(login?.state!=='ready'){
       emitProgress({stage:'来源登录',message:'来源资料尚未登录，正在打开登录窗口…',phase:'open-login'});
@@ -419,8 +442,8 @@ async function bootstrap(){
       if(login?.state!=='ready')return {outcome:'login_required',login,reason:'等待来源资料登录超过 5 分钟，请重新点击一键同步'};
     }
     emitProgress({stage:'一键同步',message:'来源资料登录已确认，正在同步来源资料…',phase:'source-sync'});
-    return runDailyInventorySync({orchestrator,catalog:shopPlusProductCatalog,connection:shopPlusConnection,progress:emitProgress,refreshInventory:refreshOrderInventory});
-  });
+    return runDailyInventorySync({orchestrator,catalog:shopPlusProductCatalog,connection:shopPlusConnection,progress:emitProgress,refreshInventory:refreshOrderInventory,closeSource:closeKdocsWorkspace});
+  }));
   handler('orders:update-shopplus-product',async payload=>({catalog:await shopPlusProductCatalog.update(payload),status:await shopPlusConnection.status()}));
   const detailProduct=detail=>detail?.productVO||detail?.product||detail;
   const catalogProduct=async remoteProductId=>{

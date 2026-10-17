@@ -64,7 +64,7 @@ test('聊天工作台仅在点击“英文翻译”时生成英文，英文可�
   await frame.locator('.cwb-conversation').click();
   await frame.locator('.cwb-message-text').getByText('Can you confirm the fictional address?',{exact:true}).waitFor();
   const chineseTab=frame.getByRole('button',{name:'中文输入',exact:true});
-  const englishTab=frame.getByRole('button',{name:'英文翻译',exact:true});
+  const englishTab=frame.locator('button[data-editor="en"]');
   const chinese=frame.getByLabel('中文输入');
   const backTranslate=frame.locator('.cwb-back-translate');
   assert.equal(await frame.locator('.cwb-composer-tabs > button[data-editor]').count(),2,'仅保留中文输入和英文翻译两个文字入口');

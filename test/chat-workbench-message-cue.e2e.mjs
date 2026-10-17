@@ -13,7 +13,7 @@ test('提示点实际隐藏：向上滚轮、迟到响应、连续轮询、失�
  const directory=await mkdtemp(path.join(os.tmpdir(),'workbench-message-cue-'));let app;
  try{
   await mkdir(evidence,{recursive:true});
-  app=await electron.launch({executablePath:electronPath,args:['.',`--orders-test-user-data=${directory}`],cwd:path.resolve('.'),env:{...process.env,NODE_ENV:'test'}});
+  app=await electron.launch({executablePath:process.env.KDOCS_TEST_EXECUTABLE||electronPath,args:[...(process.env.KDOCS_TEST_EXECUTABLE?[]:['.']),`--orders-test-user-data=${directory}`],cwd:path.resolve('.'),env:{...process.env,NODE_ENV:'test'}});
   const page=await app.firstWindow();
   await app.evaluate(({ipcMain})=>{
    globalThis.cueFixture={mode:'success',calls:0,rows:Array.from({length:35},(_,i)=>({id:`fictional-${i}`,direction:'customer',text:`Fictional message ${i}: scrolling verification only.`,sentAt:new Date(Date.UTC(2026,8,22,8,i)).toISOString()}))};

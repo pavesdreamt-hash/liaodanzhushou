@@ -498,7 +498,7 @@ export class ShopPlusProductCatalog {
         const costPriceAed=aedAmount(found.row.cost),suggestedPriceAed=aedAmount(found.row.suggestedPrice);
         if(costPriceAed===null&&suggestedPriceAed===null)blank++;else updated++;
         const sourceStock=text(found.row.stock,40);
-        return {...product,costPriceAed,suggestedPriceAed,sourcePricing:{status:costPriceAed===null&&suggestedPriceAed===null?'matched_empty':'matched',at,method:found.method,sourceBusinessId:text(found.row.businessId,160)||null,sourceName:text(found.row.sourceName,240)||null,sourceStock:['有货','无货'].includes(sourceStock)?sourceStock:null,costPriceAed,suggestedPriceAed}};
+        return {...product,costPriceAed,suggestedPriceAed,sourcePricing:{...product.sourcePricing,sourceRow:found.row.sourceRow||product.sourcePricing?.sourceRow||null,sourceRows:found.row.sourceRows||product.sourcePricing?.sourceRows||[],status:costPriceAed===null&&suggestedPriceAed===null?'matched_empty':'matched',at,method:found.method,sourceBusinessId:text(found.row.businessId,160)||null,sourceName:text(found.row.sourceName,240)||null,sourceStock:['有货','无货'].includes(sourceStock)?sourceStock:null,costPriceAed,suggestedPriceAed}};
       });
       this.state.products=integrated.filter(normalInventoryProduct);
       this.state.archivedProducts=integrated.filter(product=>!normalInventoryProduct(product));

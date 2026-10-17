@@ -1,3 +1,4 @@
+import {sourceSnapshotStatistics,sourceDirectionalCounts} from './source-statistics.mjs';
 import {assignSourceKeys,normalizedSourceName,sourceModel} from '../mapping/source-key.mjs';
 import {coreText} from '../../shared/text.mjs';
 import {stableHash} from '../core/files.mjs';
@@ -54,7 +55,8 @@ export function buildSourceChangeReport({previous,snapshot,mappings=[]}){
     for(const old of matches.missing)if(!usedOld.has(old))add(ambiguous(old)?'review':'removed',old,null);
     for(const current of matches.added)if(!usedNew.has(current))add(ambiguous(current)?'review':'added',null,current);
   }
-  return {schemaVersion:1,id:snapshot.capturedAt,at:snapshot.capturedAt,previousAt:previous?.capturedAt||null,firstBaseline,sheet:snapshot.sheet||'Sheet1',rawRows:snapshot.quality?.rawNamedRows??matches.after.reduce((total,row)=>total+sourceRows(row).length,0),previousRawRows:previous?.quality?.rawNamedRows??(previous?matches.before.reduce((total,row)=>total+sourceRows(row).length,0):null),summary:changeCounts(rows),rows,websiteCheck:'pending',websiteCheckedAt:null};
+  const report={statistics:{previous:sourceSnapshotStatistics(previous),current:sourceSnapshotStatistics(snapshot)},schemaVersion:1,id:snapshot.capturedAt,at:snapshot.capturedAt,previousAt:previous?.capturedAt||null,firstBaseline,sheet:snapshot.sheet||'Sheet1',rawRows:snapshot.quality?.rawNamedRows??matches.after.reduce((total,row)=>total+sourceRows(row).length,0),previousRawRows:previous?.quality?.rawNamedRows??(previous?matches.before.reduce((total,row)=>total+sourceRows(row).length,0):null),summary:changeCounts(rows),rows,websiteCheck:'pending',websiteCheckedAt:null};
+  report.directional=sourceDirectionalCounts(report);return report;
 }
 export function taskSeeds(report){
   return report.rows.flatMap(row=>{

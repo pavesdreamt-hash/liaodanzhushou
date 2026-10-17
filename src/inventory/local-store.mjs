@@ -1,3 +1,4 @@
+import {sourceSnapshotStatistics,sourceDirectionalCounts} from '../sync/source-statistics.mjs';
 import path from 'node:path';
 import {unlink} from 'node:fs/promises';
 import {readJSON,writeJSON,listJSON} from '../core/files.mjs';
@@ -20,7 +21,7 @@ const compactInventory=values=>{
 const currentProducts=(inventoryValues,mappingRows=[])=>{const sourceRows=new Map((mappingRows||[]).filter(row=>row?.businessId).map(row=>[row.businessId,row.sourceRow||null]));return parseInventory(inventoryValues).rows.map(row=>({businessId:row.businessId||'',sourceName:row.sourceName||'',cost:row.latest?.cost||'',suggestedPrice:row.latest?.suggestedPrice||'',stock:row.latest?.stock||'',additionalInfo:row.latest?.additionalInfo||'',sourceRow:sourceRows.get(row.businessId)||null,removed:row.latest?.stock==='来源已移除'}));};
 
 export class LocalInventoryStore{
-  constructor(paths){this.paths=paths;this.file=path.join(paths.state,'local-inventory.json');this.queue=Promise.resolve();}
+  constructor(paths){this.paths=paths;this.file=path.join(paths.state,'local-inventory.json');this.queue=Promise.resolve();this.statisticsCache=new Map();}
   serial(operation){const next=this.queue.then(operation,operation);this.queue=next.catch(()=>{});return next;}
   async read(){const value=await readJSON(this.file,null);return value?.schemaVersion===1?{...blankDocument(),...value}:blankDocument();}
   async workbook(){
@@ -56,8 +57,18 @@ export class LocalInventoryStore{
     changes.report.summary=changeCounts(changes.report.rows);
     const update=report=>({...report,rows:report.rows.map(row=>({...row,tasks:changes.tasks.filter(task=>task.changeId===row.id||!task.resolved&&sameSourceIdentity(task.after||task.before,row.after||row.before))}))});
     changes.report=update(changes.report);changes.history=changes.history.map(report=>report.id===changes.report.id?changes.report:update(report));
-    await writeJSON(this.file,document);return this.changesView(changes);
+    await writeJSON(this.file,document);const view=this.changesView(changes);await this.hydrateReportStatistics(view,document.latestCollection);return view;
   });}
+  async hydrateReportStatistics(changes,latest){
+    const reports=[changes.report,...(changes.history||[])],needed=new Set(reports.filter(r=>!r.statistics).flatMap(r=>[r.at,r.previousAt]).filter(Boolean));
+    for(const report of reports)report.directional=sourceDirectionalCounts(report);
+    if(!needed.size)return;
+    if(latest?.capturedAt)this.statisticsCache.set(latest.capturedAt,sourceSnapshotStatistics(latest));
+    const missing=new Set([...needed].filter(at=>!this.statisticsCache.has(at)));
+    if(missing.size)for(const file of await listJSON(this.paths.snapshots,'source_')){if(!missing.size)break;const value=await readJSON(path.join(this.paths.snapshots,file),null);if(missing.has(value?.capturedAt)){this.statisticsCache.set(value.capturedAt,sourceSnapshotStatistics(value));missing.delete(value.capturedAt);}}
+    for(const at of missing)this.statisticsCache.set(at,null);
+    for(const report of reports)if(!report.statistics)report.statistics={previous:this.statisticsCache.get(report.previousAt)||null,current:this.statisticsCache.get(report.at)||null};
+  }
   changesView(changes){return changes?{...changes,pending:[...changes.tasks.filter(task=>!task.resolved),...(changes.catalogPending||[])],tasks:undefined}:null;}
   async refreshReviewedReminders(){return this.serial(async()=>{
     const document=await this.read(),changes=document.sourceChanges;if(!changes)return null;

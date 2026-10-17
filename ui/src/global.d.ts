@@ -27,6 +27,7 @@ declare global {
         changeKey: (payload: unknown) => Promise<{ok: boolean; data?: unknown; error?: {message?: string}}>;
         test: (payload: unknown) => Promise<{ok: boolean; data?: unknown; error?: {message?: string}}>;
       };
+      openExternalLink?: (payload: {url: string}) => Promise<{ok: boolean; data?: {opened: boolean; url: string}; error?: {message?: string}}> ;
       openKdocs?: () => Promise<unknown>;
       openShopPlusProduct?: (payload: {remoteProductId: string}) => Promise<{ok: boolean; data?: unknown; error?: {message?: string}}>;
       loginKdocs?: () => Promise<{ok: boolean; data?: unknown; error?: {message?: string}}>;

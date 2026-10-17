@@ -47,8 +47,8 @@ export async function collectKdocs({profile,paths,previous=null,onProgress=()=>{
       manifest.captureRetries=(manifest.captureRetries||0)+1;onProgress({stage:'KDocs采集',message:`画布尚未完整绘制，正在重读 ${label}（${attempt}/2）`});await wait(250);
     }
   }
-  // The managed workspace belongs to the explicit login lifecycle. A collection
-  // attempt must not close it, whether the read completes or raises an error.
+  // The collector leaves workspace ownership to its caller. The successful daily
+  // workflow closes it after website verification; failed reads retain it for recovery.
   try{
     browser=await open(profile,SOURCE_URL,{onProgress});({page}=browser);
     // The canvas can become visible before the sheet tab finishes mounting.

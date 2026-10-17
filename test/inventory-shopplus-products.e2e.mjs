@@ -134,16 +134,16 @@ test('商品库存页仅在明确操作后读取全部已上架有货目录，�
   const dialogLayout=await manager.evaluate(node=>{const rect=node.getBoundingClientRect(),style=getComputedStyle(node),rules=[...document.styleSheets].flatMap(sheet=>{try{return [...sheet.cssRules];}catch{return [];}}).filter(rule=>rule.selectorText&&rule.style.maxWidth&&node.matches(rule.selectorText)).map(rule=>({selector:rule.selectorText,maxWidth:rule.style.maxWidth}));return {width:Math.round(rect.width),viewport:window.innerWidth,computedWidth:style.width,computedMaxWidth:style.maxWidth,inlineWidth:node.style.width,inlineMaxWidth:node.style.maxWidth,rules};});
   assert.ok(Math.abs(dialogLayout.width-Math.min(880,dialogLayout.viewport-32))<=1,`同步弹窗应实际横向扩大至最多 880px，而不是仍被 760px 基础样式覆盖：${JSON.stringify(dialogLayout)}`);
   assert.equal(await manager.locator('h2').textContent(),'商品同步与更新');
-  assert.match(await manager.locator('.product-sync-summary').textContent()||'',/当前正常商品库存 0 款 · 待处理 0 项/);
-  assert.deepEqual(await manager.locator('.product-sync-option h3').allTextContents(),['日常同步','首次采集','局部刷新'],'三个动作使用并列卡片，避免长段落和分隔线堆叠');
-  assert.deepEqual(await manager.locator('.product-sync-option > button').allTextContents(),['一键同步','开始采集','刷新资料']);
+  assert.equal(await manager.locator('.product-sync-summary').count(),0);
+  assert.deepEqual(await manager.locator('.product-sync-option h3').allTextContents(),['1、商品库存表同步','2、读取网站在售商品','3、同步商品细节资料'],'三个动作使用并列卡片，避免长段落和分隔线堆叠');
+  assert.deepEqual(await manager.locator('.product-sync-actions button').allTextContents(),['一键同步','查看同步变化','开始读取','同步资料']);
   const cardLayout=await manager.locator('.product-sync-option').evaluateAll(cards=>cards.map(card=>{const rect=card.getBoundingClientRect();return {x:Math.round(rect.x),y:Math.round(rect.y),width:Math.round(rect.width)};}));
   assert.equal(new Set(cardLayout.map(card=>card.y)).size,1,`1280px 宽度下三张同步卡片应并列：${JSON.stringify(cardLayout)}`);
   assert.ok(cardLayout.every(card=>card.width>=145),`同步卡片应保有可读宽度：${JSON.stringify(cardLayout)}`);
   if(process.env.KDOCS_PRODUCT_SYNC_DIALOG_SCREENSHOT){await manager.screenshot({path:process.env.KDOCS_PRODUCT_SYNC_DIALOG_SCREENSHOT});}
-  assert.equal(await manager.locator('#ui011-manager-refresh').isDisabled(),true,'未采集商品前不能伪造网站资料更新');
+  assert.equal(await manager.locator('#ui011-manager-refresh').getAttribute('data-requires-confirmation'),'true','未完成时通过确认提示，而非硬禁用');
   assert.match(await manager.textContent()||'',/商品详情逐件确认/);
-  await manager.locator('#ui011-manager-collect').click();
+  await manager.locator('#ui011-manager-collect').click();await frame.locator('.sync-step-confirm').getByRole('button',{name:'是，继续',exact:true}).click();
   await waitFor(async()=>await frame.locator('#ui011-rows tr').count()===2);
   assert.equal(await application.evaluate(()=>globalThis.__inventoryPilotCalls),1,'仅通过明确按钮触发一次虚构商品读取');
   assert.deepEqual(await application.evaluate(()=>globalThis.__inventoryPilotScopes),['published-in-stock']);
@@ -154,8 +154,8 @@ test('商品库存页仅在明确操作后读取全部已上架有货目录，�
   await manager.getByRole('button',{name:'一键同步',exact:true}).click();
   await waitFor(async()=>await application.evaluate(()=>globalThis.__inventoryPilotDailySyncCalls)===1);
   assert.equal(await manager.locator('.daily-sync-running').isVisible(),true,'一键同步期间显示等待进度，不要求用户再点登录或检测按钮');
-  await waitFor(async()=>/无需额外重新读取上架商品/.test(await manager.locator('output').textContent()||''));
-  assert.match(await manager.locator('output').textContent()||'',/补网站库存 1、手动上架 0、手动下架 0/,'完成弹窗明确给出待处理分类数量');
+  await waitFor(async()=>/同步完成/.test(await manager.locator('output').textContent()||''));
+  assert.match(await manager.locator('output').textContent()||'',/同步完成/,'完成状态在第一步内显示');
   assert.equal(await frame.locator('#ui011-source-pending').isVisible(),true,'一键同步后在库存首页集中展示人工待处理项');
   assert.match(await frame.locator('#ui011-source-pending').textContent()||'',/037（虚构下架）.*补网站库存/,'待处理项明确说明人工动作');
   assert.equal(await frame.locator('#ui011-source-pending button').allTextContents().then(items=>items.join(',')),'刷新,补网站库存');
@@ -425,9 +425,9 @@ test('商品库存页仅在明确操作后读取全部已上架有货目录，�
   assert.equal(await frame.locator('#ui011-rows tr').count(),2,'返回库存后仍保留同一批虚构试采集记录');
   await frame.locator('#ui011-product-manager').click();
   const refreshManager=frame.locator('dialog.product-sync-dialog').filter({hasText:'商品同步与更新'});
-  await refreshManager.locator('#ui011-manager-refresh').click();
+  await refreshManager.locator('#ui011-manager-refresh').click();await frame.locator('.sync-step-confirm').getByRole('button',{name:'是，继续',exact:true}).click();
   await waitFor(async()=>await application.evaluate(()=>globalThis.__inventoryPilotRefreshCalls)===1);
-  assert.match(await refreshManager.locator('output').textContent()||'',/已更新 2 款/,'明确点击后才执行已采集商品资料更新');
+  assert.match(await refreshManager.locator('.product-step-status').last().textContent()||'',/已更新 2 款/,'明确点击后才执行已采集商品资料更新');
   assert.match(await frame.locator('#ui011-rows tr').first().textContent()||'',/AED 301\.00/,'网站售价更新显示在已采集商品列表');
   await refreshManager.locator('#ui011-manager-close').click();
   await application.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().find(window=>window.isVisible())?.setContentSize(1280,820));

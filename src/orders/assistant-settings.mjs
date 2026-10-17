@@ -65,7 +65,7 @@ export class AssistantSettings{
   today(){return this.now().toLocaleDateString('sv-SE');}
   publicState(){
     const s=this.state;
-    return {revision:s.revision,activeProvider:s.activeProvider,secureStorageAvailable:this.encryptionAvailable,callsUsed:s.callsUsed,usageMode:s.usageMode,dailyCalls:s.dailyDate===this.today()?s.dailyCalls:0,ledger:(s.ledger||[]).map(({purpose,at,status,elapsedMs,simulation})=>({purpose,at,status,elapsedMs,simulation})),providers:Object.fromEntries(Object.entries(AI_PROVIDERS).map(([id,p])=>{
+    return {revision:s.revision,activeProvider:s.activeProvider,secureStorageAvailable:this.encryptionAvailable,callsUsed:s.callsUsed,usageMode:s.usageMode,dailyCalls:s.dailyDate===this.today()?s.dailyCalls:0,ledger:(s.ledger||[]).map(({purpose,at,status,elapsedMs,simulation,errorCode})=>({purpose,at,status,elapsedMs,simulation,...(errorCode?{errorCode}:{})})),providers:Object.fromEntries(Object.entries(AI_PROVIDERS).map(([id,p])=>{
       const current=s.providers[id],test=current.test?.status==='testing'&&!this.requestBusy?{status:'interrupted',message:'上次请求未完成，未自动重试'}:current.test;
       return [id,{label:p.label,baseUrl:p.baseUrl,model:current.model,hasApiKey:Boolean(current.key),test:test?{status:test.status,message:test.message,at:test.at,elapsedMs:test.elapsedMs}:null}];
     }))};
@@ -112,13 +112,13 @@ export class AssistantSettings{
       const options={provider,url:AI_PROVIDERS[provider].baseUrl,model:config.model,token:config.key,fetchImpl:this.fetchImpl,timeoutMs:20000,maxCalls:1};
       value=purpose==='extraction'?await compatibleExtractor(options).extract({messages}):await compatibleAssistant(options).complete({purpose,input});
       if(probe)verifyConnectionSample(value);
-    }catch(e){failure=e?.code==='AI_SAMPLE_INVALID'?e:settingsError(e?.code==='ASSISTANT_CONNECTION'?e.message:'接口响应无法验证，未写入订单','AI_CONNECTION_FAILED');}
+    }catch(e){failure=e?.code==='AI_SAMPLE_INVALID'?e:settingsError(e?.code==='ASSISTANT_CONNECTION'?e.message:'接口响应无法验证，未写入订单','AI_CONNECTION_FAILED');failure.connectionReason=e?.connectionReason||failure.code;}
     try{
       return await this.serial(async()=>{
         const current=this.state.providers[provider];
         if(this.state.revision!==expectedRevision||this.state.activeProvider!==provider||current.model!==config.model||current.key!==config.key||(probe&&current.test?.requestId!==requestId)){const discarded=structuredClone(this.state),entry=discarded.ledger?.find(e=>e.id===requestId);if(entry){entry.status='interrupted';entry.elapsedMs=Date.now()-started;await this.persist(discarded);}throw settingsError('请求期间配置已变化，已丢弃旧结果','AI_SETTINGS_CHANGED');}
         if(probe){const next=structuredClone(this.state);next.revision++;next.providers[provider].test={status:failure?'failed':'verified',message:failure?failure.message:(this.simulation?'模拟接口样本通过（未验证真实服务）':'真实接口及虚构资料样本校验通过'),at:this.now().toISOString(),elapsedMs:Date.now()-started};await this.persist(next);}
-        const audited=structuredClone(this.state),entry=audited.ledger?.find(e=>e.id===requestId);if(entry){entry.status=failure?'failed':'responded';entry.elapsedMs=Date.now()-started;await this.persist(audited);}
+        const audited=structuredClone(this.state),entry=audited.ledger?.find(e=>e.id===requestId);if(entry){entry.status=failure?'failed':'responded';entry.elapsedMs=Date.now()-started;if(failure)entry.errorCode=failure.connectionReason;await this.persist(audited);}
         if(failure)throw failure;return probe?this.publicState():value;
       });
     }finally{this.requestBusy=false;}
