@@ -3,9 +3,9 @@
 ## 现状与计数（2026-10-17）
 
 - 编号规则：连续加一、逢9进位；详见 [AGENTS.md](AGENTS.md)。历史错误编号只作实际记录保留。
-- 最新源码与已交付成品为3.7.0，由3.6.9连续加一；商品同步三步、来源统计和16项成品定向回归通过，正常启动原资料目录。旧真实翻译授权后复验通过，历史验收缺口保留；下次实际版本3.7.1。当前为本批第5次，本次须提交并推送。
+- 最新源码与已交付成品为3.7.0，由3.6.9连续加一；商品同步三步、来源统计和16项成品定向回归通过，正常启动原资料目录。旧真实翻译授权后复验通过，历史验收缺口保留；下次实际版本3.7.1。本次为本批第5次，已提交并推送`688ae3b532ac08985c01ba19a9e6f941721be52b`且核对远端，下一批从3.7.1开始计数。
 - 最新成品路径：`/Users/apple/Documents/ChatGPT/网站料单Skill/liaodan-assistant-next/交付/聊单助手3.7.0/聊单助手.app`。3.6.9及更早App、旧dist App保留。
-- 最新应用发布提交：`0ec9af9a7190533cb576e5633bc320e8917e9103`，2026-10-16，`release: ship five delivered updates through 3.6.5`，已成功推送并核对远端main；随后同步的文档登记不产生新应用迭代。
+- 最新应用发布提交：`688ae3b532ac08985c01ba19a9e6f941721be52b`，2026-10-17，`release: ship five delivered updates through 3.7.0`，已成功推送并核对远端main；随后同步的文档登记不产生新应用迭代。
 - 截至3.6.0的6次历史积压补交仍为`7d03ff0fdc16dd6519893806fa5d07beb8315226`，保留原核验记录。
 - 该次补交的父提交为2026-10-03的`9565503`（3.3.0）；下面6次交付的原节点遗漏保留，不补造逐版历史提交。
 
@@ -18,7 +18,7 @@
 | 5 | 3.5.3 | NEW-PRODUCT-REMINDER-3.5.3-ACCEPTANCE.md | 原第五次节点遗漏；现已补交7d03ff0 |
 | 6 | 3.6.0 | REMINDER-CONTROLS-3.6.0-ACCEPTANCE.md | 已补交7d03ff0 |
 
-**截至3.6.0的6次积压已经补交完成。** 新批次从该次成功补交后累计；3.6.1至3.6.5已交付，记为第5次，不因开发、中途修正或文档修改重复计数。本轮5次已提交并推送0ec9af9且远端核对一致；下一批次当前5次（3.6.6、3.6.7、3.6.8、3.6.9、3.7.0），本次须提交并推送；不重算或删除这批真实交付记录。
+**截至3.6.0的6次积压已经补交完成。** 新批次从该次成功补交后累计；3.6.1至3.6.5已交付，记为第5次，不因开发、中途修正或文档修改重复计数。本轮5次已提交并推送0ec9af9且远端核对一致；3.6.6至3.7.0这批5次已提交并推送`688ae3b532ac08985c01ba19a9e6f941721be52b`且核对远端；下一批从3.7.1开始，不删除真实交付记录。
 
 | 新批次累计次数 | 实际交付标号 | 验收记录 | 本地提交／GitHub状态 |
 | --- | --- | --- | --- |
@@ -96,14 +96,15 @@
 8.23.0 adds Windows 10 x64 platform compatibility and a current-user NSIS installer, preserving business rules and the existing database schema. Mac ZIP regression is verified separately; Windows installation and real connection validation remain pending user-machine acceptance. Existing 8.22 artifacts and installed applications remain untouched. See WINDOWS-8.23-ACCEPTANCE.md.
 
 
-### 下一批：3.6.6起（2026-10-17）
+### 第二批：3.6.6至3.7.0（2026-10-17，已推送）
 
 | 累计交付次数 | 实际交付标号 | 验收记录 | 本地提交／GitHub状态 |
 | --- | --- | --- | --- |
-| 1 | 3.6.6 | HISTORY-LAYOUT-3.6.6-ACCEPTANCE.md | 尚未到5次节点，当轮未提交／未推送，HEAD保持0ce167c |
-| 2 | 3.6.7 | CHAT-MESSAGE-LINKS-3.6.7-ACCEPTANCE.md | 尚未到5次节点，当轮未提交／未推送，HEAD保持0ce167c |
-| 3 | 3.6.8 | COMPOSER-TRANSLATION-3.6.8-ACCEPTANCE.md | 尚未到5次节点，当轮未提交／未推送，HEAD保持0ce167c |
-| 4 | 3.6.9 | QUICK-REPLIES-3.6.9-ACCEPTANCE.md | 尚未到5次节点，本轮未提交／未推送，HEAD保持0ce167c |
+| 1 | 3.6.6 | HISTORY-LAYOUT-3.6.6-ACCEPTANCE.md | 已随本批5次提交并推送688ae3b，远端已核对 |
+| 2 | 3.6.7 | CHAT-MESSAGE-LINKS-3.6.7-ACCEPTANCE.md | 已随本批5次提交并推送688ae3b，远端已核对 |
+| 3 | 3.6.8 | COMPOSER-TRANSLATION-3.6.8-ACCEPTANCE.md | 已随本批5次提交并推送688ae3b，远端已核对 |
+| 4 | 3.6.9 | QUICK-REPLIES-3.6.9-ACCEPTANCE.md | 已随本批5次提交并推送688ae3b，远端已核对 |
+| 5 | 3.7.0 | PRODUCT-SYNC-WORKFLOW-3.7.0-ACCEPTANCE.md | 已随本批5次提交并推送688ae3b，远端已核对 |
 
 本版修复旧消息读取入口和订单操作列；同一候选内的修正、验证与文档更新不重复计数。上一批0ec9af9的成功推送与0ce167c文档回执保持。
 
@@ -116,4 +117,7 @@
 2026-10-17授权后复验：用户明确完成系统授权；正在运行的3.6.9安全存储检查85ms成功，虚构中文真实翻译923ms返回有效英文。只补充核验记录，不修改应用/版本/交付次数，本批仍4/5。详见TRANSLATION-AUTHORIZATION-3.6.9-VERIFICATION.md。
 
 
-2026-10-17本轮：3.7.0为本批第5次实际交付，三步同步与来源统计、62项相关单元及16项最终成品回归通过；交付路径为项目交付/聊单助手3.7.0/聊单助手.app，旧App保留。正式商品/话术哈希保持，不写网站或发送消息。验收见PRODUCT-SYNC-WORKFLOW-3.7.0-ACCEPTANCE.md。本次结束前提交并推送本批3.6.6至3.7.0，成功后追加真实远端收据，不把待提交写成已推送。
+2026-10-17本轮：3.7.0为本批第5次实际交付，三步同步与来源统计、62项相关单元及16项最终成品回归通过；交付路径为项目交付/聊单助手3.7.0/聊单助手.app，旧App保留。正式商品/话术哈希保持，不写网站或发送消息。验收见PRODUCT-SYNC-WORKFLOW-3.7.0-ACCEPTANCE.md。本批3.6.6至3.7.0已提交并推送688ae3b，远端已核对，完整收据如下。
+
+
+2026-10-17第五次节点收据：本批3.6.6至3.7.0的源码、测试及必要文档共55个文件已提交并成功推送GitHub，应用发布提交`688ae3b532ac08985c01ba19a9e6f941721be52b`，远端main已核对同值。App、证据、依赖、正式资料及凭据未纳入。下一批从3.7.1开始计数；本收据仅更新工作区文档，不修改或重打包3.7.0 App，不增加应用迭代。此前同批各版“未到节点”的文字仍表示当时状态。
