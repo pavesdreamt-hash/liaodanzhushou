@@ -1,3 +1,4 @@
+import {confirmReminder} from './verified-reminder-helper.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp,mkdir,rm} from 'node:fs/promises';
@@ -15,7 +16,7 @@ const web=(number='OLD',publishStatus=1,stockQuantity=5)=>({remoteProductId:`web
 const relation=(source,number)=>({...assignSourceKeys([source])[0],businessId:number,status:'正常'});
 const catalog=(products=[web(),web('006',0,10),web('007',1,9)])=>({mappingCatalog:products,mappingCatalogRun:{at:'2026-10-09T01:01:00Z'},dailyPending:[]});
 const fresh=(store,data=catalog())=>store.refreshSourceChanges({catalog:data,websiteCheck:'verified'});
-const close=(store,id)=>store.reviewSourceTask({taskId:id,operation:'close',confirmed:true});
+const close=(store,id)=>confirmReminder(store,{taskId:id,operation:'close',confirmed:true});
 async function fixture(run,next=[old,six,seven]){const directory=await mkdtemp(path.join(os.tmpdir(),'reminder-controls-')),paths={state:path.join(directory,'state'),snapshots:path.join(directory,'snapshots')};await mkdir(paths.snapshots);const store=new LocalInventoryStore(paths);try{await store.recordCollection(snapshot([old]));let doc=await store.read();doc.mappingRows=[relation(old,'OLD')];await writeJSON(store.file,doc);await fresh(store);await store.recordCollection(snapshot(next,1));await fresh(store);await run(store,paths);}finally{await rm(directory,{recursive:true,force:true});}}
 test('006/007已有网站但关系未确认：查看与持续提醒独立，人工确认关闭才由本机刷新移走',async()=>fixture(async store=>{
  let view=await fresh(store),task=view.pending.find(row=>row.current.sourceName===seven.sourceName);assert.equal(task.newProductPending,true);

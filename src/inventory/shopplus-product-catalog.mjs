@@ -1,3 +1,4 @@
+import {websitePriceEvidence} from '../../shared/website-price-rule.mjs';
 import {createHash} from 'node:crypto';
 import {mkdir,readFile,rename,unlink,writeFile} from 'node:fs/promises';
 import path from 'node:path';
@@ -225,7 +226,7 @@ export class ShopPlusProductCatalog {
       const images=imageRecords(product);
       return {...product,images,image:images[0]||null,sourceImageCount:Number.isSafeInteger(product?.sourceImageCount)?product.sourceImageCount:images.length};
     });
-    const archivedProducts=(parsed.version===2&&Array.isArray(parsed.archivedProducts)?parsed.archivedProducts:[]).slice(0,SHOPPLUS_PRODUCT_ARCHIVE_LIMIT).map(product=>{
+    const archivedProducts=([2,3].includes(parsed.version)&&Array.isArray(parsed.archivedProducts)?parsed.archivedProducts:[]).slice(0,SHOPPLUS_PRODUCT_ARCHIVE_LIMIT).map(product=>{
       const images=imageRecords(product);
       return {...product,images,image:images[0]||null,sourceImageCount:Number.isSafeInteger(product?.sourceImageCount)?product.sourceImageCount:images.length};
     });
@@ -603,6 +604,30 @@ export class ShopPlusProductCatalog {
     return this.serial(async()=>{
       await this.load();this.state.listingReviewCheckedAt=this.now().toISOString();await this.persist();return this.state.listingReviewCheckedAt;
     });
+  }
+  async identityRecords(){return this.serial(async()=>{await this.load();const records=new Map();for(const p of [...(this.state.mappingCatalog||[]),...(this.state.archivedProducts||[]),...this.state.products])records.set(p.remoteProductId,{remoteProductId:p.remoteProductId,productNumber:p.productNumber,sourceName:p.sourceName,name:p.localName||p.sourceName,websitePriceAed:p.websitePriceAed,publishStatus:p.publishStatus,stockKnown:p.stockKnown,stockQuantity:p.stockQuantity});return [...records.values()];});}
+  async rebindSourceIdentity({remoteProductId,source}){return this.serial(async()=>{await this.load();const update=p=>p.remoteProductId===remoteProductId?{...p,sourcePricing:{...p.sourcePricing,status:'matched',sourceName:source.sourceName,sourceKey:source.sourceKey,sourceRow:source.sourceRow,sourceRows:sourceRows(source),sourceStock:sourceStock(source.stock),reason:'来源名称已衔接，价格资料仍按单品回读/同步流程更新'}}:p;this.state.products=this.state.products.map(update);this.state.archivedProducts=(this.state.archivedProducts||[]).map(update);await this.persist();});}
+  async readOne({remoteProductId,readProduct,expectedProductNumber}={}){
+    return this.serial(async()=>{
+      await this.load();const id=text(remoteProductId,160),active=this.state.products.find(p=>p.remoteProductId===id),archived=(this.state.archivedProducts||[]).find(p=>p.remoteProductId===id),mapped=(this.state.mappingCatalog||[]).find(p=>p.remoteProductId===id),previous=active||archived||mapped;
+      if(!id||!previous)throw catalogError('没有找到这条提醒对应的网站商品，请先核对对应关系','SHOPPLUS_PRODUCT_NOT_FOUND');
+      const matchingIds=expectedProductNumber?new Set([...this.state.products,...(this.state.archivedProducts||[]),...(this.state.mappingCatalog||[])].filter(p=>normalizedIdentifier(p.productNumber)===normalizedIdentifier(expectedProductNumber)).map(p=>p.remoteProductId)):null;
+      if(expectedProductNumber&&(normalizedIdentifier(previous.productNumber)!==normalizedIdentifier(expectedProductNumber)||matchingIds.size!==1))throw catalogError('网站商品与已确认的对应关系不一致，未读取','SHOPPLUS_PRODUCT_READBACK_MISMATCH');
+      if(typeof readProduct!=='function')throw catalogError('单品读取暂不可用','SHOPPLUS_PRODUCT_READ_UNAVAILABLE');
+      const raw=await readProduct(id),next=candidate(raw?.productVO||raw?.product||raw);
+      if(!next||next.remoteProductId!==id)throw catalogError('网站返回的商品 ID 不一致，未保存此次核对','SHOPPLUS_PRODUCT_READBACK_MISMATCH');
+      const priceEvidence=websitePriceEvidence(raw?.productVO||raw?.product||raw);next.websitePriceAed=priceEvidence.websitePriceAed;
+      const at=this.now().toISOString(),updated={...retainedProduct(next,previous,at),priceEvidence,refresh:{status:'refreshed',at}};
+      if(active)this.state.products=this.state.products.map(p=>p.remoteProductId===id?updated:p);
+      if(archived)this.state.archivedProducts=this.state.archivedProducts.map(p=>p.remoteProductId===id?updated:p);
+      if(mapped)this.state.mappingCatalog=this.state.mappingCatalog.map(p=>p.remoteProductId===id?{...next,productNumber:mapped.productNumber||next.productNumber,image:null,images:[],capturedAt:at,updatedAt:at}:p);
+      this.state.singleReadRun={at,remoteProductId:id};await this.persist();
+      // Return only this product's fields, without loading any image bytes or a full catalogue view.
+      const {images,image,...fields}=copied(updated);return {...fields,name:updated.localName||updated.sourceName,image:null,images:[],readbackAt:at};
+    });
+  }
+  async applySingleSourcePrices({remoteProductId,source}={}){
+    return this.serial(async()=>{await this.load();const id=text(remoteProductId,160),update=p=>p.remoteProductId===id?{...p,costPriceAed:aedAmount(source.cost),suggestedPriceAed:aedAmount(source.suggestedPrice),sourcePricing:{...p.sourcePricing,status:'matched',sourceBusinessId:source.businessId,sourceName:source.sourceName,sourceRow:source.sourceRow,sourceRows:sourceRows(source),sourceStock:sourceStock(source.stock),costPriceAed:aedAmount(source.cost),suggestedPriceAed:aedAmount(source.suggestedPrice)}}:p;this.state.products=this.state.products.map(update);this.state.archivedProducts=(this.state.archivedProducts||[]).map(update);await this.persist();});
   }
   async recordWebsiteUpdate({remoteProductId,raw,action,manualLock}={}){
     return this.serial(async()=>{

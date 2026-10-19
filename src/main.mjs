@@ -1,3 +1,5 @@
+import {SourceRenameService} from './mapping/source-rename.mjs';
+import {PriceTaskVerification} from './inventory/price-task-verification.mjs';
 import {sameSourceIdentity} from './sync/source-changes.mjs';
 import {ProductSyncWorkflow} from './inventory/sync-workflow.mjs';
 import {ManualChat} from './manual-chat.mjs';
@@ -371,7 +373,7 @@ async function bootstrap(){
   handler('app:status',()=>orchestrator.status());handler('kdocs:open-external',async()=>{await shell.openExternal(SOURCE_URL);return {opened:true};});handler('shopplus:open-product',async payload=>{const productId=String(payload?.remoteProductId||'').trim();if(!/^[A-Za-z0-9_-]{1,80}$/.test(productId))throw new Error('ShopPlus 商品 ID 无效，无法打开商品后台');const url=`https://portal.shoplus.net/admin/products/${encodeURIComponent(productId)}`;await shell.openExternal(url);return {opened:true,url};});handler('kdocs:login',()=>orchestrator.login());handler('kdocs:login-status',()=>orchestrator.kdocsLoginStatus());
   const refreshOrderInventory=async()=>{const view=await orchestrator.localInventory();orderApp?.syncInventoryProducts(view?.current?.products||[]);return view;};
   handler('google:connect',()=>orchestrator.connectGoogle());handler('google:open',async()=>{await shell.openExternal(TARGET_SPREADSHEET_URL);return {opened:true,url:TARGET_SPREADSHEET_URL};});handler('sync:start',async()=>{const result=await orchestrator.sync();await refreshOrderInventory();return result;});handler('source:sync-local',async()=>{const result=await orchestrator.syncSourceLocal();await refreshOrderInventory();return result;});handler('sync:mapping',async p=>{const result=await orchestrator.submitMapping(p?.answers,p||{});await refreshOrderInventory();return result;});
-  handler('mapping:status',()=>orchestrator.mappingStatus());handler('inventory:local',refreshOrderInventory);
+  handler('mapping:status',async()=>{const relations=await sourceRenameService.reconcile(),value=await orchestrator.mappingStatus();if(value.mapping)value.mapping.retired=(await orchestrator.localStore.read()).sourceRelationHistory?.filter(r=>!r.reappearedAt).map(r=>({...r,inactive:true}))||[];return {...value,relationUpdates:{automatic:relations.receipts.length,warnings:relations.warnings}};});handler('inventory:local',refreshOrderInventory);
   handler('app:recent',()=>orchestrator.recent());handler('app:diagnostics',exportDiagnostics);handler('app:renderer-error',value=>{lifecycle('renderer-js','渲染页面JavaScript异常',{message:String(value?.message||'未知错误').slice(0,800),source:String(value?.source||'').slice(0,500),line:Number(value?.line)||0});return true;});
   const orders=()=>{if(!orderApp)throw Object.assign(new Error(orderDatabaseError?.message||'订单数据库不可用'),{code:'ORDER_DATABASE_UNAVAILABLE',stage:'订单数据库'});return orderApp;};
   for(const [method,operation] of Object.entries({linkAssistantOnlineMessages:p=>orders().assistant.online.linkPending(p),assistantOnlineSync:p=>orders().assistant.online.state(p),setAssistantOnlineSync:p=>orders().assistant.online.configure(p),refreshAssistantChat:p=>orders().assistant.history.refresh(p),assistantHistory:p=>orders().assistant.history.state(p),syncAssistantHistory:p=>orders().assistant.history.sync(p),cancelAssistantHistory:p=>orders().assistant.history.cancel(p),importAssistantHistory:p=>orders().assistant.history.import(p),applyAssistantHistory:p=>orders().assistant.history.apply(p),assistantPolicy:()=>orders().assistant.policy.state(),saveAssistantPolicy:p=>orders().assistant.policy.save(p),assistantWorkflow:p=>orders().assistant.policy.workflow(p.orderId),saveAssistantStage:p=>orders().assistant.policy.records.save(p),assistantReminders:()=>orders().assistant.policy.records.reminders(),assistantWorkspace:p=>orders().assistant.workspace.state(p),saveAssistantWorkspace:p=>orders().assistant.workspace.save(p),assistantMessages:p=>orders().assistant.workspace.messages(p),assistantActivity:p=>orders().assistant.workspace.activity(p),assistantTranslations:p=>orders().assistant.ai.translations(p),generateAssistantReply:p=>orders().assistant.ai.generate(p)}))handler('orders:'+method,operation);
@@ -394,11 +396,18 @@ async function bootstrap(){
   handler('orders:configure-order-sync-schedule',payload=>{const schedule=orders().configureOrderSyncSchedule(payload);scheduleShopPlusOrderSync();return schedule;});
   handler('orders:shopplus-sync-attention',()=>orders().shopPlusSyncAttention());
   handler('orders:acknowledge-shopplus-sync-attention',payload=>orders().acknowledgeShopPlusSyncAttention(payload));
-  const productSyncWorkflow=new ProductSyncWorkflow(paths);
+  const productSyncWorkflow=new ProductSyncWorkflow(paths),priceTaskVerification=new PriceTaskVerification({store:orchestrator.localStore,catalog:shopPlusProductCatalog,readProduct:id=>shopPlusConnection.productDetail(id)});
   const shopPlusProductStatus=async()=>{const catalog=await shopPlusProductCatalog.getView();return {catalog,sourceChanges:await orchestrator.sourceChanges(catalog),workflow:await productSyncWorkflow.view(),status:await shopPlusConnection.status()};};
   handler('source:changes',async()=>orchestrator.sourceChanges(await shopPlusProductCatalog.getView()));
   handler('source:refresh-reminders',async()=>orchestrator.localStore.refreshReviewedReminders());
-  handler('source:review-task',async payload=>{await orchestrator.localStore.reviewSourceTask(payload||{});return orchestrator.sourceChanges(await shopPlusProductCatalog.getView());});
+  handler('source:review-task',async payload=>{if(payload?.operation==='close'){const document=await orchestrator.localStore.read(),task=document.sourceChanges?.tasks?.find(t=>t.id===payload.taskId&&!t.resolved);if(task?.kind==='price'){const result=await priceTaskVerification.confirm(payload);if(!result.closed)throw new Error(result.reason||'单品价格尚未核验通过，提醒保留');return result.changes;}}return orchestrator.localStore.reviewSourceTask(payload||{});});
+  const sourceRenameService=new SourceRenameService({store:orchestrator.localStore,catalog:shopPlusProductCatalog,afterSaved:()=>{orchestrator.pending=null;}});
+  orchestrator.reconcileSourceRelations=async()=>{const result=await sourceRenameService.reconcile();return result.changed;};
+  handler('source:retired-mapping',payload=>orchestrator.localStore.changeRetiredSource(payload||{}));
+  handler('source:rename-options',payload=>sourceRenameService.options(payload||{}));
+  handler('source:confirm-rename',payload=>sourceRenameService.confirm(payload||{}));
+  handler('source:read-price-task',payload=>priceTaskVerification.read(payload||{}));
+  handler('source:confirm-price-task',payload=>priceTaskVerification.confirm(payload||{}));
   handler('source:decide-replacement',async payload=>{await orchestrator.localStore.decideReplacement(payload||{});return orchestrator.sourceChanges(await shopPlusProductCatalog.getView());});
   handler('orders:shopplus-product-catalog',shopPlusProductStatus);
   handler('orders:chat-product-catalog',async payload=>{

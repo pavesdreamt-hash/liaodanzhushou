@@ -1,3 +1,4 @@
+import {confirmReminder} from './verified-reminder-helper.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp,mkdir,rm} from 'node:fs/promises';
@@ -22,16 +23,16 @@ test('重复同步本次新增0不覆盖首次新增待办；库存/价格变化
   await store.recordCollection(snap([old,added],2));view=await fresh(store);assert.equal(view.report.summary.added,0);assert.equal(view.pending[0].id,id);assert.equal(view.pending[0].originKind,'added');
   await store.recordCollection(snap([old,{...added,sourceRow:121,stock:'无货',cost:'46'}],3));view=await fresh(store);task=view.pending.find(task=>task.originKind==='added');assert.equal(task.id,id);assert.equal(task.kind,'added');assert.equal(task.newProductPending,true);assert.equal(task.current.sourceRow,121);assert.equal(task.current.stock,'无货');assert.equal(view.pending.filter(task=>task.originKind==='added').length,1);assert.equal(view.pending.filter(task=>task.kind==='price').length,1);
 }));
-test('已查看、本机刷新与重启仍保留未对应新品，非新增价格提醒仍按原规则移走',async()=>fixture(async(store,paths)=>{
+test('已查看、本机刷新与重启仍保留未对应新品，非新增价格提醒经单品核验人工确认后移走',async()=>fixture(async(store,paths)=>{
   let view=await fresh(store),task=view.pending[0];await store.reviewSourceTask({taskId:task.id,confirmed:true});const before=await store.read();
   view=await store.refreshReviewedReminders();assert.equal(view.pending.length,1);assert.equal(view.localRefresh.closed,0);assert.ok(view.pending[0].reviewed);assert.equal(view.pending[0].newProductPending,true);assert.deepEqual((await store.read()).latestCollection,before.latestCollection);
   view=await new LocalInventoryStore(paths).refreshReviewedReminders();assert.equal(view.pending[0].id,task.id);assert.equal(view.localRefresh.closed,0);
-  await store.recordCollection(snap([{...old,cost:'40'},added],2));view=await fresh(store);const price=view.pending.find(task=>task.kind==='price');await store.reviewSourceTask({taskId:price.id,operation:'close',confirmed:true});view=await store.refreshReviewedReminders();assert.equal(view.localRefresh.closed,1);assert.equal(view.pending.length,1);assert.equal(view.pending[0].originKind,'added');assert.equal(view.reviewHistory.find(task=>task.id===price.id).completion.type,'manual');
+  await store.recordCollection(snap([{...old,cost:'40'},added],2));view=await fresh(store);const price=view.pending.find(task=>task.kind==='price');await confirmReminder(store,{taskId:price.id,operation:'close',confirmed:true});view=await store.refreshReviewedReminders();assert.equal(view.localRefresh.closed,1);assert.equal(view.pending.length,1);assert.equal(view.pending[0].originKind,'added');assert.equal(view.reviewHistory.find(task=>task.id===price.id).completion.type,'manual');
 }));
 test('网站实际存在且唯一对应成功回读后结束新增标记；后续补库存/上架仍按原规则',async()=>fixture(async store=>{
   await fresh(store);let doc=await store.read();doc.mappingRows.push(relation(added,'NEW'));await writeJSON(store.file,doc);
   let view=await fresh(store,[web(),web('NEW',0,0)]),task=view.pending[0];assert.equal(task.newProductPending,false);assert.equal(task.newProductMatch.remoteProductId,'web-NEW');assert.equal(task.action,'replenish');assert.equal(task.resolved,false);
-  await store.reviewSourceTask({taskId:task.id,operation:'close',confirmed:true});view=await store.refreshReviewedReminders();assert.equal(view.pending.length,0);assert.equal(view.localRefresh.closed,1);
+  await confirmReminder(store,{taskId:task.id,operation:'close',confirmed:true});view=await store.refreshReviewedReminders();assert.equal(view.pending.length,0);assert.equal(view.localRefresh.closed,1);
 }));
 test('仅填编号、缓存/读取失败/未返回/歧义/不完整快照不能结束新增持续提醒',async()=>{
   for(const mode of ['missing','cached','failed','duplicate','quality','source-duplicate','incomplete-missing'])await fixture(async store=>{

@@ -34,6 +34,8 @@ declare global {
       kdocsLoginStatus?: () => Promise<{ok: boolean; data?: unknown; error?: {message?: string}}>;
       sync?: () => Promise<unknown>;
       syncSourceLocal?: () => Promise<{ok: boolean; data?: unknown; error?: {message?: string}}>;
+      readPriceTask?: (payload:{taskId:string}) => Promise<{ok:boolean;data?:any;error?:{message?:string}}> ;
+      confirmPriceTask?: (payload:{taskId:string;verificationId:string;confirmed:boolean}) => Promise<{ok:boolean;data?:any;error?:{message?:string}}> ;
       sourceChanges?: () => Promise<{ok: boolean; data?: unknown; error?: {message?: string}}>;
       decideSourceReplacement?: (payload: unknown) => Promise<{ok: boolean; data?: unknown; error?: {message?: string}}>;
       reviewSourceTask?: (payload: unknown) => Promise<{ok: boolean; data?: unknown; error?: {message?: string}}>;
@@ -41,6 +43,9 @@ declare global {
       dailySourceSync?: () => Promise<{ok: boolean; data?: unknown; error?: {message?: string}}>;
       onProgress?: (callback: (value: {stage?: string; message?: string; currentRow?: number; endRow?: number}) => void) => () => void;
       onAssistantChanged?: (callback: (value: unknown) => void) => () => void;
+      sourceRenameOptions?: (payload?: any) => Promise<{ok:boolean;data?:any;error?:{message?:string}}> ;
+      confirmSourceRename?: (payload:any) => Promise<{ok:boolean;data?:any;error?:{message?:string}}> ;
+      changeRetiredSource?: (payload:any) => Promise<{ok:boolean;data?:any;error?:{message?:string}}> ;
       mappingStatus?: () => Promise<{ok: boolean; data?: unknown; error?: {message?: string}}>;
       submitMapping?: (answers: unknown, confirmFirstSync: boolean) => Promise<{ok: boolean; data?: unknown; error?: {message?: string}}>;
     };

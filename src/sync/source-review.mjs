@@ -7,6 +7,7 @@ export const unmatchedNewProduct=task=>(task.originKind==='added'||task.kind==='
 export function restoreNewProductTasks(changes,snapshot,mappings=[]){
   const origins=new Set((changes.history||[]).flatMap(report=>(report.rows||[]).filter(row=>['added','replacement'].includes(row.kind)).map(row=>row.id+':current')));
   for(const task of changes.tasks||[]){
+    if(task.renameReceiptId)continue;
     if(task.kind!=='added'&&task.originKind!=='added'&&!origins.has(task.id))continue;
     task.originKind='added';
     const current=(snapshot?.products||[]).filter(row=>sameSourceIdentity(row,task.after||task.current||task.before));
@@ -28,6 +29,7 @@ export function mergeSourceSeeds(tasks,seeds,at){
     if(seed.kind==='price')for(const field of seed.fields){const previous=pending.fields.find(item=>item.field===field.field);if(previous)previous.after=field.after;else pending.fields.push(field);}
     else if(seed.kind==='modified'&&pending.kind!=='added'&&pending.originKind!=='added')pending.kind=seed.kind;
     delete pending.reviewed;delete pending.reminder; // A new event requires a new decision.
+    if(seed.kind==='price'){delete pending.priceVerification;delete pending.priceCloseReceipt;}
   }
   return tasks;
 }
@@ -85,7 +87,7 @@ export function applyTaskReviews(tasks,{applyReviewed=false}={}){
     const fingerprint=reviewFingerprint(task),reviewed=task.reviewed?.fingerprint===fingerprint?task.reviewed:undefined;
     const reminder=task.reminder?.mode==='close-pending'&&task.reminder.fingerprint!==fingerprint?undefined:task.reminder;
     if(reminder?.mode==='close-pending'){
-      if(applyReviewed)return {...task,reviewed,reminder,resolved:true,reason:'已人工确认关闭本次提醒。',completion:{type:'manual',notificationOnly:true,at:new Date().toISOString(),reviewedAt:reviewed?.at,reason:task.kind==='price'?'已人工核对价格并关闭本次提醒；不修改网站价格。':'人工关闭提醒；不代表系统对齐或商品身份/对应关系已确认。'}};
+      if(applyReviewed)return {...task,reviewed,reminder,resolved:true,reason:'已人工确认关闭本次提醒。',completion:{type:'manual',notificationOnly:true,at:new Date().toISOString(),reviewedAt:reviewed?.at,reason:task.kind==='price'?(task.priceCloseReceipt?.type==='acknowledged'?'已知晓价格提示，人工关闭本次提醒；不代表网站价格达标，不修改网站价格。':'已人工核对价格并关闭本次提醒；不修改网站价格。'):'人工关闭提醒；不代表系统对齐或商品身份/对应关系已确认。'}};
       return {...task,reviewed,reminder,resolved:false,completion:undefined};
     }
     if(['continue','close-ready'].includes(reminder?.mode))return {...task,reviewed,reminder,resolved:false,completion:undefined,reason:task.resolved?`${task.reason}已选择持续提醒，可人工关闭本次提醒。`:task.reason};

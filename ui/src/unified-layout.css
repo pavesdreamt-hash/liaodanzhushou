@@ -122,3 +122,24 @@ html,body{margin:0;padding:0;height:100%;min-height:0;overflow:hidden;background
 @media(max-width:820px){.product-sync-dialog .product-sync-option{min-height:0}.source-change-counts{grid-template-columns:repeat(2,minmax(0,1fr))}}
 
 .product-sync-dialog .product-sync-footer{position:sticky;bottom:0;z-index:3;background:#fff;padding-top:12px}
+
+/* D-211: compare the same product field in one row; retain the shared dialog shell. */
+.source-task-view.live-dialog{box-sizing:border-box;width:min(880px,calc(100vw - 32px));max-width:min(880px,calc(100vw - 32px));display:flex;flex-direction:column;overflow:hidden;max-height:calc(100vh - 32px)}
+.source-task-view h2{margin:0 0 8px;font-size:20px}.source-task-view .source-task-meta{font-size:12px;color:#756b80;margin:0 0 14px}
+.source-task-content{min-height:0;overflow:auto}.source-task-table-scroll{overflow:auto}
+.source-task-table{width:100%;min-width:690px;table-layout:fixed;border-collapse:collapse;font-size:13px;line-height:1.6}
+.source-task-table th,.source-task-table td{padding:9px 10px;text-align:left;border:1px solid #e8e1f0;overflow-wrap:anywhere;vertical-align:top;white-space:pre-line}
+.source-task-table thead th{background:#f8f5fc;font-weight:600}.source-task-table thead th:first-child{width:19%}.source-task-table tbody th{font-weight:500;color:#5f556e;background:#fcfaff}
+.source-task-table .is-changed th,.source-task-table .is-changed td:nth-child(2),.source-task-table .is-changed td:nth-child(3){background:#fff3cf;color:#7f5000}
+.source-task-change-badge{display:block;font-size:11px;font-weight:600;color:#9a6200}.source-task-table .is-price-low{color:#b42318;background:#fff0ed;font-weight:600}
+.source-task-notice{margin-top:12px;padding:10px 12px;background:#f8f5fc;border-radius:8px;font-size:12px;line-height:1.7}.source-task-notice p{margin:4px 0 0!important;font-size:12px;white-space:pre-line}.source-task-notice.is-change,.source-task-notice.is-price{background:#fff6dc;color:#81571c}
+.source-task-view footer{flex:none;display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end;padding-top:14px;margin-top:0!important;background:#fff}.source-task-view footer button{white-space:normal}
+.source-task-notice.is-passed{background:#e8f7ef;color:#08764b}.source-task-notice.is-failed{background:#fff0ed;color:#a52a1f}
+.source-task-action-result{font-size:12px!important;line-height:1.6;color:#665870;margin:10px 0 0!important;flex:none}
+.source-price-close-confirm footer{display:flex;justify-content:flex-end;gap:8px}
+
+/* D-212: reuse source comparison and shared dialog styles for an explicit identity decision. */
+.source-rename-dialog.live-dialog{box-sizing:border-box;width:min(720px,calc(100vw - 32px));max-width:calc(100vw - 32px);max-height:calc(100vh - 32px);overflow:auto}
+.source-rename-dialog .source-task-table{min-width:0;table-layout:auto}.source-rename-dialog .source-task-table th{width:28%}
+.source-rename-dialog p{font-size:13px;line-height:1.7;overflow-wrap:anywhere}.source-rename-dialog footer{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px;position:sticky;bottom:0;background:white;padding-top:12px}
+.source-rename-action{white-space:normal}

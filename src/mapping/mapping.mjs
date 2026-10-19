@@ -35,6 +35,7 @@ export function applyWizardAnswers(wizard,answers){
     // saving another row never changes it incidentally.
     if(byKey.has(row.sourceKey)){
       const answer=byKey.get(row.sourceKey),nextBusinessId=answer.businessId;
+      if(row.status==='来源已移除')throw new AppError('来源已移除，旧关系已停用；请在已移除记录中清理，不能重新确认对应',{stage:'商品映射',code:'SOURCE_RELATION_RETIRED'});
       if(answer.action==='ignore'){
         businessId='';status='本机已忽略';
         note=`${note}${note?'；':''}本机标记为重复项并忽略`;
@@ -63,7 +64,7 @@ export function reconcileMappings(sourceProducts,existing){
   const current=assignSourceKeys(sourceProducts.filter(r=>coreText(r.sourceName))),byKey=new Map(existing.map(r=>[r.sourceKey,r])),matchedOld=new Set();
   const continuityName=value=>normalizedSourceName(value).replace(/\([^)]*[a-z]{1,8}\d[a-z0-9-]*[^)]*\)/gi,'').replace(/\s+/g,' ').trim();
   const fallbackGroups=Map.groupBy(existing,r=>continuityName(r.sourceName)),matches=new Map();
-  for(const record of current){const exact=byKey.get(record.sourceKey);if(exact&&!matchedOld.has(exact.sourceKey)&&sameSourceIdentity(exact,record)&&existing.filter(old=>sameSourceIdentity(old,record)&&old.status!=='来源已移除').length<=1&&current.filter(peer=>sameSourceIdentity(peer,record)).length===1){matches.set(record.sourceKey,exact);matchedOld.add(exact.sourceKey);}}
+  for(const record of current){const exact=byKey.get(record.sourceKey);if(exact&&exact.status!=='来源已移除'&&!matchedOld.has(exact.sourceKey)&&sameSourceIdentity(exact,record)&&existing.filter(old=>sameSourceIdentity(old,record)&&old.status!=='来源已移除').length<=1&&current.filter(peer=>sameSourceIdentity(peer,record)).length===1){matches.set(record.sourceKey,exact);matchedOld.add(exact.sourceKey);}}
   // A new snapshot may consolidate several old row-level entries into one
   // named source product. Never let their former order choose a website product
   // silently. We only carry a single already-confirmed relationship forward;
@@ -81,7 +82,7 @@ export function reconcileMappings(sourceProducts,existing){
   // sourceKey may legitimately change when KDocs removes a displayed model or
   // stops painting an image. Preserve confirmed business IDs by normalized
   // unique identity; changing D/E/F/G never affects identity.
-  for(const record of current){if(matches.has(record.sourceKey))continue;const name=continuityName(record.sourceName),candidates=(fallbackGroups.get(name)||[]).filter(candidate=>!matchedOld.has(candidate.sourceKey)&&sameSourceIdentity(candidate,record)),active=candidates.filter(candidate=>candidate.status!=='来源已移除'),available=active.length?active:candidates,old=available.length===1&&current.filter(peer=>sameSourceIdentity(peer,record)).length===1?available[0]:null;
+  for(const record of current){if(matches.has(record.sourceKey))continue;const name=continuityName(record.sourceName),candidates=(fallbackGroups.get(name)||[]).filter(candidate=>!matchedOld.has(candidate.sourceKey)&&sameSourceIdentity(candidate,record)),active=candidates.filter(candidate=>candidate.status!=='来源已移除'),available=active,old=available.length===1&&current.filter(peer=>sameSourceIdentity(peer,record)).length===1?available[0]:null;
     if(old){matches.set(record.sourceKey,old);matchedOld.add(old.sourceKey);}}
   const rows=current.map(record=>{
     const old=matches.get(record.sourceKey);
