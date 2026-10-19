@@ -18,6 +18,8 @@ Mac x64/版本3.7.5/稳定Bundle ID com.liaodan.assistant.live/严格深度签�
 
 证据：artifacts/reminder-detail-close-3.7.5中的check-final.log、unit-final.log（124）、packaged-ui-final.log（18）、final/reminder-detail-close截图及IPC/HTTP收据、package-manifest.json、package-identity.json、normal-launch.json、formal-protection.json和source-scope.json。生成证据/私有备份、App、依赖及凭据均不入Git。
 
-本批3.7.1—3.7.5已到第五次，正在完成提交/推送；实际远端收据将在本文件补记。此次为3.7.1—3.7.5的第五次交付，需包含整批源码、测试和必要文档；收据文档不新增应用迭代。
+本批3.7.1—3.7.5五次已成功提交并推送GitHub，应用发布提交8a36b51c8fea6d3f2b98d066fd1a806329edf31e，远端main已核对；下一批从3.7.6开始。此次为3.7.1—3.7.5的第五次交付，已包含整批55个源码、测试和必要文档文件；收据文档不新增应用迭代。
 
 仅本轮范围通过。库存整页进入慢、订单编辑宽度、历史17项全量旧失败及其它整体验收缺口保留，未声称软件全部稳定或真实网站全链路通过。
+
+2026-10-19第五次节点收据：3.7.1—3.7.5五次交付已整理55个源码、测试及必要文档文件，提交`8a36b51c8fea6d3f2b98d066fd1a806329edf31e`并成功推送GitHub，远端main核对同值。App、生成证据、依赖、正式资料及凭据未纳入。此处为后续文档登记，不修改3.7.5 App，也不产生第六次应用迭代。下一批从3.7.6开始。
