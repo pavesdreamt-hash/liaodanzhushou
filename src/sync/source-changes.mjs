@@ -5,6 +5,8 @@ import {stableHash} from '../core/files.mjs';
 
 export const sourceRows=product=>[...new Set((product?.sourceRows?.length?product.sourceRows.map(row=>Number(typeof row==='number'?row:row.sourceRow)):[Number(product?.sourceRow)]).filter(row=>Number.isSafeInteger(row)&&row>0))].sort((a,b)=>a-b);
 const name=value=>(normalizedSourceName(value)||coreText(value).normalize('NFKC').toLowerCase()).replace(/\([^)]*[a-z]{1,8}\d[a-z0-9-]*[^)]*\)/gi,'').replace(/\s+/g,'').trim();
+// Coarse index only; callers still apply sameSourceIdentity to check model compatibility.
+export const sourceIdentityName=product=>name(product?.sourceName);
 // A row number and an occurrence index are positions, never product identities.
 export const sameSourceIdentity=(a,b)=>{
   const left=sourceModel(a?.sourceName),right=sourceModel(b?.sourceName);

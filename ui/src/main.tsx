@@ -18,6 +18,7 @@ import './window-chrome.css';
 import orderLayoutCss from './order-layout.css?raw';
 import {installOrderLayout,type OrderLayoutDesktop} from './order-layout';
 import unifiedCss from './unified-layout.css?raw';
+import inventoryBatchCss from './inventory-batch.css?raw';
 import replyCss from './reply-tools.css?raw';
 import mediaDialogCss from './media-dialog.css?raw';
 import productMediaCss from './product-media.css?raw';
@@ -98,6 +99,7 @@ function ConfirmedApp(){
       +(page==='fb-chat'?moduleStyle('facebook-chat',facebookChatCss):'')
       +moduleStyle('empty-workspace',emptyCss)
       +(restoredPages.has(page)?moduleStyle('restored-pages',restoredCss):'')
+      +(page==='inventory'?moduleStyle('inventory-batch',inventoryBatchCss):'')
       +moduleStyle('hover-hints',hoverHintsCss);
   },[page]);
   const setup=()=>{

@@ -143,3 +143,17 @@ html,body{margin:0;padding:0;height:100%;min-height:0;overflow:hidden;background
 .source-rename-dialog .source-task-table{min-width:0;table-layout:auto}.source-rename-dialog .source-task-table th{width:28%}
 .source-rename-dialog p{font-size:13px;line-height:1.7;overflow-wrap:anywhere}.source-rename-dialog footer{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px;position:sticky;bottom:0;background:white;padding-top:12px}
 .source-rename-action{white-space:normal}
+
+/* Listing verdict in the shared source-task table; symbols include text for accessibility. */
+.source-listing-result{display:inline-block;font-weight:600;font-size:12px;white-space:nowrap;margin-left:4px}.source-listing-result.is-matched{color:#08764b}.source-listing-result.is-mismatched{color:#946000}.source-listing-result.is-unknown{color:#756b82}
+
+/* Approved batch entry and compact new-product reminder. */
+#ui011-inventory .table-wrap table :is(th,td):first-child{padding-left:24px;padding-right:12px;white-space:nowrap;font-variant-numeric:tabular-nums}
+#ui011-inventory .source-pending-head>.source-batch-entry{margin-left:auto;color:#7133d9;border-color:#bba2ed;background:#fff}
+#ui011-inventory .source-pending-head>.source-batch-entry+button{margin-left:0}
+#ui011-inventory .pending-new{margin:9px 12px 0;border:1px solid #e5daf6;border-radius:8px;background:#faf7ff;font-size:11px;color:#735599}
+#ui011-inventory .pending-new>summary{cursor:pointer;padding:7px 11px;min-height:20px;font-weight:600}
+#ui011-inventory .pending-new[hidden]{display:none}
+#ui011-inventory .pending-new-items{border-top:1px solid #eee5f8;padding:8px 11px;max-height:160px;overflow:auto;line-height:1.8}
+#ui011-inventory .pending-new-items>div{padding:3px 0}
+#ui011-inventory .pending-new-items>button{margin-top:6px;padding:4px 9px;color:#7133d9;background:#fff;border:1px solid #d9c8f2;border-radius:5px;font:inherit}

@@ -1,3 +1,5 @@
+import {InventoryBatchEdit} from './inventory/batch-edit.mjs';
+import {SourceTaskReadback} from './inventory/source-task-readback.mjs';
 import {SourceRenameService} from './mapping/source-rename.mjs';
 import {PriceTaskVerification} from './inventory/price-task-verification.mjs';
 import {sameSourceIdentity} from './sync/source-changes.mjs';
@@ -397,7 +399,14 @@ async function bootstrap(){
   handler('orders:shopplus-sync-attention',()=>orders().shopPlusSyncAttention());
   handler('orders:acknowledge-shopplus-sync-attention',payload=>orders().acknowledgeShopPlusSyncAttention(payload));
   const productSyncWorkflow=new ProductSyncWorkflow(paths),priceTaskVerification=new PriceTaskVerification({store:orchestrator.localStore,catalog:shopPlusProductCatalog,readProduct:id=>shopPlusConnection.productDetail(id)});
-  const shopPlusProductStatus=async()=>{const catalog=await shopPlusProductCatalog.getView();return {catalog,sourceChanges:await orchestrator.sourceChanges(catalog),workflow:await productSyncWorkflow.view(),status:await shopPlusConnection.status()};};
+  const inventoryBatch=new InventoryBatchEdit({store:orchestrator.localStore,catalog:shopPlusProductCatalog,connection:shopPlusConnection});
+  handler('inventory:batch-view',()=>inventoryBatch.view());
+  handler('inventory:pending-new-refresh',()=>inventoryBatch.refreshPendingNew());
+  handler('inventory:pending-new-export',()=>inventoryBatch.exportPendingNew());
+  handler('inventory:batch-progress',payload=>inventoryBatch.progress(payload));
+  handler('inventory:batch-refresh',async payload=>{const result=await inventoryBatch.refresh(payload);const catalog=await shopPlusProductCatalog.getView();return {...result,catalog,sourceChanges:await orchestrator.sourceChanges(catalog)};});
+  handler('inventory:batch-execute',async payload=>{const result=await inventoryBatch.execute(payload);const catalog=await shopPlusProductCatalog.getView();return {...result,catalog,sourceChanges:await orchestrator.sourceChanges(catalog)};});
+  const shopPlusProductStatus=async()=>{const catalog=await shopPlusProductCatalog.getView();return {catalog,batch:await inventoryBatch.view(),sourceChanges:await orchestrator.sourceChanges(catalog),workflow:await productSyncWorkflow.view(),status:await shopPlusConnection.status()};};
   handler('source:changes',async()=>orchestrator.sourceChanges(await shopPlusProductCatalog.getView()));
   handler('source:refresh-reminders',async()=>orchestrator.localStore.refreshReviewedReminders());
   handler('source:review-task',async payload=>{if(payload?.operation==='close'){const document=await orchestrator.localStore.read(),task=document.sourceChanges?.tasks?.find(t=>t.id===payload.taskId&&!t.resolved);if(task?.kind==='price'){const result=await priceTaskVerification.confirm(payload);if(!result.closed)throw new Error(result.reason||'单品价格尚未核验通过，提醒保留');return result.changes;}}return orchestrator.localStore.reviewSourceTask(payload||{});});
@@ -406,6 +415,8 @@ async function bootstrap(){
   handler('source:retired-mapping',payload=>orchestrator.localStore.changeRetiredSource(payload||{}));
   handler('source:rename-options',payload=>sourceRenameService.options(payload||{}));
   handler('source:confirm-rename',payload=>sourceRenameService.confirm(payload||{}));
+  const sourceTaskReadback=new SourceTaskReadback({store:orchestrator.localStore,catalog:shopPlusProductCatalog,readProduct:id=>shopPlusConnection.productDetail(id)});
+  handler('source:read-task-record',payload=>sourceTaskReadback.read(payload||{}));
   handler('source:read-price-task',payload=>priceTaskVerification.read(payload||{}));
   handler('source:confirm-price-task',payload=>priceTaskVerification.confirm(payload||{}));
   handler('source:decide-replacement',async payload=>{await orchestrator.localStore.decideReplacement(payload||{});return orchestrator.sourceChanges(await shopPlusProductCatalog.getView());});

@@ -34,8 +34,15 @@ declare global {
       kdocsLoginStatus?: () => Promise<{ok: boolean; data?: unknown; error?: {message?: string}}>;
       sync?: () => Promise<unknown>;
       syncSourceLocal?: () => Promise<{ok: boolean; data?: unknown; error?: {message?: string}}>;
+      readSourceTask?: (payload:{taskId:string}) => Promise<{ok:boolean;data?:any;error?:{message?:string}}> ;
       readPriceTask?: (payload:{taskId:string}) => Promise<{ok:boolean;data?:any;error?:{message?:string}}> ;
       confirmPriceTask?: (payload:{taskId:string;verificationId:string;confirmed:boolean}) => Promise<{ok:boolean;data?:any;error?:{message?:string}}> ;
+      batchView?:()=>Promise<{ok:boolean;data?:any;error?:{message?:string}}>;
+      batchRefreshPendingNew?:()=>Promise<{ok:boolean;data?:any;error?:{message?:string}}>;
+      batchExportPendingNew?:()=>Promise<{ok:boolean;data?:{filename:string;content:string;count:number};error?:{message?:string}}>;
+      batchProgress?:(payload:{requestId:string})=>Promise<{ok:boolean;data?:any;error?:{message?:string}}>;
+      batchRefresh?:(payload:any)=>Promise<{ok:boolean;data?:any;error?:{message?:string}}>;
+      batchExecute?:(payload:any)=>Promise<{ok:boolean;data?:any;error?:{message?:string}}>;
       sourceChanges?: () => Promise<{ok: boolean; data?: unknown; error?: {message?: string}}>;
       decideSourceReplacement?: (payload: unknown) => Promise<{ok: boolean; data?: unknown; error?: {message?: string}}>;
       reviewSourceTask?: (payload: unknown) => Promise<{ok: boolean; data?: unknown; error?: {message?: string}}>;

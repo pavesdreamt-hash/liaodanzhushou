@@ -145,6 +145,21 @@ export class ShopPlusConnection {
     await this.request('products.skus.addOrUpdate',{productId:id,updateProductVariants:[{id:variant,availableStockQuantity:quantity}]});
     return await this.productDetail(id);
   }
+  async updateVariantPrices({productId,variants}={}){
+    const id=identifier(productId,'ShopPlus 商品 ID');
+    if(!Array.isArray(variants)||!variants.length||variants.length>500)throw shopPlusApiError('请选择有效的商品规格','SHOPPLUS_PRICE_INVALID');
+    const seen=new Set(),updateProductVariants=variants.map(v=>{
+      const variant=identifier(v.id,'ShopPlus 变体 ID'),price=typeof v.salePrice==='number'?v.salePrice:Number(v.salePrice);
+      if(seen.has(variant)||v.salePrice===null||v.salePrice===''||typeof v.salePrice==='boolean'||!Number.isFinite(price)||price<0||price>10_000_000||Math.abs(Math.round(price*100)-price*100)>0.00001)throw shopPlusApiError('目标售价或规格无效','SHOPPLUS_PRICE_INVALID');
+      seen.add(variant);return {id:variant,salePrice:price};
+    });
+    const result=await this.request('products.skus.addOrUpdate',{productId:id,updateProductVariants},{timeoutMs:SHOPPLUS_LISTING_WRITE_TIMEOUT_MS});
+    // This SKU endpoint returns a product, unlike the SPU status endpoint's
+    // {result:true}. A code=0 response must reach readback before being judged.
+    const product=result?.productVO||result?.product||result;
+    if(result?.result===false||product?.id!==undefined&&String(product.id)!==String(id))throw shopPlusApiError('售价更新未确认，请重新读取','SHOPPLUS_PRICE_UNCONFIRMED');
+    try{return await this.productDetail(id,{timeoutMs:SHOPPLUS_LISTING_READBACK_TIMEOUT_MS});}catch{throw shopPlusApiError('售价请求已提交，网站回读未完成，请先核对','SHOPPLUS_PRICE_READBACK_UNCERTAIN');}
+  }
   async listLatestOrders({updatedAtMin=null,maxPages=20,limit=50}={}){
     if(!Number.isSafeInteger(maxPages)||maxPages<1||maxPages>20||!Number.isSafeInteger(limit)||limit<1||limit>100)throw shopPlusApiError('同步页数参数无效');
     const orders=[];let page=1,totalCount=null,truncated=false;

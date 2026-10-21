@@ -1,3 +1,4 @@
+import {sourceReadContext,readbackTask} from './source-task-readback.mjs';
 import {sourceRenameOptions,applySourceRename} from '../mapping/source-rename.mjs';
 import {retireMissingSourceRelations,retiredSourceView} from '../mapping/retired-source.mjs';
 import {priceTaskContext,checkPriceProof,priceResult,priceAcknowledgementFingerprint,priceAcknowledgementSource} from './price-task-verification.mjs';
@@ -129,6 +130,30 @@ export class LocalInventoryStore{
     if(document.latestCollection?.quality?.passed!==true||(document.latestCollection.products||[]).some(p=>sameSourceIdentity(p,record.row)))throw Error('来源不完整或该商品已重新出现，不能清理旧记录');
     record.cleared=operation==='clear';record[operation==='clear'?'clearedAt':'restoredAt']=nowIso();document.updatedAt=nowIso();await writeJSON(this.file,document);
     return {retired:retiredSourceView(document)};
+  });}
+  saveSourceReadTask(changes,task){
+    if(changes.tasks.some(t=>t.id===task.id))this.syncTaskRows(changes,task);
+    else{
+      changes.catalogPending=(changes.catalogPending||[]).map(t=>t.id===task.id?task:t);
+      const record=changes.catalogReviews?.[task.id];if(record)Object.assign(record,{task:structuredClone(task),fingerprint:reviewFingerprint(task),reviewed:task.reviewed,reminder:task.reminder});
+    }
+  }
+  async beginSourceRead({taskId,attemptId,records,at}){return this.serial(async()=>{
+    const document=await this.read(),context=await sourceReadContext(this,document,taskId,records);
+    context.task.recordRead={id:attemptId,status:'reading',at};this.saveSourceReadTask(document.sourceChanges,context.task);await writeJSON(this.file,document);return structuredClone(context);
+  });}
+  async finishSourceRead({taskId,attemptId,records,expectedFingerprint,product,at}){return this.serial(async()=>{
+    const document=await this.read(),context=await sourceReadContext(this,document,taskId,records),{task,source,remoteProductId}=context;
+    if(task.recordRead?.id!==attemptId||context.fingerprint!==expectedFingerprint||String(product.remoteProductId)!==String(remoteProductId))throw Error('读取期间来源、商品或对应关系已变化，请重新读取本条记录');
+    const previous=reviewFingerprint(task);task.current=source;task.businessId=source.businessId;task.remoteProductId=remoteProductId;
+    task.website={name:product.name||product.sourceName,publishStatus:product.publishStatus,stockKnown:product.stockKnown,stockQuantity:product.stockQuantity,websitePriceAed:product.websitePriceAed,priceComplete:product.priceEvidence?.complete};
+    task.websiteReadAt=at;task.recordRead={id:attemptId,status:'read',at};
+    if(previous!==reviewFingerprint(task)){delete task.reviewed;if(task.reminder?.mode==='close-pending')delete task.reminder;}
+    this.saveSourceReadTask(document.sourceChanges,task);await writeJSON(this.file,document);return {task:structuredClone(task)};
+  });}
+  async failSourceRead({taskId,attemptId,reason,at}){return this.serial(async()=>{
+    const document=await this.read(),task=readbackTask(document,taskId);if(!task)return null;
+    if(task.recordRead?.id===attemptId){task.recordRead={id:attemptId,status:'failed',at,message:reason};this.saveSourceReadTask(document.sourceChanges,task);await writeJSON(this.file,document);}return structuredClone(task);
   });}
   async beginPriceRead({taskId,attemptId,at}){return this.serial(async()=>{
     const document=await this.read(),context=await priceTaskContext(this,document,taskId);context.task.priceVerification={id:attemptId,status:'reading',at,ruleId:WEBSITE_PRICE_RULE_ID};if(context.task.priceCloseReceipt?.type!=='acknowledged')delete context.task.priceCloseReceipt;this.syncTaskRows(document.sourceChanges,context.task);await writeJSON(this.file,document);return structuredClone(context);

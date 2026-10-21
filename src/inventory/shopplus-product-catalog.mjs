@@ -1,3 +1,4 @@
+import {toPriceFils} from '../../shared/website-price-rule.mjs';
 import {websitePriceEvidence} from '../../shared/website-price-rule.mjs';
 import {createHash} from 'node:crypto';
 import {mkdir,readFile,rename,unlink,writeFile} from 'node:fs/promises';
@@ -112,7 +113,7 @@ function productVariants(raw){
   return variants.map(variant=>{
     const quantity=number(variant?.productVariantInventoryDTO?.availableStockQuantity??variant?.availableStockQuantity??variant?.inventory?.availableStockQuantity);
     const id=text(variant?.id??variant?.variantId,160);
-    return {id:id||null,skuCode:text(variant?.skuCode,160)||null,optionValueNames:text(variant?.optionValueNames,240)||null,stockQuantity:quantity===null?null:Math.max(0,Math.floor(quantity)),isTrackInventory:number(variant?.isTrackInventory??variant?.productVariantInventoryDTO?.isTrackInventory),inventoryPolicy:text(variant?.productVariantInventoryDTO?.inventoryPolicy??variant?.inventoryPolicy,40)||null};
+    return {id:id||null,salePrice:toPriceFils(variant?.salePrice??variant?.price)===null?null:Number(variant?.salePrice??variant?.price),skuCode:text(variant?.skuCode,160)||null,optionValueNames:text(variant?.optionValueNames,240)||null,stockQuantity:quantity===null?null:Math.max(0,Math.floor(quantity)),isTrackInventory:number(variant?.isTrackInventory??variant?.productVariantInventoryDTO?.isTrackInventory),inventoryPolicy:text(variant?.productVariantInventoryDTO?.inventoryPolicy??variant?.inventoryPolicy,40)||null};
   }).filter(variant=>variant.id||variant.stockQuantity!==null);
 }
 
@@ -120,7 +121,7 @@ function candidate(raw){
   const remoteProductId=text(raw?.id??raw?.productId,160),stock=productStock(raw);
   if(!remoteProductId)return null;
   const sourceSpu=text(raw?.spuCode??raw?.spu??'',160),base=(sourceSpu||remoteProductId).replace(/[^A-Za-z0-9_-]/gu,'').slice(0,48)||'PRODUCT';
-  const publish=number(raw?.publishStatus);
+  const publish=raw?.publishStatus===null||raw?.publishStatus===undefined||typeof raw.publishStatus==='boolean'||String(raw.publishStatus).trim()===''?null:number(raw.publishStatus);
   return {
     remoteProductId,
     productNumber:`SP-${base.toUpperCase()}-${hash(remoteProductId).slice(0,6).toUpperCase()}`,
@@ -308,20 +309,21 @@ export class ShopPlusProductCatalog {
     for(const sourceUrl of urls)images.push(await this.imageRecord({remoteProductId:product.remoteProductId,sourceUrl,previous:byUrl.get(sourceUrl)}));
     return images;
   }
-  async readPages(listPage,{pageSize,until}={}){
+  async readPages(listPage,{pageSize,until,requireComplete=false}={}){
     if(typeof listPage!=='function')throw catalogError('ShopPlus 商品读取接口暂不可用','SHOPPLUS_PRODUCT_LIST_UNAVAILABLE');
     const rows=[],seenPages=new Set();let pageNum=1,received=0,pages=0,totalCount=null,complete=false;
     while(pageNum<=100000){
       const response=await listPage({pageNum,pageSize}),current=Array.isArray(response?.products)?response.products:[];
       const pageSignature=current.map(raw=>text(raw?.id??raw?.productId??raw?.spuCode??'',160)).join('\u0001');
-      if(pageSignature&&seenPages.has(pageSignature))break;
+      if(pageSignature&&seenPages.has(pageSignature)){if(requireComplete)throw catalogError('网站重复返回同一页，目录未完整读取；请重试','SHOPPLUS_PRODUCT_MAPPING_INCOMPLETE');break;}
       if(pageSignature)seenPages.add(pageSignature);
       pages++;received+=current.length;
-      const declared=Number(response?.totalCount);if(Number.isFinite(declared)&&declared>=0)totalCount=declared;
+      const declared=response?.totalCount===null||response?.totalCount===undefined?NaN:Number(response.totalCount);if(Number.isFinite(declared)&&declared>=0)totalCount=declared;
       for(const raw of current){rows.push(raw);if(until?.(rows)){complete=true;break;}}
-      if(complete||!current.length||current.length<pageSize||(totalCount!==null&&received>=totalCount))break;
+      if(complete||!current.length||(!requireComplete&&current.length<pageSize)||(totalCount!==null&&received>=totalCount))break;
       pageNum++;
     }
+    if(requireComplete&&totalCount!==null&&received<totalCount)throw catalogError('网站商品目录未完整返回，已保留上次记录；请重试','SHOPPLUS_PRODUCT_MAPPING_INCOMPLETE');
     return {rows,received,pages,totalCount,complete};
   }
   async collect({listPage,target}={}){
@@ -385,10 +387,12 @@ export class ShopPlusProductCatalog {
       await this.persist();return this.view();
     });
   }
-  async syncMappingCatalog({listPage}={}){
+  mappingSnapshot(){return {at:this.state.mappingCatalogRun?.at||null,records:(this.state.mappingCatalog||[]).map(p=>({remoteProductId:p.remoteProductId,productNumber:p.productNumber,sourceName:p.sourceName,sourceSpu:p.sourceSpu,publishStatus:p.publishStatus,stockKnown:p.stockKnown,stockQuantity:p.stockQuantity,websitePriceAed:p.websitePriceAed,variants:copied(p.variants||[]),updatedAt:p.updatedAt}))};}
+  async pendingWebsiteSnapshot(){return this.serial(async()=>{await this.load();return this.mappingSnapshot();});}
+  async syncMappingCatalog({listPage,metadataOnly=false,requireComplete=false}={}){
     return this.serial(async()=>{
       await this.load();
-      const scan=await this.readPages(listPage,{pageSize:SHOPPLUS_PRODUCT_ACTIVE_CATALOG_PAGE_SIZE});
+      const scan=await this.readPages(listPage,{pageSize:SHOPPLUS_PRODUCT_ACTIVE_CATALOG_PAGE_SIZE,requireComplete});
       const at=this.now().toISOString(),seen=new Set(),products=[];let listed=0,unlisted=0,inStock=0,outOfStock=0,unknownStock=0;
       for(const raw of scan.rows){
         const item=candidate(raw);if(!item||seen.has(item.remoteProductId))continue;
@@ -403,7 +407,7 @@ export class ShopPlusProductCatalog {
       this.state.mappingCatalog=products;
       this.state.mappingCatalogRun={at,received:scan.received,pages:scan.pages,totalCount:scan.totalCount,captured:products.length,listed,unlisted,inStock,outOfStock,unknownStock};
       this.state.lastSuccessfulReadAt=at;
-      await this.persist();return this.view();
+      await this.persist();return metadataOnly?this.mappingSnapshot():this.view();
     });
   }
   async refresh({listPage}={}){
@@ -605,9 +609,10 @@ export class ShopPlusProductCatalog {
       await this.load();this.state.listingReviewCheckedAt=this.now().toISOString();await this.persist();return this.state.listingReviewCheckedAt;
     });
   }
+  async batchRecords(){return this.serial(async()=>{await this.load();const records=new Map();for(const p of [...(this.state.mappingCatalog||[]),...(this.state.archivedProducts||[]),...this.state.products]){const {image,images,...fields}=copied(p);records.set(p.remoteProductId,fields);}return [...records.values()];});}
   async identityRecords(){return this.serial(async()=>{await this.load();const records=new Map();for(const p of [...(this.state.mappingCatalog||[]),...(this.state.archivedProducts||[]),...this.state.products])records.set(p.remoteProductId,{remoteProductId:p.remoteProductId,productNumber:p.productNumber,sourceName:p.sourceName,name:p.localName||p.sourceName,websitePriceAed:p.websitePriceAed,publishStatus:p.publishStatus,stockKnown:p.stockKnown,stockQuantity:p.stockQuantity});return [...records.values()];});}
   async rebindSourceIdentity({remoteProductId,source}){return this.serial(async()=>{await this.load();const update=p=>p.remoteProductId===remoteProductId?{...p,sourcePricing:{...p.sourcePricing,status:'matched',sourceName:source.sourceName,sourceKey:source.sourceKey,sourceRow:source.sourceRow,sourceRows:sourceRows(source),sourceStock:sourceStock(source.stock),reason:'来源名称已衔接，价格资料仍按单品回读/同步流程更新'}}:p;this.state.products=this.state.products.map(update);this.state.archivedProducts=(this.state.archivedProducts||[]).map(update);await this.persist();});}
-  async readOne({remoteProductId,readProduct,expectedProductNumber}={}){
+  async readOne({remoteProductId,readProduct,expectedProductNumber,validateBeforeSave,reclassify=false,sourceForBatch=null}={}){
     return this.serial(async()=>{
       await this.load();const id=text(remoteProductId,160),active=this.state.products.find(p=>p.remoteProductId===id),archived=(this.state.archivedProducts||[]).find(p=>p.remoteProductId===id),mapped=(this.state.mappingCatalog||[]).find(p=>p.remoteProductId===id),previous=active||archived||mapped;
       if(!id||!previous)throw catalogError('没有找到这条提醒对应的网站商品，请先核对对应关系','SHOPPLUS_PRODUCT_NOT_FOUND');
@@ -616,10 +621,12 @@ export class ShopPlusProductCatalog {
       if(typeof readProduct!=='function')throw catalogError('单品读取暂不可用','SHOPPLUS_PRODUCT_READ_UNAVAILABLE');
       const raw=await readProduct(id),next=candidate(raw?.productVO||raw?.product||raw);
       if(!next||next.remoteProductId!==id)throw catalogError('网站返回的商品 ID 不一致，未保存此次核对','SHOPPLUS_PRODUCT_READBACK_MISMATCH');
+      if(validateBeforeSave)await validateBeforeSave();
       const priceEvidence=websitePriceEvidence(raw?.productVO||raw?.product||raw);next.websitePriceAed=priceEvidence.websitePriceAed;
       const at=this.now().toISOString(),updated={...retainedProduct(next,previous,at),priceEvidence,refresh:{status:'refreshed',at}};
-      if(active)this.state.products=this.state.products.map(p=>p.remoteProductId===id?updated:p);
-      if(archived)this.state.archivedProducts=this.state.archivedProducts.map(p=>p.remoteProductId===id?updated:p);
+      if(sourceForBatch){updated.costPriceAed=aedAmount(sourceForBatch.cost);updated.suggestedPriceAed=aedAmount(sourceForBatch.suggestedPrice);updated.sourcePricing={...updated.sourcePricing,status:'matched',sourceBusinessId:sourceForBatch.businessId,sourceName:sourceForBatch.sourceName,sourceStock:sourceStock(sourceForBatch.stock),sourceRow:sourceForBatch.sourceRow,sourceRows:sourceRows(sourceForBatch),costPriceAed:updated.costPriceAed,suggestedPriceAed:updated.suggestedPriceAed};}
+      if(reclassify&&(active||archived||mapped)){this.state.products=this.state.products.filter(p=>p.remoteProductId!==id);this.state.archivedProducts=(this.state.archivedProducts||[]).filter(p=>p.remoteProductId!==id);(normalInventoryProduct(updated)?this.state.products:this.state.archivedProducts).push(updated);}
+      else{if(active)this.state.products=this.state.products.map(p=>p.remoteProductId===id?updated:p);if(archived)this.state.archivedProducts=this.state.archivedProducts.map(p=>p.remoteProductId===id?updated:p);}
       if(mapped)this.state.mappingCatalog=this.state.mappingCatalog.map(p=>p.remoteProductId===id?{...next,productNumber:mapped.productNumber||next.productNumber,image:null,images:[],capturedAt:at,updatedAt:at}:p);
       this.state.singleReadRun={at,remoteProductId:id};await this.persist();
       // Return only this product's fields, without loading any image bytes or a full catalogue view.

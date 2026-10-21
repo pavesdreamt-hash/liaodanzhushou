@@ -70,10 +70,12 @@ export function catalogReviewItems(changes,catalog,{applyReviewed=false}={}){
   const records=changes.catalogReviews||{},covered=new Set(changes.tasks.filter(task=>!task.resolved&&task.kind!=='price').map(task=>task.remoteProductId).filter(Boolean)),pending=[];
   for(const product of catalog.dailyPending||[]){
     if(covered.has(product.remoteProductId))continue;
-    const source=product.sourcePricing||{},task={id:`catalog:${product.remoteProductId}`,kind:'catalog',remoteProductId:product.remoteProductId,businessId:product.productNumber,current:{sourceName:source.sourceName||product.name,sourceRow:source.sourceRow,sourceRows:source.sourceRows,stock:source.sourceStock},website:{name:product.name,publishStatus:product.publishStatus,stockKnown:product.stockKnown,stockQuantity:product.stockQuantity},action:product.kind,reason:product.reason};
+    const source=product.sourcePricing||{},task={id:`catalog:${product.remoteProductId}`,kind:'catalog',remoteProductId:product.remoteProductId,businessId:product.productNumber,current:{sourceName:source.sourceName||product.name,sourceRow:source.sourceRow,sourceRows:source.sourceRows,stock:source.sourceStock},website:{name:product.name,publishStatus:product.publishStatus,stockKnown:product.stockKnown,stockQuantity:product.stockQuantity,websitePriceAed:product.websitePriceAed,priceComplete:product.priceEvidence?.complete},action:product.kind,reason:product.reason};
     const fingerprint=reviewFingerprint(task),old=records[task.id];
     if(changes.tasks.some(saved=>saved.resolved&&saved.kind!=='price'&&saved.completion?.type==='manual'&&reviewFingerprint(saved)===fingerprint))continue;
     let record=old?.fingerprint===fingerprint?old:{fingerprint};
+    // Preserve only a read of the same saved website state; a later status or price is not this read's result.
+    if(record.task?.recordRead&&record.task.website?.websitePriceAed===task.website.websitePriceAed){task.recordRead=record.task.recordRead;task.websiteReadAt=record.task.websiteReadAt;}
     const [updated]=applyTaskReviews([{...task,reviewed:record.reviewed,reminder:record.reminder}],{applyReviewed});
     record={...record,reviewed:updated.reviewed,reminder:updated.reminder};
     if(updated.resolved&&updated.completion&&!record.completion){record.completion=updated.completion;changes.reviewHistory=[updated,...(changes.reviewHistory||[])].slice(0,300);}
