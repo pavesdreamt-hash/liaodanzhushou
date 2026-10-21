@@ -400,15 +400,16 @@ async function bootstrap(){
   handler('orders:acknowledge-shopplus-sync-attention',payload=>orders().acknowledgeShopPlusSyncAttention(payload));
   const productSyncWorkflow=new ProductSyncWorkflow(paths),priceTaskVerification=new PriceTaskVerification({store:orchestrator.localStore,catalog:shopPlusProductCatalog,readProduct:id=>shopPlusConnection.productDetail(id)});
   const inventoryBatch=new InventoryBatchEdit({store:orchestrator.localStore,catalog:shopPlusProductCatalog,connection:shopPlusConnection});
+  const sourceChangesWithCurrent=async(catalog,websiteCheck=null,options={})=>{const batch=options.priceCompletions?null:await inventoryBatch.view();return orchestrator.sourceChanges(catalog,websiteCheck,{...(batch?{verifiedReads:batch.verifiedReads,priceCompletions:batch.priceCompletions}:{}),...options});};
   handler('inventory:batch-view',()=>inventoryBatch.view());
   handler('inventory:pending-new-refresh',()=>inventoryBatch.refreshPendingNew());
   handler('inventory:pending-new-export',()=>inventoryBatch.exportPendingNew());
   handler('inventory:batch-progress',payload=>inventoryBatch.progress(payload));
-  handler('inventory:batch-refresh',async payload=>{const result=await inventoryBatch.refresh(payload);const catalog=await shopPlusProductCatalog.getView();return {...result,catalog,sourceChanges:await orchestrator.sourceChanges(catalog)};});
-  handler('inventory:batch-execute',async payload=>{const result=await inventoryBatch.execute(payload);const catalog=await shopPlusProductCatalog.getView();return {...result,catalog,sourceChanges:await orchestrator.sourceChanges(catalog)};});
-  const shopPlusProductStatus=async()=>{const catalog=await shopPlusProductCatalog.getView();return {catalog,batch:await inventoryBatch.view(),sourceChanges:await orchestrator.sourceChanges(catalog),workflow:await productSyncWorkflow.view(),status:await shopPlusConnection.status()};};
-  handler('source:changes',async()=>orchestrator.sourceChanges(await shopPlusProductCatalog.getView()));
-  handler('source:refresh-reminders',async()=>orchestrator.localStore.refreshReviewedReminders());
+  handler('inventory:batch-refresh',async payload=>{const result=await inventoryBatch.refresh(payload);const catalog=await shopPlusProductCatalog.getView();return {...result,catalog,sourceChanges:await sourceChangesWithCurrent(catalog,null,{verifiedReads:result.verifiedReads,priceCompletions:result.priceCompletions})};});
+  handler('inventory:batch-execute',async payload=>{const result=await inventoryBatch.execute(payload);const catalog=await shopPlusProductCatalog.getView();return {...result,catalog,sourceChanges:await sourceChangesWithCurrent(catalog,null,{verifiedReads:result.verifiedReads,priceCompletions:result.priceCompletions})};});
+  const shopPlusProductStatus=async()=>{const batch=await inventoryBatch.view(),catalog=await shopPlusProductCatalog.getView();return {catalog,batch,sourceChanges:await sourceChangesWithCurrent(catalog,null,{verifiedReads:batch.verifiedReads,priceCompletions:batch.priceCompletions}),workflow:await productSyncWorkflow.view(),status:await shopPlusConnection.status()};};
+  handler('source:changes',async()=>{const batch=await inventoryBatch.view();return sourceChangesWithCurrent(await shopPlusProductCatalog.getView(),null,{verifiedReads:batch.verifiedReads,priceCompletions:batch.priceCompletions});});
+  handler('source:refresh-reminders',async()=>{await sourceChangesWithCurrent(await shopPlusProductCatalog.getView());return orchestrator.localStore.refreshReviewedReminders();});
   handler('source:review-task',async payload=>{if(payload?.operation==='close'){const document=await orchestrator.localStore.read(),task=document.sourceChanges?.tasks?.find(t=>t.id===payload.taskId&&!t.resolved);if(task?.kind==='price'){const result=await priceTaskVerification.confirm(payload);if(!result.closed)throw new Error(result.reason||'单品价格尚未核验通过，提醒保留');return result.changes;}}return orchestrator.localStore.reviewSourceTask(payload||{});});
   const sourceRenameService=new SourceRenameService({store:orchestrator.localStore,catalog:shopPlusProductCatalog,afterSaved:()=>{orchestrator.pending=null;}});
   orchestrator.reconcileSourceRelations=async()=>{const result=await sourceRenameService.reconcile();return result.changed;};
@@ -419,7 +420,7 @@ async function bootstrap(){
   handler('source:read-task-record',payload=>sourceTaskReadback.read(payload||{}));
   handler('source:read-price-task',payload=>priceTaskVerification.read(payload||{}));
   handler('source:confirm-price-task',payload=>priceTaskVerification.confirm(payload||{}));
-  handler('source:decide-replacement',async payload=>{await orchestrator.localStore.decideReplacement(payload||{});return orchestrator.sourceChanges(await shopPlusProductCatalog.getView());});
+  handler('source:decide-replacement',async payload=>{await orchestrator.localStore.decideReplacement(payload||{});return sourceChangesWithCurrent(await shopPlusProductCatalog.getView());});
   handler('orders:shopplus-product-catalog',shopPlusProductStatus);
   handler('orders:chat-product-catalog',async payload=>{
     const token=typeof payload?.token==='string'?payload.token:'',bound=manualChat?.bindings.get(token);
@@ -431,7 +432,7 @@ async function bootstrap(){
     const listPage=request=>shopPlusConnection.listProductsPage(request);let catalog=payload?.scope==='published-in-stock'?await shopPlusProductCatalog.collectPublishedInStock({listPage}):await shopPlusProductCatalog.collect({target:payload?.target,listPage});
     // A full matching read also checks unlisted/zero-stock products; a filtered list cannot prove completion.
     catalog=await shopPlusProductCatalog.syncMappingCatalog({listPage});
-    const sourceChanges=await orchestrator.sourceChanges(catalog,'verified',{applyReviewed:true});
+    const sourceChanges=await sourceChangesWithCurrent(catalog,'verified',{applyReviewed:true});
     await shopPlusConnection.markProductVerified('已通过 ShopPlus 商品读取验证');return {catalog,sourceChanges,status:await shopPlusConnection.status(),collected:true};
   }catch(error){await shopPlusConnection.markProductFailed(`商品读取失败：${String(error?.message||error)}`).catch(()=>{});throw error;}}));
   handler('orders:sync-shopplus-mapping-catalog',async()=>{try{const catalog=await shopPlusProductCatalog.syncMappingCatalog({listPage:request=>shopPlusConnection.listProductsPage(request)});await shopPlusConnection.markProductVerified('已通过 ShopPlus 商品匹配目录读取验证');return {catalog,status:await shopPlusConnection.status(),synced:true};}catch(error){await shopPlusConnection.markProductFailed(`商品匹配目录读取失败：${String(error?.message||error)}`).catch(()=>{});throw error;}});
@@ -440,7 +441,7 @@ async function bootstrap(){
     const confirmed=await orchestrator.confirmedSourceProducts(),local=await orchestrator.localInventory();
     const sourceProducts=confirmed.flatMap(row=>{const matches=(local.latestCollection?.products||[]).filter(item=>sameSourceIdentity(row,item));return !row.removed&&!row.identityUncertain&&matches.length===1?[{...matches[0],businessId:row.businessId}]:[];});
     if(sourceProducts.length)catalog=await shopPlusProductCatalog.integrateSourcePricing({sourceProducts,sourceUpdatedAt:local.latestCollection?.capturedAt});
-    const sourceChanges=await orchestrator.sourceChanges(catalog);
+    const sourceChanges=await sourceChangesWithCurrent(catalog);
     await shopPlusConnection.markProductVerified('已通过 ShopPlus 商品资料更新验证');return {catalog,sourceChanges,status:await shopPlusConnection.status(),refreshed:true};
   }catch(error){await shopPlusConnection.markProductFailed(`商品资料更新失败：${String(error?.message||error)}`).catch(()=>{});throw error;}}));
   handler('orders:sync-shopplus-product-media',async payload=>{try{const catalog=await shopPlusProductCatalog.collectMedia({listPage:request=>shopPlusConnection.listProductsPage(request),remoteProductIds:payload?.remoteProductIds});await shopPlusConnection.markProductVerified('已通过 ShopPlus 商品图片只读采集验证');return {catalog,status:await shopPlusConnection.status(),collected:true};}catch(error){await shopPlusConnection.markProductFailed(`商品图片读取失败：${String(error?.message||error)}`).catch(()=>{});throw error;}});

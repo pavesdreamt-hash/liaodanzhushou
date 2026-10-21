@@ -49,15 +49,18 @@ export class LocalInventoryStore{
     }
     document.updatedAt=nowIso();document.latestCollection={capturedAt:snapshot.capturedAt,sourceUrl:snapshot.sourceUrl,sheet:snapshot.sheet,range:snapshot.range,quality:snapshot.quality,products:snapshot.products||[]};await writeJSON(this.file,document);await this.pruneSourceSnapshots();return this.view(document);
   });}
-  async refreshSourceChanges({catalog={},mappings=null,websiteCheck=null,applyReviewed=false}={}){return this.serial(async()=>{
+  async refreshSourceChanges({catalog={},mappings=null,websiteCheck=null,applyReviewed=false,verifiedReads=[],priceCompletions=[]}={}){return this.serial(async()=>{
     const document=await this.read(),changes=document.sourceChanges;if(!changes)return null;
     const check=websiteCheck||changes.report.websiteCheck||'pending',relations=mappings||document.mappingRows||parseMappingRows(document.mapping);
     restoreNewProductTasks(changes,document.latestCollection,relations);
     migratePriceTasks(changes);
     await this.validatePriceClosures(document);
     if(websiteCheck==='verified')captureWebsitePrices(changes,catalog,document.latestCollection,relations);
-    const tasks=applyTaskReviews(evaluateSourceTasks({tasks:changes.tasks.filter(task=>!task.resolved),snapshot:document.latestCollection,mappings:relations,catalog,websiteCheck:check,allowAutoResolve:websiteCheck==='verified'}));
-    for(const task of tasks.filter(item=>item.resolved&&item.completion))changes.reviewHistory=[task,...(changes.reviewHistory||[])].slice(0,300);
+    const tasks=applyTaskReviews(evaluateSourceTasks({tasks:changes.tasks.filter(task=>!task.resolved),snapshot:document.latestCollection,mappings:relations,catalog,websiteCheck:check,allowAutoResolve:websiteCheck==='verified',verifiedReads,priceCompletions}));
+    for(const task of tasks.filter(item=>item.resolved&&item.completion)){
+      changes.reviewHistory=[task,...(changes.reviewHistory||[])].slice(0,300);
+      if(['batch-price','price-aligned'].includes(task.completion.type))(changes.websitePrices??={})[task.remoteProductId]={price:task.website.websitePriceAed,at:task.completion.websiteReadAt};
+    }
     const byId=new Map(tasks.map(task=>[task.id,task]));changes.tasks=changes.tasks.map(task=>byId.get(task.id)||task);
     if(websiteCheck)changes.report.websiteCheck=check;
     if(check==='verified')changes.report.websiteCheckedAt=catalog.mappingCatalogRun?.at||catalog.lastSuccessfulReadAt||changes.report.websiteCheckedAt;

@@ -2,9 +2,10 @@ import path from 'node:path';
 import {readJSON,writeJSON,stableHash} from '../core/files.mjs';
 import {effectivePendingMappings} from '../mapping/source-rename.mjs';
 import {parseMappingRows} from '../mapping/mapping.mjs';
-import {sameSourceIdentity,sourceRows,sourceIdentityName} from '../sync/source-changes.mjs';
+import {sameSourceIdentity,sourceRows,sourceIdentityName,priceTaskSnapshot} from '../sync/source-changes.mjs';
 import {sourceModel} from '../mapping/source-key.mjs';
 import {websitePriceGuard,toPriceFils,WEBSITE_PRICE_RULE_ID} from '../../shared/website-price-rule.mjs';
+import {sourcePrice} from '../../shared/source-price.mjs';
 
 const norm=v=>String(v||'').normalize('NFKC').toUpperCase().replace(/[\s_-]+/g,'');
 const rawProduct=v=>v?.productVO||v?.product||v;
@@ -22,7 +23,9 @@ const grouped=(items,key)=>{const map=new Map();for(const item of items){const k
 const emptyState=()=>({version:1,reads:{},history:[]});
 // A manual price decision survives reads and stock changes, but never a new
 // source price, product identity, or SKU set. It is not a price-verification pass.
-const priceDecisionSource=row=>stableHash({id:row.id,business:row.businessId,name:row.name,cost:toPriceFils(row.source.cost),suggested:toPriceFils(row.source.suggestedPrice),rule:WEBSITE_PRICE_RULE_ID});
+const decisionPrice=value=>toPriceFils(value)??{raw:String(value??'')};
+const priceDecisionSource=row=>stableHash({id:row.id,business:row.businessId,name:row.name,cost:decisionPrice(row.source.cost),suggested:decisionPrice(row.source.suggestedPrice),rule:WEBSITE_PRICE_RULE_ID});
+const sourceGuard=(source,website)=>websitePriceGuard({costPriceAed:sourcePrice(source.cost,'cost').value,suggestedPriceAed:sourcePrice(source.suggestedPrice).value,...website});
 const priceVariantSet=variants=>stableHash(variants.map(v=>String(v.id)).sort());
 const fullName=value=>String(value||'').normalize('NFKC').toLowerCase().replace(/\s+/gu,'').trim();
 const pendingIdentity=(source,origin)=>stableHash({name:source.sourceName,key:source.sourceKey,origin:origin?.id||null});
@@ -98,19 +101,46 @@ export class InventoryBatchEdit{
       if(!p)continue;
       const variants=(p.variants||[]).map(v=>({id:String(v.id||''),name:String(v.optionValueNames||v.skuCode||'单一规格'),stockQuantity:quantity(v.stockQuantity),salePrice:v.salePrice??null}));
       const validVariants=variants.length>0&&unique(variants.map(v=>v.id)).length===variants.length&&variants.every(v=>/^\d{1,15}$/.test(v.id));
-      const guard=websitePriceGuard({costPriceAed:source.cost,suggestedPriceAed:source.suggestedPrice,websitePriceAed:p.websitePriceAed,priceComplete:p.priceEvidence?.complete});
+      const guard=sourceGuard(source,{websitePriceAed:p.websitePriceAed,priceComplete:p.priceEvidence?.complete});
       const sourceStock=['有货','无货'].includes(source.stock)?source.stock:null;
       const read=state.reads[p.remoteProductId],cachedFingerprint=stableHash({publishStatus:p.publishStatus,variants});
       const successfulRead=read?.status==='read'&&read.context===ctx.fingerprint&&read.website===cachedFingerprint;
       rows.push({id:p.remoteProductId,businessId:p.productNumber,name:source.sourceName,websiteName:p.name||p.sourceName,sourceRow:sourceRows(source)[0]||null,sourceStock,before:old,source:{cost:source.cost,suggestedPrice:source.suggestedPrice,stock:source.stock},publishStatus:p.publishStatus,stockKnown:p.stockKnown,stockQuantity:p.stockQuantity,websitePriceAed:p.websitePriceAed,variants,validVariants,priceReady:validVariants&&variants.every(v=>toPriceFils(v.salePrice)!==null),guard,sourceFingerprint:ctx.fingerprint,websiteFingerprint:cachedFingerprint,readAt:successfulRead?read.at:null,readError:read?.status==='failed'?read.reason:null,blocked:ctx.blocked,listingTarget:sourceStock==='有货'?1:sourceStock==='无货'?0:null,taskIds:related.filter(t=>!t.resolved).map(t=>t.id),priceChanged:related.some(t=>!t.resolved&&t.kind==='price')});
       const row=rows.at(-1),decision=state.priceDecisions?.[row.id];
-      row.priceAccepted=Boolean(!ctx.blocked&&row.priceReady&&guard.minimumFils!==null&&Number.isSafeInteger(decision?.targetFils)&&decision.targetFils>=0&&decision.source===priceDecisionSource(row)&&decision.variants===priceVariantSet(variants)&&variants.every(v=>toPriceFils(v.salePrice)>=decision.targetFils));
+      row.catalogReadAt=[p.refresh?.at,p.capturedAt].filter(at=>Number.isFinite(Date.parse(at))).sort().at(-1)||null;
+      row.catalogRevision=p.updatedAt||p.capturedAt||null;
+      row.priceReadAt=successfulRead||read?.status==='read'&&read.context===ctx.fingerprint&&read.prices===stableHash(variants.map(v=>[v.id,toPriceFils(v.salePrice)]))?read.at:null;
+      row.priceTasks=related.filter(t=>!t.resolved&&t.kind==='price').map(t=>({id:t.id,fingerprint:priceTaskSnapshot(t)}));
+      row.priceAccepted=Boolean(!ctx.blocked&&row.priceReady&&Number.isSafeInteger(decision?.targetFils)&&decision.targetFils>=0&&decision.source===priceDecisionSource(row)&&decision.variants===priceVariantSet(variants)&&variants.every(v=>toPriceFils(v.salePrice)>=decision.targetFils));
       row.acceptedPriceAed=row.priceAccepted?decision.targetFils/100:null;
       row.priceReviewRequired=guard.status!=='ok'&&!row.priceAccepted;
+      row.priceIssue=ctx.blocked||(!validVariants?'网站规格无效，请重新读取':!row.priceReady?'网站规格售价缺失，请重新读取':sourcePrice(source.cost,'cost').issue||sourcePrice(source.suggestedPrice).issue||null);
+      row.priceCategory=!row.priceReviewRequired?'done':row.priceIssue||guard.status==='unknown'?'review':'adjust';
     }
     rows.sort((a,b)=>(a.sourceRow??Infinity)-(b.sourceRow??Infinity));
     pendingNew.sort((a,b)=>(a.sourceRow??Infinity)-(b.sourceRow??Infinity));
-    return {rows,pendingNew,pendingNewCheckedAt:fresh?checked.at:null,sourceAt:data.snapshot?.capturedAt||null,history:state.history.slice(0,100)};
+    // Only saved reads matching both the current source context and website
+    // fingerprint may reconcile source tasks. A cached catalog alone cannot.
+    const verifiedReads=rows.filter(row=>(row.readAt||row.priceReadAt)&&!row.blocked).map(row=>({remoteProductId:row.id,businessId:row.businessId,sourceAt:data.snapshot.capturedAt,source:{sourceName:row.name,...row.source},website:{publishStatus:row.publishStatus,stockKnown:row.stockKnown,stockQuantity:row.stockQuantity},at:row.readAt||row.priceReadAt,...(!row.readAt?{kind:'price'}:{})}));
+    const priceCompletions=[];
+    for(const row of rows.filter(r=>!r.blocked&&r.priceReady&&!r.priceReviewRequired&&r.catalogReadAt)){
+      const read=state.reads[row.id],targetFils=row.priceAccepted?toPriceFils(row.acceptedPriceAed):row.guard.minimumFils;
+      if(read?.status==='failed'&&Date.parse(row.catalogReadAt)<=Date.parse(read.at)||targetFils===null||!row.variants.every(v=>toPriceFils(v.salePrice)>=targetFils))continue;
+      priceCompletions.push({mode:'current-state',basis:row.priceAccepted?'manual-target':'reference',remoteProductId:row.id,businessId:row.businessId,sourceAt:data.snapshot.capturedAt,source:{sourceName:row.name,...row.source},websiteAt:row.catalogRevision,readAt:row.catalogReadAt,targetFils,prices:row.variants.map(v=>[v.id,toPriceFils(v.salePrice)])});
+    }
+    for(const row of rows.filter(r=>r.priceReadAt&&!r.blocked&&r.priceReady&&r.priceTasks.length)){
+      const read=state.reads[row.id],related=(taskIndex.get(sourceIdentityName({sourceName:row.name}))||[]).filter(t=>!t.resolved&&t.kind==='price'&&sameSourceIdentity(t.current||t.after||t.before,{sourceName:row.name}));
+      for(const batch of state.history.filter(h=>h.kind==='price'&&h.status==='finished'))for(const result of batch.results.filter(r=>r.id===row.id&&['success','unchanged'].includes(r.status))){
+        const started=Date.parse(result.startedAt),finished=Date.parse(result.at),readTime=Date.parse(read.at),targetFils=toPriceFils(result.target);
+        if(![started,finished,readTime].every(Number.isFinite)||readTime<started||readTime>finished||targetFils===null||row.variants.some(v=>toPriceFils(v.salePrice)<targetFils))continue;
+        // New receipts bind the exact price notifications shown at confirmation.
+        // Legacy receipts are usable only when this is still their saved read,
+        // with no later source snapshot or notification event.
+        const proofTasks=Object.hasOwn(result,'priceTasks')?(result.sourceAt===data.snapshot.capturedAt&&result.sourceFingerprint===row.sourceFingerprint?result.priceTasks:[]):Date.parse(data.snapshot.capturedAt)<=started?related.filter(t=>Date.parse(t.createdAt)<=started&&Date.parse(t.lastSeenAt||t.createdAt)<=started&&[t.websiteReadAt,t.priceVerification?.at,t.recordRead?.at].filter(Boolean).every(at=>Date.parse(at)<=started)).map(t=>({id:t.id,fingerprint:priceTaskSnapshot(t)})):[];
+        if(proofTasks.length)priceCompletions.push({remoteProductId:row.id,sourceAt:data.snapshot.capturedAt,readAt:row.priceReadAt,requestId:batch.requestId,targetFils,prices:row.variants.map(v=>[v.id,toPriceFils(v.salePrice)]),tasks:proofTasks});
+      }
+    }
+    return {rows,verifiedReads,priceCompletions,pendingNew,pendingNewCheckedAt:fresh?checked.at:null,sourceAt:data.snapshot?.capturedAt||null,history:state.history.slice(0,100)};
   }
   async refreshPendingNew(){
     if(this.busy)throw Error('正在处理所选商品，请等待完成');
@@ -140,7 +170,7 @@ export class InventoryBatchEdit{
     if(context.blocked||context.fingerprint!==expected)throw Error('来源或网站对应关系已变化，请刷新后重新勾选');
     return {...context,source};
   }
-  async saveRead(id,context,website,reason=null){await this.mutateState(state=>{state.reads[id]=reason?{status:'failed',at:this.now().toISOString(),reason}:{status:'read',at:this.now().toISOString(),context,website:webFingerprint(website)};});}
+  async saveRead(id,context,website,reason=null){await this.mutateState(state=>{state.reads[id]=reason?{status:'failed',at:this.now().toISOString(),reason}:{status:'read',at:this.now().toISOString(),context,website:webFingerprint(website),prices:stableHash(website.variants.map(v=>[v.id,toPriceFils(v.salePrice)]))};});}
   async refresh({ids}={}){
     if(this.busy)throw Error('正在处理所选商品，请等待完成');
     if(!Array.isArray(ids)||!ids.length||ids.length>500)throw Error('请选择 1 至 500 件网站商品');
@@ -178,13 +208,14 @@ export class InventoryBatchEdit{
         keys.add(key);
         if(kind==='stock'&&row.sourceStock!=='有货')throw Error('来源无货或状态未知的商品不参与批量库存修改，未执行任何修改');
         if(kind==='stock'&&(quantity(item.target)===null||!row.validVariants||!row.variants.some(v=>v.id===item.variantId&&v.stockQuantity!==null)))throw Error('规格或目标库存无效，未执行任何修改');
-        if(kind==='price'&&(toPriceFils(item.target)===null||Number(item.target)>10_000_000||row.guard.minimumFils===null||!row.validVariants||!row.priceReady))throw Error('目标售价、价格资料或规格无效，未执行任何修改');
-        if(kind==='price'&&toPriceFils(item.target)<row.guard.minimumFils&&allowBelowReference!==true)throw Error('目标低于参考售价，请在修改清单中明确确认，未执行任何修改');
+        if(kind==='price'&&(toPriceFils(item.target)===null||Number(item.target)>10_000_000||!row.validVariants||!row.priceReady))throw Error('目标售价、价格资料或规格无效，未执行任何修改');
+        if(kind==='price'&&(row.guard.minimumFils===null||toPriceFils(item.target)<row.guard.minimumFils)&&allowBelowReference!==true)throw Error('目标低于参考售价或参考资料待核对，请在修改清单中明确确认，未执行任何修改');
+        if(kind==='price'&&item.priceTasks&&stableHash(item.priceTasks)!==stableHash(row.priceTasks))throw Error('价格提醒已有新变化，请刷新后重新确认，未执行任何修改');
         if(kind==='listing'&&(![0,1].includes(item.target)||row.listingTarget!==item.target))throw Error('上下架目标与来源状态不一致，请重新核对');
         if(!item.expected||typeof item.expected!=='object')throw Error('缺少显示时的网站状态，请先读取');
         planned.push({item,row});
       }
-      const receipt={requestId,kind,at:this.now().toISOString(),status:'running',total:planned.length,results:planned.map(({item,row})=>({id:row.id,variantId:item.variantId||null,name:row.name,target:item.target,status:'queued'}))};
+      const receipt={requestId,kind,at:this.now().toISOString(),status:'running',total:planned.length,results:planned.map(({item,row})=>({id:row.id,variantId:item.variantId||null,name:row.name,target:item.target,status:'queued',...(kind==='price'?{sourceAt:view.sourceAt,sourceFingerprint:row.sourceFingerprint,priceTasks:item.priceTasks||[]}: {})}))};
       this.run=receipt;const saveReceipt=()=>this.mutateState(s=>{const copy=structuredClone(receipt);s.history=[copy,...s.history.filter(h=>h.requestId!==requestId)].slice(0,100);});
       await saveReceipt();
       const touched=new Set();
@@ -216,8 +247,8 @@ export class InventoryBatchEdit{
             if(changed?.stockQuantity!==Number(item.target)||after.publishStatus!==before.publishStatus||stableHash(after.variants.map(v=>({...v,stockQuantity:v.id===item.variantId?null:v.stockQuantity})))!==stableHash(before.variants.map(v=>({...v,stockQuantity:v.id===item.variantId?null:v.stockQuantity}))))throw Error('库存回读未确认或其它规格发生变化，请核对');
           }else{
             if(stableHash(before.variants.map(v=>[v.id,toPriceFils(v.salePrice)]))!==stableHash(item.expected.prices))throw Error('网站规格售价已变化，请重新读取');
-            const guard=websitePriceGuard({costPriceAed:ctx.source.cost,suggestedPriceAed:ctx.source.suggestedPrice,websitePriceAed:before.variants[0]?.salePrice});
-            if(guard.minimumFils===null||toPriceFils(item.target)<guard.minimumFils&&allowBelowReference!==true||before.variants.some(v=>toPriceFils(v.salePrice)===null))throw Error('当前价格资料不完整或低于参考价未经确认');
+            const guard=sourceGuard(ctx.source,{websitePriceAed:before.variants[0]?.salePrice});
+            if((guard.minimumFils===null||toPriceFils(item.target)<guard.minimumFils)&&allowBelowReference!==true||before.variants.some(v=>toPriceFils(v.salePrice)===null))throw Error('当前价格资料不完整或人工价格未经确认');
             const wanted=before.variants.filter(v=>toPriceFils(v.salePrice)<toPriceFils(item.target));
             if(!wanted.length){result.status='unchanged';result.reason='全部规格已达目标，不降低售价';afterRaw=raw;}
             else{submitted=true;afterRaw=rawProduct(await this.connection.updateVariantPrices({productId:row.id,variants:wanted.map(v=>({id:v.id,salePrice:Number(item.target)}))}));}
@@ -229,9 +260,9 @@ export class InventoryBatchEdit{
           await this.catalog.readOne({remoteProductId:row.id,expectedProductNumber:row.businessId,readProduct:async()=>afterRaw,validateBeforeSave:()=>this.currentContext(row.id,item.sourceFingerprint,validationRecords),reclassify:true,sourceForBatch:ctx.source});
           await this.saveRead(row.id,item.sourceFingerprint,after);touched.add(row.id);
           if(kind==='price'){
-            const below=toPriceFils(item.target)<row.guard.minimumFils;
+            const below=row.guard.minimumFils===null||toPriceFils(item.target)<row.guard.minimumFils;
             await this.mutateState(s=>{s.priceDecisions||={};if(below)s.priceDecisions[row.id]={targetFils:toPriceFils(item.target),referenceFils:row.guard.minimumFils,source:priceDecisionSource(row),variants:priceVariantSet(after.variants),at:this.now().toISOString()};else delete s.priceDecisions[row.id];});
-            if(below){result.belowReference=true;result.reason=`已人工确认目标 ${Number(item.target)} AED（参考 ${row.guard.minimumFils/100} AED），回读符合所填目标；保留更高规格售价`;}
+            if(below){result.belowReference=true;result.reason=`已人工确认目标 ${Number(item.target)} AED（${row.guard.minimumFils===null?'参考资料待核对':`参考 ${row.guard.minimumFils/100} AED`}），回读符合所填目标；保留更高规格售价`;}
           }
           if(result.status==='running')result.status='success';result.at=this.now().toISOString();
         }catch(error){result.status=submitted?'uncertain':'failed';result.reason=(submitted?'请求已提交，需重新读取核对，勿直接重复执行。':'')+String(error.message||error);if(submitted)await this.saveRead(row.id,null,null,result.reason);}

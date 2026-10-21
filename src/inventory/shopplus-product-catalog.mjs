@@ -609,7 +609,15 @@ export class ShopPlusProductCatalog {
       await this.load();this.state.listingReviewCheckedAt=this.now().toISOString();await this.persist();return this.state.listingReviewCheckedAt;
     });
   }
-  async batchRecords(){return this.serial(async()=>{await this.load();const records=new Map();for(const p of [...(this.state.mappingCatalog||[]),...(this.state.archivedProducts||[]),...this.state.products]){const {image,images,...fields}=copied(p);records.set(p.remoteProductId,fields);}return [...records.values()];});}
+  async batchRecords(){return this.serial(async()=>{
+    await this.load();const records=new Map(),webFields=['productNumber','sourceName','websitePriceAed','variants','publishStatus','stockKnown','stockQuantity','capturedAt','updatedAt'];
+    for(const p of [...(this.state.mappingCatalog||[]),...(this.state.archivedProducts||[]),...this.state.products]){
+      const {image,images,...fields}=copied(p),old=records.get(p.remoteProductId),latest=old&&Date.parse(old.capturedAt)>Date.parse(fields.capturedAt)?old:fields,merged={...old,...fields};
+      for(const key of webFields)merged[key]=latest[key];
+      merged.priceEvidence=websitePriceEvidence({variants:latest.variants});records.set(p.remoteProductId,merged);
+    }
+    return [...records.values()];
+  });}
   async identityRecords(){return this.serial(async()=>{await this.load();const records=new Map();for(const p of [...(this.state.mappingCatalog||[]),...(this.state.archivedProducts||[]),...this.state.products])records.set(p.remoteProductId,{remoteProductId:p.remoteProductId,productNumber:p.productNumber,sourceName:p.sourceName,name:p.localName||p.sourceName,websitePriceAed:p.websitePriceAed,publishStatus:p.publishStatus,stockKnown:p.stockKnown,stockQuantity:p.stockQuantity});return [...records.values()];});}
   async rebindSourceIdentity({remoteProductId,source}){return this.serial(async()=>{await this.load();const update=p=>p.remoteProductId===remoteProductId?{...p,sourcePricing:{...p.sourcePricing,status:'matched',sourceName:source.sourceName,sourceKey:source.sourceKey,sourceRow:source.sourceRow,sourceRows:sourceRows(source),sourceStock:sourceStock(source.stock),reason:'来源名称已衔接，价格资料仍按单品回读/同步流程更新'}}:p;this.state.products=this.state.products.map(update);this.state.archivedProducts=(this.state.archivedProducts||[]).map(update);await this.persist();});}
   async readOne({remoteProductId,readProduct,expectedProductNumber,validateBeforeSave,reclassify=false,sourceForBatch=null}={}){

@@ -86,6 +86,7 @@ export function catalogReviewItems(changes,catalog,{applyReviewed=false}={}){
 }
 export function applyTaskReviews(tasks,{applyReviewed=false}={}){
   return tasks.map(task=>{
+    if(task.resolved&&['batch-price','price-aligned'].includes(task.completion?.type)&&task.reminder?.mode!=='continue')return task;
     const fingerprint=reviewFingerprint(task),reviewed=task.reviewed?.fingerprint===fingerprint?task.reviewed:undefined;
     const reminder=task.reminder?.mode==='close-pending'&&task.reminder.fingerprint!==fingerprint?undefined:task.reminder;
     if(reminder?.mode==='close-pending'){

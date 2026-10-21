@@ -5,7 +5,7 @@ import {ShopPlusConnection} from '../src/orders/shopplus-api.mjs';
 import {InventoryBatchEdit} from '../src/inventory/batch-edit.mjs';
 import {ShopPlusProductCatalog} from '../src/inventory/shopplus-product-catalog.mjs';
 import {batchFixture,selection} from './fixtures/inventory-batch.mjs';
-import {writeJSON,readJSON} from '../src/core/files.mjs';
+import {writeJSON,readJSON,stableHash} from '../src/core/files.mjs';
 
 async function fixture(t,{ack='product',failReadback=false,apply=true}={}){
   const f=await batchFixture();t.after(f.cleanup);
@@ -93,4 +93,21 @@ test('网站跌破人工目标或换SKU后重新提醒，不自动抬价',async 
 test('低价写后回读失败不保存人工认可，不确定状态仍显示待处理',async t=>{
   const f=await fixture(t,{failReadback:true}),row=(await f.service.view()).rows.find(r=>r.id==='1002'),req=priceRequest(row);req.items[0].target=305;
   const result=await f.service.execute({...req,allowBelowReference:true});assert.equal(result.results[0].status,'uncertain');assert.equal(result.rows.find(r=>r.id==='1002').priceReviewRequired,true);assert.equal((await readJSON(f.service.file)).priceDecisions?.['1002'],undefined);
+});
+
+test('明确来源文字价按正常参考判断，原文不被改写，区间单独待核对',async t=>{
+ const f=await fixture(t),doc=await f.store.read();doc.latestCollection.products[1].suggestedPrice='销售价260';await writeJSON(f.store.file,doc);let row=(await f.service.view()).rows.find(r=>r.id==='1002');assert.equal(row.guard.minimumFils,31000);assert.equal(row.priceCategory,'adjust');assert.equal(row.source.suggestedPrice,'销售价260');
+ doc.latestCollection.products[1].suggestedPrice='260-280';await writeJSON(f.store.file,doc);row=(await f.service.view()).rows.find(r=>r.id==='1002');assert.equal(row.priceCategory,'review');assert.match(row.priceIssue,/区间/);assert.equal(row.guard.minimumFils,null);assert.equal(f.calls.writes.length,0);
+});
+
+test('区间参考可人工确认保留现价，未确认不写，重启保持且新原文重新提醒',async t=>{
+ const f=await fixture(t),doc=await f.store.read();doc.latestCollection.products[1].suggestedPrice='260-280';await writeJSON(f.store.file,doc);const row=(await f.service.view()).rows.find(r=>r.id==='1002'),req=priceRequest(row);req.items[0].target=300;await assert.rejects(f.service.execute(req),/参考资料/);
+ let result=await f.service.execute({...req,allowBelowReference:true});assert.equal(result.results[0].status,'unchanged');assert.equal(result.rows.find(r=>r.id==='1002').priceAccepted,true);assert.equal(result.rows.find(r=>r.id==='1002').guard.status,'unknown');assert.equal(result.rows.find(r=>r.id==='1002').priceCategory,'done');assert.equal(f.calls.writes.length,0);
+ const service=new InventoryBatchEdit({store:f.store,catalog:f.catalog,connection:f.connection});assert.equal((await service.view()).rows.find(r=>r.id==='1002').priceCategory,'done');
+ doc.latestCollection.products[1].suggestedPrice='260-290';await writeJSON(f.store.file,doc);assert.equal((await service.view()).rows.find(r=>r.id==='1002').priceCategory,'review');
+});
+
+test('旧版纯数字价格人工认可签名继续有效，不让已经确认的商品重现',async t=>{
+ const f=await fixture(t);f.web.get('1002').productVariantDTOs[0].salePrice=305;await f.service.refresh({ids:['1002']});const row=(await f.service.view()).rows.find(r=>r.id==='1002'),state=await f.service.state();
+ state.priceDecisions={'1002':{targetFils:30500,source:stableHash({id:row.id,business:row.businessId,name:row.name,cost:11000,suggested:26000,rule:'cost200-suggested20-v1'}),variants:stableHash(['10020','10021']),at:'2026-10-21T08:00:00Z'}};await writeJSON(f.service.file,state);const after=(await f.service.view()).rows.find(r=>r.id==='1002');assert.equal(after.priceAccepted,true);assert.equal(after.priceCategory,'done');
 });

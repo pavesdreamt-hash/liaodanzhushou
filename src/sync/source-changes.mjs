@@ -2,6 +2,7 @@ import {sourceSnapshotStatistics,sourceDirectionalCounts} from './source-statist
 import {assignSourceKeys,normalizedSourceName,sourceModel} from '../mapping/source-key.mjs';
 import {coreText} from '../../shared/text.mjs';
 import {stableHash} from '../core/files.mjs';
+import {toPriceFils} from '../../shared/website-price-rule.mjs';
 
 export const sourceRows=product=>[...new Set((product?.sourceRows?.length?product.sourceRows.map(row=>Number(typeof row==='number'?row:row.sourceRow)):[Number(product?.sourceRow)]).filter(row=>Number.isSafeInteger(row)&&row>0))].sort((a,b)=>a-b);
 const name=value=>(normalizedSourceName(value)||coreText(value).normalize('NFKC').toLowerCase()).replace(/\([^)]*[a-z]{1,8}\d[a-z0-9-]*[^)]*\)/gi,'').replace(/\s+/g,'').trim();
@@ -73,11 +74,14 @@ export function taskSeeds(report){
   });
 }
 const normalizedId=value=>coreText(value).normalize('NFKC').toUpperCase().replace(/[\s_-]+/g,'');
-export function evaluateSourceTasks({tasks,snapshot,mappings=[],catalog={},websiteCheck='pending',allowAutoResolve=true}){
+// Bind notification events; computed website/current fields may be hydrated by
+// an ordinary page read. Source identity and actual SKU prices are checked separately.
+export const priceTaskSnapshot=task=>stableHash({id:task.id,before:task.before,after:task.after,fields:task.fields,createdAt:task.createdAt,lastSeenAt:task.lastSeenAt});
+export function evaluateSourceTasks({tasks,snapshot,mappings=[],catalog={},websiteCheck='pending',allowAutoResolve=true,verifiedReads=[],priceCompletions=[]}){
   const latest=records(snapshot?.products),webByRemote=new Map();
   for(const product of [...(catalog.mappingCatalog||[]),...(catalog.products||[]),...(catalog.archivedProducts||[])]){
     const old=webByRemote.get(product.remoteProductId);
-    if(!old||String(product.updatedAt||product.capturedAt||'')>=String(old.updatedAt||old.capturedAt||''))webByRemote.set(product.remoteProductId,product);
+    if(!old||String(product.capturedAt||product.updatedAt||'')>=String(old.capturedAt||old.updatedAt||''))webByRemote.set(product.remoteProductId,product);
   }
   return tasks.map(task=>{
     const reference=task.after||task.before,candidates=latest.filter(row=>sameSourceIdentity(row,reference)),current=candidates.length===1?candidates[0]:null;
@@ -87,16 +91,21 @@ export function evaluateSourceTasks({tasks,snapshot,mappings=[],catalog={},websi
     const ambiguousRelation=businessId&&(mappings||[]).filter(row=>row.status==='正常'&&normalizedId(row.businessId)===normalizedId(businessId)).length>1;
     const isNew=task.originKind==='added'||task.kind==='added',confirmed=current&&(mappings||[]).filter(row=>row.status==='正常'&&row.businessId&&sameSourceIdentity(row,current));
     const uniqueRelation=confirmed?.length===1&&!ambiguousRelation&&normalizedId(confirmed[0].businessId)===normalizedId(businessId);
+    const read=uniqueRelation&&website&&snapshot?.quality?.passed===true&&verifiedReads.find(proof=>(task.kind==='price'||proof.kind!=='price')&&proof.remoteProductId===website.remoteProductId&&normalizedId(proof.businessId)===normalizedId(businessId)&&proof.sourceAt===snapshot.capturedAt&&proof.at&&['sourceName','cost','suggestedPrice','stock'].every(field=>proof.source?.[field]===current[field])&&['publishStatus','stockKnown','stockQuantity'].every(field=>proof.website?.[field]===website[field]));
+    const websiteVerified=websiteCheck==='verified'||Boolean(read);
+    const alignedPrice=task.kind==='price'&&uniqueRelation&&website&&snapshot?.quality?.passed===true&&priceCompletions.find(proof=>proof.mode==='current-state'&&proof.remoteProductId===website.remoteProductId&&normalizedId(proof.businessId)===normalizedId(businessId)&&proof.sourceAt===snapshot.capturedAt&&proof.websiteAt===(website.updatedAt||website.capturedAt||null)&&Number.isFinite(Date.parse(proof.readAt))&&['sourceName','cost','suggestedPrice','stock'].every(field=>proof.source?.[field]===current[field])&&Number.isSafeInteger(proof.targetFils)&&proof.targetFils>=0&&website.variants?.length&&stableHash(proof.prices)===stableHash(website.variants.map(v=>[String(v.id),toPriceFils(v.salePrice)]))&&website.variants.every(v=>toPriceFils(v.salePrice)!==null&&toPriceFils(v.salePrice)>=proof.targetFils));
+    const priceCompletion=task.kind==='price'&&read&&priceCompletions.find(proof=>proof.mode!=='current-state'&&proof.remoteProductId===website.remoteProductId&&proof.sourceAt===snapshot.capturedAt&&proof.readAt===read.at&&Number.isSafeInteger(proof.targetFils)&&proof.targetFils>=0&&proof.tasks?.some(item=>item.id===task.id&&item.fingerprint===priceTaskSnapshot(task))&&website.variants?.length&&stableHash(proof.prices)===stableHash(website.variants.map(v=>[String(v.id),toPriceFils(v.salePrice)]))&&website.variants.every(v=>toPriceFils(v.salePrice)!==null&&toPriceFils(v.salePrice)>=proof.targetFils))||alignedPrice;
+    const byCurrentPrice=priceCompletion?.mode==='current-state';
     const newProductMatch=isNew&&uniqueRelation&&website?.remoteProductId&&allowAutoResolve&&websiteCheck==='verified'&&snapshot?.quality?.passed===true?{businessId,remoteProductId:website.remoteProductId,at:catalog.mappingCatalogRun?.at||catalog.lastSuccessfulReadAt||new Date().toISOString()}:task.newProductMatch;
     const newProductPending=isNew&&(candidates.length>0||snapshot?.quality?.passed!==true)&&!(uniqueRelation&&newProductMatch?.remoteProductId&&normalizedId(newProductMatch.businessId)===normalizedId(businessId));
     let action='verify',reason='网站状态尚未核对，请完成一键同步。',resolved=false;
-    if(task.kind==='price'){action='price';reason='价格发生变化，必须人工核对并确认已查看；来源与网站价格一致也不会自动关闭。';}
+    if(task.kind==='price'){action='price';resolved=Boolean(priceCompletion);reason=priceCompletion?`网站当前规格售价已符合${byCurrentPrice&&priceCompletion.basis==='reference'?'参考售价':'确认目标'} ${priceCompletion.targetFils/100} AED，无需重复处理，价格提醒同步完成。`:'价格仍需处理；调整后读取最新状态，已对齐或符合人工目标即同步移走。';}
     else if(task.kind==='review'){action='review';reason='商品身份待核对；请确认是否替换，或到来源同步与核对页确认对应关系。';}
     else if(ambiguousRelation){action='review';reason='同一网站编号对应多个来源商品，必须先人工更正对应关系。';}
     else if(ignored&&!newProductPending){resolved=true;reason='该来源商品已在本机明确忽略。';}
     else if(task.kind==='removed'&&current){resolved=true;reason='来源商品已重新出现，删除待办已取消。';}
     else if(task.kind!=='removed'&&!current){resolved=true;reason='此待办对应的来源商品已消失，由最新删除／替换记录核对。';}
-    else if(websiteCheck!=='verified'){}
+    else if(!websiteVerified){}
     else if(task.kind==='removed'){
       if(!businessId){action='review';reason='来源已删除；原网站对应关系未确认，请人工核对是否需要下架。';}
       else if(!website){action='verify';reason='网站目录未返回原商品，不能确认是否已经下架。';}
@@ -115,9 +124,9 @@ export function evaluateSourceTasks({tasks,snapshot,mappings=[],catalog={},websi
     else{resolved=true;reason='来源有货，网站已上架且库存大于 0，回读确认完成。';}
     // Only a newly completed source + website read can prove stock alignment.
     // Cached facts, invalid source quality, and a missing stock quantity cannot.
-    if(resolved&&!ignored&&task.kind!=='removed'&&current&&coreText(current.stock)==='有货'&&(!Number.isFinite(Number(website?.stockQuantity))||website?.stockQuantity===null||website?.stockQuantity===undefined)){resolved=false;action='verify';reason='网站库存数量无效或未返回，不能确认完成。';}
-    if(resolved&&!ignored&&(!allowAutoResolve||snapshot?.quality?.passed!==true)) {resolved=false;reason='尚未完整回读确认，请刷新核对；也可明确人工确认已处理。';}
+    if(resolved&&!ignored&&!['removed','price'].includes(task.kind)&&current&&coreText(current.stock)==='有货'&&(!Number.isFinite(Number(website?.stockQuantity))||website?.stockQuantity===null||website?.stockQuantity===undefined)){resolved=false;action='verify';reason='网站库存数量无效或未返回，不能确认完成。';}
+    if(resolved&&!ignored&&(!(allowAutoResolve||read||alignedPrice)||snapshot?.quality?.passed!==true)) {resolved=false;reason='尚未完整回读确认，请刷新核对；也可明确人工确认已处理。';}
     if(newProductPending){resolved=false;if(candidates.length>1){action='review';reason='来源商品身份有歧义，请先核对对应关系。';}else if(!current){action='verify';reason='来源快照尚未完整核对，不能确认商品已消失。';}reason=`新增商品尚未确认网站对应关系；可人工核对后关闭本次提醒。${reason}`;}
-    return {...task,...(isNew?{originKind:'added',newProductPending,newProductMatch}:{}),current:brief(current?relation:null),businessId,remoteProductId:website?.remoteProductId||task.remoteProductId||null,website:website?{name:website.name||website.sourceName,publishStatus:website.publishStatus,stockKnown:website.stockKnown,stockQuantity:website.stockQuantity,websitePriceAed:website.websitePriceAed}:null,action,reason,resolved,completion:resolved?{type:ignored?'manual-ignore':'system',at:new Date().toISOString(),reason}:undefined};
+    return {...task,...(isNew?{originKind:'added',newProductPending,newProductMatch}:{}),current:brief(current?relation:null),businessId,remoteProductId:website?.remoteProductId||task.remoteProductId||null,website:website?{name:website.name||website.sourceName,publishStatus:website.publishStatus,stockKnown:website.stockKnown,stockQuantity:website.stockQuantity,websitePriceAed:website.websitePriceAed}:null,action,reason,resolved,completion:resolved?{type:ignored?'manual-ignore':byCurrentPrice?'price-aligned':priceCompletion?'batch-price':'system',at:new Date().toISOString(),reason,...(byCurrentPrice?{verification:'catalog-price-read',websiteReadAt:priceCompletion.readAt}:read?{verification:'product-read',websiteReadAt:read.at}: {}),...(priceCompletion?{requestId:priceCompletion.requestId,targetFils:priceCompletion.targetFils,manualTarget:byCurrentPrice?priceCompletion.basis==='manual-target':true}: {})}:undefined};
   });
 }
