@@ -41,4 +41,4 @@ App.asar SHA-256：66c136c30c2e0dc6d307d7a39a8ae4d0312362cb99b6f7a2b5ac13d2733ca
 
 成品核验后检查运行路径，删除3.8.0旧交付及重复构建，共978240KiB分配占用，现场可用空间增加1002287104字节。保留3.8.1～3.8.5五App与小型历史校验记录，未清理源码/Git或正式资料。
 
-Git收据：待本轮提交推送。当前本批3.8.1～3.8.5共5次真实交付，相关源码/测试/必要文档将一并提交推送并核对远端；成品、依赖、商品数据副本、原始Excel与凭据不提交。发布前HEAD为c4a4b2eeeebc1817af8a3ffca1df09fc8035d52c，暂存空。
+Git收据：本批3.8.1～3.8.5共5次真实交付的36项源码/测试/必要文档已提交4f23b71b583c7d5fd5f836b7b362eb50640f46e8，父提交c4a4b2eeeebc1817af8a3ffca1df09fc8035d52c。常规git push/ls-remote因github.com网络超时失败；通过可连接的GitHub官方Git Database REST API上传同一树及同一提交，校验返回树和提交SHA与本机完全一致后以force=false更新main，2026-10-21T10:14:21Z再次读取远端main为4f23b71b583c7d5fd5f836b7b362eb50640f46e8。未改写历史，未提交成品、依赖、商品数据副本、原始Excel或凭据；既有Git凭据仅内存处理。证据artifacts/price-alignment-3.8.5/push-4f23b71b.json。纯文档收据随后另交，不改变已验收App、版本或交付次数；下一3.8.6为新批第1次。
