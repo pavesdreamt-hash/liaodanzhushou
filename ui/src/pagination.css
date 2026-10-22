@@ -1,0 +1,7 @@
+:is(#ui011-inventory,.inventory-batch-dialog) .ld-pagination{display:inline-flex;align-items:center;flex:none;gap:5px;color:#80788d;font:400 12px/1.4 Inter,-apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;font-variant-numeric:tabular-nums;white-space:nowrap;letter-spacing:normal}
+:is(#ui011-inventory,.inventory-batch-dialog) .ld-pagination button{box-sizing:border-box;display:grid;place-items:center;flex:none;width:28px;min-width:28px;max-width:28px;height:28px;min-height:28px;padding:0;border:1px solid #e6dff0;border-radius:7px;background:#faf8ff;color:#80788d;font:inherit;line-height:1;cursor:pointer;box-shadow:none}
+:is(#ui011-inventory,.inventory-batch-dialog) .ld-pagination button:hover:not(:disabled){background:#f2ebff;border-color:#bda2ef;color:#7133d9}
+:is(#ui011-inventory,.inventory-batch-dialog) .ld-pagination button:disabled{opacity:.5;cursor:default}
+:is(#ui011-inventory,.inventory-batch-dialog) .ld-pagination button:focus-visible{outline:2px solid #8b5cf6;outline-offset:2px}
+:is(#ui011-inventory,.inventory-batch-dialog) .ld-pagination svg{width:15px;height:15px;stroke-width:1.8}
+:is(#ui011-inventory,.inventory-batch-dialog) .ld-page-current{min-width:32px;text-align:center;font:inherit;font-variant-numeric:tabular-nums;color:inherit}

@@ -68,17 +68,16 @@
     #ui011-inventory .stat small{display:block;margin-top:6px;color:var(--muted);font-size:10px}
     #ui011-inventory .workspace{min-height:570px;flex:1 1 auto;display:grid;grid-template-columns:minmax(0,1fr) 292px;gap:14px;align-items:stretch}
     #ui011-inventory .card{min-width:0;height:100%;background:var(--surface);border:1px solid var(--line);border-radius:13px}
+    #ui011-inventory.unified-page .workspace{min-height:0}
     #ui011-inventory .workspace>.card{height:auto;min-height:0}
     #ui011-inventory .list-card{display:flex;flex-direction:column;overflow:hidden}
-    #ui011-inventory .source-pending{margin:12px 12px 0;padding:11px 12px;background:var(--amber-soft);border:1px solid #f1d5ae;border-radius:10px}
-    #ui011-inventory .source-pending-head{display:flex;align-items:center;justify-content:space-between;gap:10px;color:#8b5714;font-size:13px;font-weight:650}
+    #ui011-inventory .source-pending{flex:none;display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 14px;padding:10px 12px;background:var(--amber-soft);border:1px solid #f1d5ae;border-radius:10px}
+    #ui011-inventory .source-pending-head{display:flex;align-items:center;gap:8px;color:#8b5714;font-size:12px;font-weight:650}
     #ui011-inventory .source-pending-head span{padding:2px 7px;background:#fff;border-radius:99px;font-size:11px}
-    #ui011-inventory .source-pending-copy{margin:5px 0 8px;color:#765d3d;font-size:11px}
-    #ui011-inventory .source-pending-items{display:grid;gap:6px;max-height:150px;overflow:auto}
-    #ui011-inventory .source-pending-item{display:flex;align-items:center;gap:8px;padding:7px 8px;background:#fffdf8;border:1px solid #f1dfc2;border-radius:8px}
-    #ui011-inventory .source-pending-item strong{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}
-    #ui011-inventory .source-pending-item small{display:block;color:#765d3d;font-size:10px}
-    #ui011-inventory .source-pending-item button{flex:0 0 auto;min-height:29px;padding:0 8px;color:#8b5714;background:#fff;border:1px solid #e8c590;border-radius:6px;font-size:11px}
+    #ui011-inventory .source-pending-copy{flex:1;min-width:160px;margin:0;color:#765d3d;font-size:12px}
+    #ui011-inventory .source-pending-actions{display:flex;align-items:center;gap:8px;margin-left:auto}
+    #ui011-inventory .source-pending-actions button{min-height:30px;padding:0 10px;color:#8b5714;background:#fff;border:1px solid #e8c590;border-radius:6px;font-size:11px;white-space:nowrap}
+    #ui011-inventory .source-pending-actions .source-batch-entry{color:var(--accent);border-color:var(--accent-line)}
     #ui011-inventory .daily-sync-running{display:flex;align-items:center;gap:7px;margin:9px 0;color:var(--accent);font-size:11px;font-weight:600}#ui011-inventory .daily-sync-running .spin{display:inline-grid;place-items:center;width:16px;height:16px;font-size:20px;line-height:1}
     #ui011-inventory .toolbar{padding:12px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--line)}
     #ui011-inventory .search{min-width:180px;flex:1;position:relative}
@@ -111,10 +110,6 @@
     #ui011-inventory .list-page-summary{margin-right:auto;color:var(--muted);font-size:10px;white-space:nowrap}
     #ui011-inventory .list-sort{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:10px;white-space:nowrap}
     #ui011-inventory .list-sort select{height:30px;max-width:142px;padding:0 25px 0 8px;color:var(--text);background:var(--surface);border:1px solid var(--line);border-radius:7px;font-size:10px}
-    #ui011-inventory .list-pager{display:flex;align-items:center;gap:5px;color:var(--muted);font-size:10px;font-variant-numeric:tabular-nums;white-space:nowrap}
-    #ui011-inventory .list-pager button{width:28px;height:28px;display:grid;place-items:center;color:var(--muted);background:var(--surface-2);border:1px solid var(--line);border-radius:7px}
-    #ui011-inventory .list-pager button:disabled{cursor:not-allowed;opacity:.58}
-    #ui011-inventory .list-pager svg{width:15px;height:15px}
     #ui011-inventory .overview{position:relative;padding:12px;overflow-y:auto}
     #ui011-inventory .overview-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
     #ui011-inventory .overview-title-wrap{display:flex;align-items:center;gap:6px}#ui011-inventory .overview-title{display:flex;align-items:center;gap:7px;font-size:14px;font-weight:600}#ui011-inventory .overview-title svg{color:var(--accent)}
@@ -170,6 +165,7 @@
         <div class="page-head">
           <div><div class="eyebrow">商品与库存</div><div class="inventory-title-row"><h1>商品库存 <button class="title-help" id="ui011-page-help" type="button" aria-label="商品库存采集规则"><i data-lucide="circle-help"></i></button></h1><span class="title-connection" id="ui011-connection" role="status" aria-live="polite"><span class="connection-dot"></span><span id="ui011-connection-label">ShopPlus 待验证</span></span></div></div>
           <div class="page-actions">
+            <button class="button" id="ui011-task-details" type="button"><i data-lucide="list-todo"></i>商品待办</button>
             <button class="button" id="ui011-source-library" type="button"><i data-lucide="database"></i>来源同步与核对</button>
             <button class="button" id="ui011-image-manager" type="button"><i data-lucide="images"></i>图片管理</button>
             <button class="button button-primary" id="ui011-product-manager" type="button"><i data-lucide="refresh-cw"></i><span>商品同步与更新</span></button>
@@ -182,6 +178,8 @@
           </section>
         </div>
 
+        <section class="source-pending" id="ui011-source-pending" aria-label="商品待办提示" hidden><div class="source-pending-head"><span>商品待办</span><span id="ui011-source-pending-count"></span></div><p class="source-pending-copy"></p><div class="source-pending-actions"></div></section>
+
         <div class="stats" aria-label="库存概况">
           <button class="stat" type="button" data-filter="all" aria-pressed="true"><span class="stat-label"><span>已采集商品</span><i data-lucide="package-open"></i></span><strong id="ui011-total">0</strong></button>
           <button class="stat" type="button" data-filter="in" aria-pressed="false"><span class="stat-label"><span>有库存</span><i data-lucide="circle-check"></i></span><strong id="ui011-in">0</strong></button>
@@ -190,7 +188,6 @@
 
         <div class="workspace">
           <section class="card list-card" aria-label="商品列表">
-            <section class="source-pending" id="ui011-source-pending" aria-label="来源状态待处理" hidden><div class="source-pending-head"><span>来源状态待处理</span><span id="ui011-source-pending-count">0 项</span></div><p class="source-pending-copy">“刷新”只移走本机已查看项，不读取来源表或网站；库存自动核对请用“一键同步”，价格须人工确认。</p><div class="source-pending-items" id="ui011-source-pending-items"></div></section>
             <div class="toolbar"><label class="search"><span class="sr-only">搜索商品</span><i data-lucide="search"></i><input id="ui011-search" type="search" placeholder="搜索商品名称"></label><select id="ui011-status" aria-label="库存状态"><option value="all">全部状态</option><option value="in">有库存</option><option value="review">图片待确认</option></select></div>
             <div class="result-count" id="ui011-result-count">共 0 个商品</div>
             <div class="table-wrap">

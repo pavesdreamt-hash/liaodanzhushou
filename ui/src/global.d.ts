@@ -58,7 +58,7 @@ declare global {
       submitMapping?: (answers: unknown, confirmFirstSync: boolean, options?:{localOnly?:boolean;sourceAt?:string;mappingFingerprint?:string}) => Promise<{ok: boolean; data?: unknown; error?: {message?: string}}>;
     };
     shopPlusProductPilot?: {
-      catalog: (payload?: {inventory?:boolean;phase?:'list'}) => Promise<{ok: boolean; data?: unknown; error?: {message?: string}}>;
+      catalog: (payload?: {inventory?:boolean;phase?:'list';productDetail?:boolean}) => Promise<{ok: boolean; data?: unknown; error?: {message?: string}}>;
       localMedia: (payload:{remoteProductId:string;primaryOnly?:boolean}) => Promise<{ok:boolean;data?:unknown;error?:{message?:string}}>;
       collect: (payload?: unknown) => Promise<{ok: boolean; data?: unknown; error?: {message?: string}}>;
       syncMappingCatalog: () => Promise<{ok: boolean; data?: unknown; error?: {message?: string}}>;

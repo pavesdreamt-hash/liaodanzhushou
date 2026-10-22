@@ -35,18 +35,18 @@ function pendingIdentities(data){
 }
 const sourceSignature=data=>stableHash({at:data.snapshot?.capturedAt,products:pendingIdentities(data)});
 function pendingWebsiteMatch(data,source,ctx,website,related){
-  if(ctx.blocked&&ctx.blocked!=='网站对应关系未确认')return {published:false,reason:ctx.blocked};
-  if(ctx.product){const product=Date.parse(ctx.product.updatedAt)>Date.parse(website.at)?ctx.product:website.records.find(p=>p.remoteProductId===ctx.product.remoteProductId);return {product,published:product?.publishStatus===1,reason:!product?'网站目录未返回已对应商品，请核对':product.publishStatus===0?'网站商品尚未上架':'网站上架状态待核对'};}
-  if(related.some(t=>!t.resolved&&t.kind==='review')||data.mappings.some(m=>m.status==='本机已忽略'&&sameSourceIdentity(m,source)))return {published:false,reason:'商品身份仍需人工核对'};
+  if(ctx.blocked&&ctx.blocked!=='网站对应关系未确认')return {confirmed:false,reason:ctx.blocked};
+  if(ctx.product){const product=Date.parse(ctx.product.updatedAt)>Date.parse(website.at)?ctx.product:website.records.find(p=>p.remoteProductId===ctx.product.remoteProductId);return {product,confirmed:true};}
+  if(related.some(t=>!t.resolved&&t.kind==='review')||data.mappings.some(m=>m.status==='本机已忽略'&&sameSourceIdentity(m,source)))return {confirmed:false,reason:'商品身份仍需人工核对'};
   const model=sourceModel(source.sourceName),peers=(data.index.sources.get(sourceIdentityName(source))||[]).filter(p=>sameSourceIdentity(p,source));
-  if(peers.length!==1||model&&data.index.models.get(model)?.length!==1)return {published:false,reason:'来源名称或型号不唯一，请核对对应'};
+  if(peers.length!==1||model&&data.index.models.get(model)?.length!==1)return {confirmed:false,reason:'来源名称或型号不唯一，请核对对应'};
   // Exact full title or an exact seller model/SKU identifier, never fuzzy/substring matching.
   const matches=[...new Map([...(website.names.get(fullName(source.sourceName))||[]),...(model?website.models.get(model)||[]:[])].map(p=>[p.remoteProductId,p])).values()];
-  if(matches.length>1)return {published:false,reason:'网站名称或型号存在多个商品，请核对对应'};
-  const product=matches[0];if(!product)return {published:false,reason:'网站尚未找到准确对应的商品，可先准备图片'};
+  if(matches.length>1)return {confirmed:false,reason:'网站名称或型号存在多个商品，请核对对应'};
+  const product=matches[0];if(!product)return {confirmed:false,reason:'网站尚未找到准确对应的商品，可先准备图片'};
   const businessIds=new Set([product.productNumber,...data.records.filter(p=>p.remoteProductId===product.remoteProductId).map(p=>p.productNumber)].map(norm));
-  if(data.mappings.some(m=>m.status==='正常'&&businessIds.has(norm(m.businessId))&&!sameSourceIdentity(m,source)))return {published:false,reason:'网站商品已由其它来源确认对应，请人工核对'};
-  return {product,published:product.publishStatus===1,reason:product.publishStatus===0?'网站商品已创建，尚未上架':'网站上架状态待核对'};
+  if(data.mappings.some(m=>m.status==='正常'&&businessIds.has(norm(m.businessId))&&!sameSourceIdentity(m,source)))return {confirmed:false,reason:'网站商品已由其它来源确认对应，请人工核对'};
+  return {product,confirmed:false,reason:'网站已有同名或同型号商品，请通过“来源与对应”人工确认'};
 }
 // Different products may wait on the network together. SKUs of one product remain ordered.
 async function forProducts(items,run,limit=3){
@@ -92,10 +92,12 @@ export class InventoryBatchEdit{
       const related=(taskIndex.get(sourceIdentityName(source))||[]).filter(t=>sameSourceIdentity(t.current||t.after||t.before,source));
       const old=related.find(t=>t.before)?.before||source;
       const origin=related.find(t=>t.originKind==='added'||t.kind==='added');
-      if(origin){
+      {
         const sourceChecked=directoryChecked&&(checked.sources?checked.sources[source.sourceKey||source.sourceName]===pendingIdentity(source,origin):fresh);
-        const match=sourceChecked?pendingWebsiteMatch(data,source,ctx,website,related):{published:Boolean(p?.publishStatus===1&&!ctx.blocked),reason:!p?'尚未建立网站商品对应，可先准备图片':'网站商品尚未上架'};
-        if(!match.published)pendingNew.push({key:source.sourceKey||source.sourceName,sourceName:source.sourceName,sourceRow:sourceRows(source)[0],cost:source.cost,suggestedPrice:source.suggestedPrice,stock:source.stock,reason:match.reason,remoteProductId:p?.remoteProductId||null});
+        const match=sourceChecked?pendingWebsiteMatch(data,source,ctx,website,related):{confirmed:Boolean(p&&!ctx.blocked),reason:ctx.blocked&&ctx.blocked!=='网站对应关系未确认'?ctx.blocked:'尚未建立网站商品对应，可先准备图片'};
+        // Availability and an explicit unique relationship define this queue,
+        // independently of old notification types or a candidate's listing state.
+        if(source.stock==='有货'&&!match.confirmed)pendingNew.push({key:source.sourceKey||source.sourceName,sourceName:source.sourceName,sourceRow:sourceRows(source)[0],cost:source.cost,suggestedPrice:source.suggestedPrice,stock:source.stock,reason:match.reason,remoteProductId:p?.remoteProductId||null});
         if(p&&match.product&&(!p.updatedAt||Date.parse(p.updatedAt)<=Date.parse(website.at)))p={...p,...match.product,productNumber:p.productNumber};
       }
       if(!p)continue;

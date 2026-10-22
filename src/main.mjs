@@ -48,7 +48,7 @@ import {LocalWebServer} from './local-web-server.mjs';
 import {SHOPPLUS_FILE_FILTER_EXTENSIONS,shopPlusExtension,validateShopPlusUpload} from './orders/shopplus-file.mjs';
 import {ShopPlusConnection} from './orders/shopplus-api.mjs';
 import {ShopPlusProductCatalog} from './inventory/shopplus-product-catalog.mjs';
-import {inventoryPageView} from './inventory/page-view.mjs';
+import {createInventoryPageView} from './inventory/page-view.mjs';
 import {projectChatProductCatalog} from './orders/chat-product-catalog.mjs';
 const directory=path.dirname(fileURLToPath(import.meta.url)),PRODUCTION_WEB_PORT=43877;
 const wait=milliseconds=>new Promise(resolve=>setTimeout(resolve,milliseconds));
@@ -410,7 +410,7 @@ async function bootstrap(){
   handler('inventory:batch-progress',payload=>inventoryBatch.progress(payload));
   handler('inventory:batch-refresh',async payload=>{const result=await inventoryBatch.refresh(payload);const catalog=await shopPlusProductCatalog.getView({includeImages:false});return {...result,catalog,sourceChanges:await sourceChangesWithCurrent(catalog,null,{verifiedReads:result.verifiedReads,priceCompletions:result.priceCompletions})};});
   handler('inventory:batch-execute',async payload=>{const result=await inventoryBatch.execute(payload);const catalog=await shopPlusProductCatalog.getView({includeImages:false});return {...result,catalog,sourceChanges:await sourceChangesWithCurrent(catalog,null,{verifiedReads:result.verifiedReads,priceCompletions:result.priceCompletions})};});
-  const shopPlusProductStatus=request=>inventoryPageView({catalog:shopPlusProductCatalog,batch:inventoryBatch,store:orchestrator.localStore,sourceChanges:sourceChangesWithCurrent,workflow:productSyncWorkflow,connection:shopPlusConnection},request);
+  const shopPlusProductStatus=createInventoryPageView({catalog:shopPlusProductCatalog,batch:inventoryBatch,store:orchestrator.localStore,sourceChanges:sourceChangesWithCurrent,workflow:productSyncWorkflow,connection:shopPlusConnection,pendingFile:orchestrator.pendingFile});
   handler('source:changes',async()=>{const batch=await inventoryBatch.view();return sourceChangesWithCurrent(await shopPlusProductCatalog.getView(),null,{verifiedReads:batch.verifiedReads,priceCompletions:batch.priceCompletions});});
   handler('source:refresh-reminders',async()=>{await sourceChangesWithCurrent(await shopPlusProductCatalog.getView());return orchestrator.localStore.refreshReviewedReminders();});
   handler('source:review-task',async payload=>{if(payload?.operation==='close'){const document=await orchestrator.localStore.read(),task=document.sourceChanges?.tasks?.find(t=>t.id===payload.taskId&&!t.resolved);if(task?.kind==='price'){const result=await priceTaskVerification.confirm(payload);if(!result.closed)throw new Error(result.reason||'单品价格尚未核验通过，提醒保留');return result.changes;}}return orchestrator.localStore.reviewSourceTask(payload||{});});

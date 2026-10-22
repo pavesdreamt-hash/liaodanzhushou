@@ -9,6 +9,7 @@ import {sourceSnapshotStatistics,sourceDirectionalCounts} from '../sync/source-s
 import path from 'node:path';
 import {unlink} from 'node:fs/promises';
 import {readJSON,writeJSON,listJSON} from '../core/files.mjs';
+import {fileRevision} from '../core/file-revision.mjs';
 import {INVENTORY_HEADERS,MAPPING_HEADERS} from '../config.mjs';
 import {parseInventory} from '../sync/history.mjs';
 import {buildSourceChangeReport,taskSeeds,evaluateSourceTasks,sameSourceIdentity,changeCounts} from '../sync/source-changes.mjs';
@@ -49,7 +50,8 @@ export class LocalInventoryStore{
     }
     document.updatedAt=nowIso();document.latestCollection={capturedAt:snapshot.capturedAt,sourceUrl:snapshot.sourceUrl,sheet:snapshot.sheet,range:snapshot.range,quality:snapshot.quality,products:snapshot.products||[]};await writeJSON(this.file,document);await this.pruneSourceSnapshots();return this.view(document);
   });}
-  async refreshSourceChanges({catalog={},mappings=null,websiteCheck=null,applyReviewed=false,verifiedReads=[],priceCompletions=[]}={}){return this.serial(async()=>{
+  async refreshSourceChanges({catalog={},mappings=null,websiteCheck=null,applyReviewed=false,verifiedReads=[],priceCompletions=[],includeInventoryRevision=false}={}){return this.serial(async()=>{
+    const inputRevision=includeInventoryRevision?await fileRevision(this.file):null;
     const document=await this.read(),changes=document.sourceChanges;if(!changes)return null;
     const check=websiteCheck||changes.report.websiteCheck||'pending',relations=mappings||document.mappingRows||parseMappingRows(document.mapping);
     restoreNewProductTasks(changes,document.latestCollection,relations);
@@ -69,7 +71,7 @@ export class LocalInventoryStore{
     changes.report.summary=changeCounts(changes.report.rows);
     const update=report=>({...report,rows:report.rows.map(row=>({...row,tasks:changes.tasks.filter(task=>task.changeId===row.id||!task.resolved&&sameSourceIdentity(task.after||task.before,row.after||row.before))}))});
     changes.report=update(changes.report);changes.history=changes.history.map(report=>report.id===changes.report.id?changes.report:update(report));
-    await writeJSON(this.file,document);const view=this.changesView(changes);await this.hydrateReportStatistics(view,document.latestCollection);return view;
+    await writeJSON(this.file,document);const revision=includeInventoryRevision?await fileRevision(this.file):null,view=this.changesView(changes);await this.hydrateReportStatistics(view,document.latestCollection);return includeInventoryRevision?{...view,inventorySourceRevision:revision,inventorySourceInputRevision:inputRevision}:view;
   });}
   async hydrateReportStatistics(changes,latest){
     const reports=[changes.report,...(changes.history||[])],needed=new Set(reports.filter(r=>!r.statistics).flatMap(r=>[r.at,r.previousAt]).filter(Boolean));
