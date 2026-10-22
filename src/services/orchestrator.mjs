@@ -60,10 +60,10 @@ export class Orchestrator {
     const state=await this.state(),now=new Date().toISOString();await writeJSON(this.stateFile,{...state,lastCheck:now,productCount:source.quality.namedProducts,kdocsLoggedIn:true,
       collection:{status:'success',capturedAt:source.capturedAt,products:source.quality.namedProducts,endpoint:source.quality.endpoint},mapping:this.mappingSummary(this.pending.mappingState),googleWrite:shouldUseGoogle?'尚未执行':'未连接（将保存本地）',localWrite:'尚未保存',workflow:this.pending.plan.requiresInput||this.pending.plan.firstSync?'waiting_confirmation':'ready'});return this.pending;
   }
-  async mappingStatus(){
-    try{let pending=await this.loadPending();if(!pending){const source=await this.latestSource();if(!source)return {status:'not-generated',sourceAvailable:false};pending=await this.preparePending(source);}
+  async mappingStatus({localOnly=false}={}){
+    try{let pending=await this.loadPending();if(!pending){const source=await this.latestSource();if(!source)return {status:'not-generated',sourceAvailable:false};pending=await this.preparePending(source,localOnly?{useGoogle:false}:{});}
       const summary=this.mappingSummary(pending.mappingState);return {status:pending.plan.requiresInput||pending.plan.firstSync?'pending':'clear',summary,
-        warnings:pending.source?.quality?.warnings||[],mapping:{...summary,review:pending.mappingState.review||[],rows:pending.mappingState.rows||[]},plan:planFileView(pending.plan)};
+        sourceAt:pending.source?.capturedAt,mappingFingerprint:stableHash(pending.mappingState.rows),warnings:pending.source?.quality?.warnings||[],mapping:{...summary,review:pending.mappingState.review||[],rows:pending.mappingState.rows||[]},plan:planFileView(pending.plan)};
     }catch(error){if(isGoogleAuthorizationError(error)){const state=await this.state(),invalidAt=new Date().toISOString();state.googleAuthorization={status:'invalid',invalidAt,code:'GOOGLE_AUTH_EXPIRED'};state.latest={ok:false,error:publicError(error),at:invalidAt};await writeJSON(this.stateFile,state);}throw error;}
   }
   async sync(){
@@ -105,8 +105,14 @@ export class Orchestrator {
       throw error;
     }finally{this.running=false;}
   }
-  async submitMapping(answers,{confirmFirstSync=false}={}){
+  async submitMapping(answers,{confirmFirstSync=false,localOnly=false,sourceAt,mappingFingerprint}={}){
     await this.loadPending();if(!this.pending)throw new AppError('没有等待确认的同步计划，请先完成一次库存采集',{stage:'商品映射',code:'NO_PENDING_PLAN'});
+    if(localOnly){
+      if(this.running)throw new AppError('来源同步正在执行，请等待完成后再保存对应',{stage:'商品映射',code:'BUSY'});
+      if(this.pending.storage!=='local')throw new AppError('当前存在外部表格同步计划，请先在来源同步页面处理该计划；此弹窗不会写外部表格',{stage:'商品映射',code:'LOCAL_MAPPING_ONLY'});
+      const latest=await this.localStore.read();
+      if(sourceAt!==latest.latestCollection?.capturedAt||!sourceAt||sourceAt!==this.pending.source?.capturedAt||!mappingFingerprint||mappingFingerprint!==stableHash(this.pending.mappingState.rows))throw new AppError('来源资料或对应关系已变化，请关闭后重新核对',{stage:'商品映射',code:'MAPPING_CHANGED'});
+    }
     const mappingState=applyWizardAnswers(this.pending.mappingState,answers);const plan=buildSyncPlan({sourceSnapshot:this.pending.source,mappingState,
       inventoryValues:this.pending.workbook.inventory,mappingValuesBefore:this.pending.workbook.mapping,metadata:this.pending.workbook.metadata});
     this.pending={...this.pending,mappingState,plan};await writeJSON(this.pendingFile,this.pending);if(plan.requiresInput)return {action:'mapping-input',warnings:this.pending.source?.quality?.warnings||[],plan:planFileView(plan),mapping:mappingState};

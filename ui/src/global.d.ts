@@ -53,11 +53,13 @@ declare global {
       sourceRenameOptions?: (payload?: any) => Promise<{ok:boolean;data?:any;error?:{message?:string}}> ;
       confirmSourceRename?: (payload:any) => Promise<{ok:boolean;data?:any;error?:{message?:string}}> ;
       changeRetiredSource?: (payload:any) => Promise<{ok:boolean;data?:any;error?:{message?:string}}> ;
-      mappingStatus?: () => Promise<{ok: boolean; data?: unknown; error?: {message?: string}}>;
-      submitMapping?: (answers: unknown, confirmFirstSync: boolean) => Promise<{ok: boolean; data?: unknown; error?: {message?: string}}>;
+      mappingWorkspace?: (options?:{localOnly?:boolean}) => Promise<{ok:boolean;data?:any;error?:{message?:string}}> ;
+      mappingStatus?: (options?:{localOnly?:boolean}) => Promise<{ok: boolean; data?: unknown; error?: {message?: string}}>;
+      submitMapping?: (answers: unknown, confirmFirstSync: boolean, options?:{localOnly?:boolean;sourceAt?:string;mappingFingerprint?:string}) => Promise<{ok: boolean; data?: unknown; error?: {message?: string}}>;
     };
     shopPlusProductPilot?: {
-      catalog: () => Promise<{ok: boolean; data?: unknown; error?: {message?: string}}>;
+      catalog: (payload?: {inventory?:boolean;phase?:'list'}) => Promise<{ok: boolean; data?: unknown; error?: {message?: string}}>;
+      localMedia: (payload:{remoteProductId:string;primaryOnly?:boolean}) => Promise<{ok:boolean;data?:unknown;error?:{message?:string}}>;
       collect: (payload?: unknown) => Promise<{ok: boolean; data?: unknown; error?: {message?: string}}>;
       syncMappingCatalog: () => Promise<{ok: boolean; data?: unknown; error?: {message?: string}}>;
       refresh: () => Promise<{ok: boolean; data?: unknown; error?: {message?: string}}>;

@@ -251,27 +251,38 @@ export class ShopPlusProductCatalog {
     try{const bytes=await readFile(path.join(this.mediaDirectory,image.file));if(bytes.length>=SHOPPLUS_PRODUCT_IMAGE_MAX_BYTES)return null;return `data:${image.mimeType||mimeForExtension[image.file.split('.').pop()]||'image/jpeg'};base64,${bytes.toString('base64')}`;}
     catch{return null;}
   }
-  async view(){
+  mediaRevision(product){return hash(JSON.stringify(imageRecords(product)));}
+  async getLocalMedia({remoteProductId,primaryOnly=false}={}){
+    const record=await this.serial(async()=>{await this.load();const product=[...this.state.products,...(this.state.archivedProducts||[])].find(p=>p.remoteProductId===remoteProductId);if(!product)throw new Error('本机没有该商品，请刷新商品列表');return {remoteProductId:product.remoteProductId,mediaRevision:this.mediaRevision(product),images:copied(primaryOnly?imageRecords(product).slice(0,1):imageRecords(product))};});
+    for(const image of record.images)image.dataUrl=await this.cachedImageData(image);
+    return {...record,image:record.images[0]||null};
+  }
+  async view({includeImages=true}={}){
     await this.load();const products=[];
     for(const product of this.state.products){
       const images=[];
       for(const stored of imageRecords(product)){
         const image={...stored};
-        image.dataUrl=await this.cachedImageData(image);
+        image.dataUrl=includeImages?await this.cachedImageData(image):null;
         images.push(image);
       }
       const image=images[0]||null;
       const descriptionSource=product.localDescription??product.sourceLongDescription??product.sourceShortDescription??'';
-      products.push({...copied(product),name:product.localName||product.sourceName,description:readableDescription(descriptionSource),image,images});
+      products.push({...copied(product),name:product.localName||product.sourceName,description:readableDescription(descriptionSource),mediaRevision:this.mediaRevision(product),image,images});
     }
     const archivedProducts=[];
-    for(const product of this.state.archivedProducts||[]){const images=[];for(const stored of imageRecords(product)){const image={...stored};image.dataUrl=await this.cachedImageData(image);images.push(image);}const descriptionSource=product.localDescription??product.sourceLongDescription??product.sourceShortDescription??'';archivedProducts.push({...copied(product),name:product.localName||product.sourceName,description:readableDescription(descriptionSource),image:images[0]||null,images});}
+    for(const product of this.state.archivedProducts||[]){const images=[];for(const stored of imageRecords(product)){const image={...stored};image.dataUrl=includeImages?await this.cachedImageData(image):null;images.push(image);}const descriptionSource=product.localDescription??product.sourceLongDescription??product.sourceShortDescription??'';archivedProducts.push({...copied(product),name:product.localName||product.sourceName,description:readableDescription(descriptionSource),mediaRevision:this.mediaRevision(product),image:images[0]||null,images});}
     const lastRun=this.state.lastRun?copied(this.state.lastRun):null;
     const mappingCatalog=(this.state.mappingCatalog||[]).map(product=>({...copied(product),name:product.localName||product.sourceName,image:null,images:[]}));
     const dailyPending=[...products,...archivedProducts].map(product=>{const action=pendingInventoryAction(product);return action?{...product,...action}:null;}).filter(Boolean);
     return {products,archivedProducts,dailyPending,mappingCatalog,mappingCatalogRun:this.state.mappingCatalogRun?copied(this.state.mappingCatalogRun):null,listingHistory:copied(this.state.listingHistory||[]),lastRun,refreshRun:this.state.refreshRun?copied(this.state.refreshRun):null,mediaRun:this.state.mediaRun?copied(this.state.mediaRun):null,sourcePricingRun:this.state.sourcePricingRun?copied(this.state.sourcePricingRun):null,reconciliation:this.state.reconciliation?copied(this.state.reconciliation):null,lastSuccessfulReadAt:this.state.lastSuccessfulReadAt||null,batch:copied(this.state.batch||initial().batch),limit:null,legacyLimit:SHOPPLUS_PRODUCT_COLLECTION_LIMIT,archivedCount:(this.state.archivedProducts||[]).length,defaultTarget:SHOPPLUS_PRODUCT_COLLECTION_DEFAULT,imageMaxBytes:SHOPPLUS_PRODUCT_IMAGE_MAX_BYTES,canCollect:true};
   }
-  async getView(){return this.serial(()=>this.view());}
+  async getView(options={}){return this.serial(()=>this.view(options));}
+  async getMappingView({includeReconciliation=false}={}){return this.serial(async()=>{
+    await this.load();
+    const metadata=p=>({remoteProductId:p.remoteProductId,productNumber:p.productNumber,sourceName:p.sourceName,name:p.localName||p.sourceName,sourceSpu:p.sourceSpu,publishStatus:p.publishStatus,stockKnown:p.stockKnown,stockQuantity:p.stockQuantity,websitePriceAed:p.websitePriceAed,variants:(p.variants||[]).map(v=>({id:v.id,name:v.name,skuCode:v.skuCode,salePrice:v.salePrice,stockQuantity:v.stockQuantity})),capturedAt:p.capturedAt,updatedAt:p.updatedAt});
+    return {mappingCatalog:(this.state.mappingCatalog||[]).map(metadata),mappingCatalogRun:copied(this.state.mappingCatalogRun||null),products:this.state.mappingCatalog?.length?[]:this.state.products.map(metadata),archivedProducts:this.state.mappingCatalog?.length?[]:(this.state.archivedProducts||[]).map(metadata),reconciliation:includeReconciliation?copied(this.state.reconciliation||null):null,lastSuccessfulReadAt:this.state.lastSuccessfulReadAt||null};
+  });}
   async imageRecord({remoteProductId,sourceUrl,previous}){
     if(!sourceUrl)return {status:'none',sourceUrl:null,byteLength:null,reviewReason:null,file:null,mimeType:null};
     if(previous?.sourceUrl===sourceUrl&&['cached','manual_review'].includes(previous.status))return {...previous};

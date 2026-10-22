@@ -137,6 +137,8 @@ html,body{margin:0;padding:0;height:100%;min-height:0;overflow:hidden;background
 .source-task-notice.is-passed{background:#e8f7ef;color:#08764b}.source-task-notice.is-failed{background:#fff0ed;color:#a52a1f}
 .source-task-action-result{font-size:12px!important;line-height:1.6;color:#665870;margin:10px 0 0!important;flex:none}
 .source-price-close-confirm footer{display:flex;justify-content:flex-end;gap:8px}
+.source-task-header{display:flex;align-items:center;justify-content:space-between;gap:16px;flex:none}.source-task-header h2{margin:0!important}.source-task-header button{flex:none}.source-task-tools{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;flex:none}
+.source-operation-editor.live-dialog{box-sizing:border-box;width:min(760px,calc(100vw - 32px));max-height:calc(100vh - 32px);display:flex;flex-direction:column;overflow:hidden}.source-operation-table-wrap{min-height:0;overflow:auto;flex:1}.source-operation-editor .source-task-table{min-width:450px;table-layout:auto}.source-operation-editor input[type=number]{width:110px;max-width:100%;box-sizing:border-box}.source-operation-editor footer{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px;flex:none}.source-operation-editor output{font-size:13px;line-height:1.6;white-space:pre-line;flex:none}
 
 /* D-212: reuse source comparison and shared dialog styles for an explicit identity decision. */
 .source-rename-dialog.live-dialog{box-sizing:border-box;width:min(720px,calc(100vw - 32px));max-width:calc(100vw - 32px);max-height:calc(100vh - 32px);overflow:auto}
@@ -157,3 +159,9 @@ html,body{margin:0;padding:0;height:100%;min-height:0;overflow:hidden;background
 #ui011-inventory .pending-new-items{border-top:1px solid #eee5f8;padding:8px 11px;max-height:160px;overflow:auto;line-height:1.8}
 #ui011-inventory .pending-new-items>div{padding:3px 0}
 #ui011-inventory .pending-new-items>button{margin-top:6px;padding:4px 9px;color:#7133d9;background:#fff;border:1px solid #d9c8f2;border-radius:5px;font:inherit}
+
+/* Single-product price editor reuses the source comparison table and dialogs. */
+.source-price-editor.live-dialog{box-sizing:border-box;width:min(660px,calc(100vw - 32px));max-height:calc(100vh - 32px);overflow:auto}
+.source-price-editor .source-task-table{min-width:0;table-layout:auto}.source-price-editor .source-task-table th{width:36%}
+.source-price-input{display:flex;align-items:center;gap:14px;margin:18px 0;font-size:14px}.source-price-input input{flex:1;min-width:0;padding:10px 12px;border:1px solid #dcd0f5;border-radius:8px}
+.source-price-editor footer{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px}.source-price-editor output{display:block;font-size:13px;line-height:1.6;margin:8px 0;color:#625577;white-space:pre-line}

@@ -1,0 +1,13 @@
+import {batchFixture} from './inventory-batch.mjs';import {writeJSON} from '../../src/core/files.mjs';import {assignSourceKeys} from '../../src/mapping/source-key.mjs';import {mappingValues} from '../../src/mapping/mapping.mjs';import {Orchestrator} from '../../src/services/orchestrator.mjs';
+export async function taskActionsFixture(){
+ const f=await batchFixture(),doc=await f.store.read();
+ const sources=doc.latestCollection.products.map((s,i)=>({...s,...(i===1?{sourceName:'YB06',cost:'75',suggestedPrice:'280',stock:'无货',sourceRow:58}:i===5?{sourceName:'YB222',cost:'60',suggestedPrice:'230',stock:'无货',sourceRow:74}:{})}));
+ sources.forEach(s=>delete s.sourceKey);const keyed=assignSourceKeys(sources);doc.latestCollection.products=keyed;doc.mappingRows=keyed.slice(0,5).map((s,i)=>({...s,businessId:doc.mappingRows[i].businessId,status:'正常'}));doc.mapping=mappingValues(doc.mappingRows);doc.current.products=keyed;doc.current.mappingRows=doc.mappingRows;
+ for(let i=0;i<doc.sourceChanges.tasks.length;i++){const t=doc.sourceChanges.tasks[i];t.current=t.after=keyed[i];t.resolved=i===3||i===4;t.website=null;if(i===1){t.kind='price';t.action='price';t.fields=[{field:'suggestedPrice',before:'260',after:'280'}];t.website={name:'YB06',publishStatus:1,stockKnown:true,stockQuantity:13,websitePriceAed:295};}if(i===5){t.kind='modified';t.action='review';t.newProductPending=false;delete t.originKind;t.reason='来源无货，请确认网站对应关系';}}
+ const stock={...structuredClone(doc.sourceChanges.tasks[1]),id:'yb06-stock',kind:'modified',action:'unpublish',fields:[{field:'stock',before:'有货',after:'无货'}]};doc.sourceChanges.tasks.push(stock);doc.sourceChanges.report.rows=doc.sourceChanges.tasks.map(t=>({id:t.changeId,kind:t.kind,before:t.before,after:t.after,fields:t.fields,tasks:[t]}));doc.sourceChanges.history=[structuredClone(doc.sourceChanges.report)];await writeJSON(f.store.file,doc);
+ f.web.get('1002').title='YB06';f.web.get('1002').productVariantDTOs[0].salePrice=295;f.web.get('1001').productVariantDTOs[0].salePrice=325;
+ f.web.set('9001',{id:'9001',title:'YB222',publishStatus:1,productVariantDTOs:[{id:'90010',salePrice:280,productVariantInventoryDTO:{availableStockQuantity:10}}]});
+ await f.catalog.syncMappingCatalog({listPage:async()=>({products:[...f.web.values()],totalCount:f.web.size})});for(const id of ['1001','1002'])await f.catalog.readOne({remoteProductId:id,readProduct:f.connection.productDetail});
+ const orchestrator=new Orchestrator({paths:f.paths,oauth:{status:async()=>({connected:false})},sheets:{}});await orchestrator.preparePending(doc.latestCollection,{useGoogle:false});f.calls.reads=[];f.calls.writes=[];
+ return{...f,orchestrator};
+}

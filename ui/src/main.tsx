@@ -1,3 +1,4 @@
+import sourceMappingCss from './source-mapping.css?raw';
 import {StrictMode,createElement,useEffect,useMemo,useRef,useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import {renderToStaticMarkup} from 'react-dom/server';
@@ -100,6 +101,7 @@ function ConfirmedApp(){
       +moduleStyle('empty-workspace',emptyCss)
       +(restoredPages.has(page)?moduleStyle('restored-pages',restoredCss):'')
       +(page==='inventory'?moduleStyle('inventory-batch',inventoryBatchCss):'')
+      +(['source','inventory'].includes(page)?moduleStyle('source-mapping',sourceMappingCss):'')
       +moduleStyle('hover-hints',hoverHintsCss);
   },[page]);
   const setup=()=>{
