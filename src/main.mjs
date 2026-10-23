@@ -1,3 +1,4 @@
+import {WebsiteProductBridge} from './inventory/website-product-bridge.mjs';
 import {readMappingWorkspace} from './mapping/workspace.mjs';
 import {InventoryBatchEdit} from './inventory/batch-edit.mjs';
 import {SourceTaskReadback} from './inventory/source-task-readback.mjs';
@@ -48,7 +49,9 @@ import {LocalWebServer} from './local-web-server.mjs';
 import {SHOPPLUS_FILE_FILTER_EXTENSIONS,shopPlusExtension,validateShopPlusUpload} from './orders/shopplus-file.mjs';
 import {ShopPlusConnection} from './orders/shopplus-api.mjs';
 import {ShopPlusProductCatalog} from './inventory/shopplus-product-catalog.mjs';
+import {LocalProducts,encodeLocalProductImage} from './inventory/local-products.mjs';
 import {createInventoryPageView} from './inventory/page-view.mjs';
+import {UnifiedInventory} from './inventory/unified-inventory.mjs';
 import {projectChatProductCatalog} from './orders/chat-product-catalog.mjs';
 const directory=path.dirname(fileURLToPath(import.meta.url)),PRODUCTION_WEB_PORT=43877;
 const wait=milliseconds=>new Promise(resolve=>setTimeout(resolve,milliseconds));
@@ -403,6 +406,41 @@ async function bootstrap(){
   handler('orders:acknowledge-shopplus-sync-attention',payload=>orders().acknowledgeShopPlusSyncAttention(payload));
   const productSyncWorkflow=new ProductSyncWorkflow(paths),priceTaskVerification=new PriceTaskVerification({store:orchestrator.localStore,catalog:shopPlusProductCatalog,readProduct:id=>shopPlusConnection.productDetail(id)});
   const inventoryBatch=new InventoryBatchEdit({store:orchestrator.localStore,catalog:shopPlusProductCatalog,connection:shopPlusConnection});
+  const localProducts=new LocalProducts({directory:path.join(paths.base,'orders','local-products'),sourceRows:async()=>((await orchestrator.localStore.read()).latestCollection?.products||[]),encodeImage:(bytes,max)=>encodeLocalProductImage(nativeImage,bytes,max)});
+  const unifiedInventory=new UnifiedInventory({batch:inventoryBatch,catalog:shopPlusProductCatalog,localProducts,localMediaUrl:(id,file)=>webServer?`${webServer.origin}/local-product-media/${id}/${file}?token=${webServer.token}`:null});
+  inventoryBatch.localProducts=localProducts;
+  const websiteBridge=new WebsiteProductBridge({unified:unifiedInventory,localProducts,catalog:shopPlusProductCatalog,connection:shopPlusConnection});
+  handler('local-products:request',async payload=>{
+    const action=payload?.action;
+    const bridgeActions={'website-unlink':'unlink','website-read':'read','website-info':'info','website-link':'link','website-plan':'plan','website-import':'execute','website-recover':'recover','website-edit':'edit','website-action':'action'};
+    if(Object.hasOwn(bridgeActions,action))return websiteBridge[bridgeActions[action]](payload);
+    if(action==='inventory-view')return unifiedInventory.view();
+    if(action==='inventory-detail')return unifiedInventory.detail(payload.key);
+    if(action==='inventory-save')return unifiedInventory.save(payload);
+    if(action==='view')return localProducts.view();
+    if(action==='plan-folder'){
+      const selected=await openDialog({title:'选择包含各商品子文件夹的总文件夹',properties:['openDirectory']});
+      if(selected.canceled||!selected.filePaths[0])return {canceled:true};
+      return localProducts.planFolder(selected.filePaths[0]);
+    }
+    if(action==='start-import')return localProducts.startImport({token:payload.token});
+    if(action==='progress')return localProducts.progress({id:payload.id});
+    if(action==='save')return localProducts.save(payload.product||{});
+    if(action==='export-missing')return localProducts.missingImagesTxt();
+    if(action==='retry-media')return localProducts.retryMedia(payload.id);
+    if(action==='select-media'){
+      await localProducts.detail(payload.id);
+      const selected=await openDialog({title:'添加商品图片和视频',properties:['openFile','multiSelections'],filters:[{name:'商品图片和视频',extensions:['jpg','jpeg','png','webp','gif','bmp','heic','heif','mp4','mov','m4v','webm']}]});
+      if(selected.canceled)return {canceled:true};
+      return localProducts.addMedia(payload.id,selected.filePaths);
+    }
+    if(action==='detail'){
+      const product=await localProducts.detail(payload.id),mediaBase=webServer?`${webServer.origin}/local-product-media/${product.id}/`:null;
+      const mediaUrl=file=>mediaBase?`${mediaBase}${file}?token=${webServer.token}`:null;
+      return {...product,images:product.images.map(m=>({...m,url:mediaUrl(m.file)})),videos:product.videos.map(m=>({...m,url:mediaUrl(m.file)}))};
+    }
+    throw new Error('不支持的本机商品操作');
+  });
   const sourceChangesWithCurrent=async(catalog,websiteCheck=null,options={})=>{const batch=options.priceCompletions?null:await inventoryBatch.view();return orchestrator.sourceChanges(catalog,websiteCheck,{...(batch?{verifiedReads:batch.verifiedReads,priceCompletions:batch.priceCompletions}:{}),...options});};
   handler('inventory:batch-view',()=>inventoryBatch.view());
   handler('inventory:pending-new-refresh',()=>inventoryBatch.refreshPendingNew());
@@ -410,7 +448,7 @@ async function bootstrap(){
   handler('inventory:batch-progress',payload=>inventoryBatch.progress(payload));
   handler('inventory:batch-refresh',async payload=>{const result=await inventoryBatch.refresh(payload);const catalog=await shopPlusProductCatalog.getView({includeImages:false});return {...result,catalog,sourceChanges:await sourceChangesWithCurrent(catalog,null,{verifiedReads:result.verifiedReads,priceCompletions:result.priceCompletions})};});
   handler('inventory:batch-execute',async payload=>{const result=await inventoryBatch.execute(payload);const catalog=await shopPlusProductCatalog.getView({includeImages:false});return {...result,catalog,sourceChanges:await sourceChangesWithCurrent(catalog,null,{verifiedReads:result.verifiedReads,priceCompletions:result.priceCompletions})};});
-  const shopPlusProductStatus=createInventoryPageView({catalog:shopPlusProductCatalog,batch:inventoryBatch,store:orchestrator.localStore,sourceChanges:sourceChangesWithCurrent,workflow:productSyncWorkflow,connection:shopPlusConnection,pendingFile:orchestrator.pendingFile});
+  const shopPlusProductStatus=createInventoryPageView({catalog:shopPlusProductCatalog,batch:inventoryBatch,store:orchestrator.localStore,sourceChanges:sourceChangesWithCurrent,workflow:productSyncWorkflow,connection:shopPlusConnection,pendingFile:orchestrator.pendingFile,unified:unifiedInventory});
   handler('source:changes',async()=>{const batch=await inventoryBatch.view();return sourceChangesWithCurrent(await shopPlusProductCatalog.getView(),null,{verifiedReads:batch.verifiedReads,priceCompletions:batch.priceCompletions});});
   handler('source:refresh-reminders',async()=>{await sourceChangesWithCurrent(await shopPlusProductCatalog.getView());return orchestrator.localStore.refreshReviewedReminders();});
   handler('source:review-task',async payload=>{if(payload?.operation==='close'){const document=await orchestrator.localStore.read(),task=document.sourceChanges?.tasks?.find(t=>t.id===payload.taskId&&!t.resolved);if(task?.kind==='price'){const result=await priceTaskVerification.confirm(payload);if(!result.closed)throw new Error(result.reason||'单品价格尚未核验通过，提醒保留');return result.changes;}}return orchestrator.localStore.reviewSourceTask(payload||{});});
@@ -448,7 +486,7 @@ async function bootstrap(){
     const sourceChanges=await sourceChangesWithCurrent(catalog);
     await shopPlusConnection.markProductVerified('已通过 ShopPlus 商品资料更新验证');return {catalog,sourceChanges,status:await shopPlusConnection.status(),refreshed:true};
   }catch(error){await shopPlusConnection.markProductFailed(`商品资料更新失败：${String(error?.message||error)}`).catch(()=>{});throw error;}}));
-  handler('orders:sync-shopplus-product-media',async payload=>{try{const catalog=await shopPlusProductCatalog.collectMedia({listPage:request=>shopPlusConnection.listProductsPage(request),remoteProductIds:payload?.remoteProductIds});await shopPlusConnection.markProductVerified('已通过 ShopPlus 商品图片只读采集验证');return {catalog,status:await shopPlusConnection.status(),collected:true};}catch(error){await shopPlusConnection.markProductFailed(`商品图片读取失败：${String(error?.message||error)}`).catch(()=>{});throw error;}});
+  handler('orders:sync-shopplus-product-media',async payload=>{try{const catalog=await shopPlusProductCatalog.collectMedia({listPage:request=>shopPlusConnection.listProductsPage(request),remoteProductIds:payload?.remoteProductIds,includeArchived:payload?.includeArchived===true});await shopPlusConnection.markProductVerified('已通过 ShopPlus 商品图片只读采集验证');return {catalog,status:await shopPlusConnection.status(),collected:true};}catch(error){await shopPlusConnection.markProductFailed(`商品图片读取失败：${String(error?.message||error)}`).catch(()=>{});throw error;}});
   handler('orders:import-shopplus-product-media',async payload=>{const remoteProductId=String(payload?.remoteProductId||'').trim();if(!remoteProductId)throw new Error('未选择需要导入图片的商品');const selected=await openDialog({title:'从电脑导入商品图片',properties:['openFile','multiSelections'],filters:[{name:'商品图片',extensions:['jpg','jpeg','png','webp','gif']}]});if(selected.canceled)return {catalog:await shopPlusProductCatalog.getView(),canceled:true};const images=[];for(const file of selected.filePaths.slice(0,20)){const original=await readFile(file),source=nativeImage.createFromPath(file);if(source.isEmpty())continue;const size=source.getSize(),large=original.length>3*1024*1024,limit=large?1600:2400,scale=Math.min(1,limit/Math.max(size.width,size.height)),resized=scale<1?source.resize({width:Math.max(1,Math.round(size.width*scale)),height:Math.max(1,Math.round(size.height*scale)),quality:'good'}):source;let bytes=resized.toJPEG(large?80:86);if(bytes.length>3*1024*1024)bytes=resized.resize({width:Math.max(1,Math.round(resized.getSize().width*.7)),height:Math.max(1,Math.round(resized.getSize().height*.7)),quality:'good'}).toJPEG(72);images.push({sourceName:path.basename(file),originalByteLength:original.length,thumbnail:large||bytes.length<original.length,data:bytes.toString('base64')});}const catalog=await shopPlusProductCatalog.importLocalMedia({remoteProductId,images});return {catalog,status:await shopPlusConnection.status(),imported:images.length};});
   handler('orders:integrate-shopplus-source-pricing',async()=>{const local=await orchestrator.localInventory(),catalog=await shopPlusProductCatalog.integrateSourcePricing({sourceProducts:local?.current?.products||[],sourceUpdatedAt:local?.current?.savedAt||local?.updatedAt||null});return {catalog,status:await shopPlusConnection.status(),sourcePricing:true};});
   handler('orders:reconcile-shopplus-source-data',async()=>{const local=await orchestrator.localInventory();if(!local?.current?.capturedAt||local.current.capturedAt!==local?.latestCollection?.capturedAt)throw new Error('最新来源资料尚未完成本机映射确认；请先保存对应关系后再核对网站变化');const catalog=await shopPlusProductCatalog.reconcileSourceAndWebsite({sourceProducts:local.current.products||[],sourceSnapshotProducts:local.latestCollection?.products||[],sourceUpdatedAt:local.current.savedAt||local.updatedAt||null,listPage:request=>shopPlusConnection.listProductsPage(request)});await shopPlusConnection.markProductVerified('已通过 ShopPlus 已映射商品资料核对验证');return {catalog,status:await shopPlusConnection.status(),reconciled:true};});
@@ -517,7 +555,7 @@ async function bootstrap(){
   handler('orders:restore-backup',async payload=>{const token=typeof payload?.token==='string'?payload.token:'',file=restoreSelections.get(token);if(!file)throw Object.assign(new Error('恢复确认已失效，请重新选择备份'),{code:'ORDER_RESTORE_TOKEN_INVALID',stage:'订单数据恢复'});restoreSelections.delete(token);try{return await restoreOrdersDatabase(file);}finally{orderApp?.assistant.online.start();}});
   handler('orders:export-profit',async payload=>{const includePending=payload?.includePending===true,filters=payload?.filters&&typeof payload.filters==='object'?payload.filters:{},report=orders().profitReport(filters),result=testCancelDataSave?{canceled:true}:testDataDirectory?{canceled:false,filePath:path.join(path.resolve(testDataDirectory.slice('--orders-test-data-directory='.length)),'profit-export-test.xlsx')}:await saveDialog({title:'导出利润登记表',defaultPath:path.join(app.getPath('downloads'),`profit-report-${new Date().toISOString().slice(0,10)}.xlsx`),filters:[{name:'Excel工作簿',extensions:['xlsx']}]});if(result.canceled||!result.filePath)return {canceled:true};const destination=path.extname(result.filePath).toLowerCase()==='.xlsx'?result.filePath:`${result.filePath}.xlsx`,generated=await buildProfitWorkbookBuffer({report,includePending});await writeFile(destination,generated.buffer,{mode:0o600});return {canceled:false,filename:path.basename(destination),rows:generated.rows.length,summary:generated.summary};});
   if(process.env.NODE_ENV==='test'&&!testBrowserWorkspace){lifecycle('startup','正在创建验收窗口');await createWindow();}
-  else{webServer=new LocalWebServer({rendererDirectory:path.resolve(app.getAppPath(),'renderer'),sourceDirectory:path.resolve(app.getAppPath(),'src'),productMediaDirectory:path.join(paths.base,'orders','product-media'),dispatch,log:lifecycle,preferredPort:(testMode||isolatedUserData)?0:PRODUCTION_WEB_PORT,tokenFile:testMode?null:path.join(paths.base,'local-web-token')});await webServer.start();if(!testBrowserWorkspace||testTrayBoundsFile){createTray();if(testTrayBoundsFile){await new Promise(resolve=>setTimeout(resolve,250));await writeFile(path.resolve(testTrayBoundsFile.slice('--orders-test-tray-bounds-file='.length)),JSON.stringify(tray.getBounds()),{encoding:'utf8',mode:0o600});}}}
+  else{webServer=new LocalWebServer({rendererDirectory:path.resolve(app.getAppPath(),'renderer'),sourceDirectory:path.resolve(app.getAppPath(),'src'),productMediaDirectory:path.join(paths.base,'orders','product-media'),localProductMediaDirectory:localProducts.mediaDirectory,dispatch,log:lifecycle,preferredPort:(testMode||isolatedUserData)?0:PRODUCTION_WEB_PORT,tokenFile:testMode?null:path.join(paths.base,'local-web-token')});await webServer.start();if(!testBrowserWorkspace||testTrayBoundsFile){createTray();if(testTrayBoundsFile){await new Promise(resolve=>setTimeout(resolve,250));await writeFile(path.resolve(testTrayBoundsFile.slice('--orders-test-tray-bounds-file='.length)),JSON.stringify(tray.getBounds()),{encoding:'utf8',mode:0o600});}}}
   lifecycle('startup','应用启动完成');
 }
 const instanceLockAcquired=testMode||app.requestSingleInstanceLock();

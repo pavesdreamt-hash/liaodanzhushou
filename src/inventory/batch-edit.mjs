@@ -70,6 +70,9 @@ export class InventoryBatchEdit{
     const document=await this.store.read(),snapshot=document.latestCollection,pending=await readJSON(path.join(this.store.paths.state,'pending-sync.json'),null);
     const mappings=pending?.source?.capturedAt===snapshot?.capturedAt?effectivePendingMappings(pending,document):document.mappingRows||parseMappingRows(document.mapping);
     records=records||await this.catalog.batchRecords();
+    // Explicit platform links are confirmed identities, never name/row guesses.
+    if(this.localProducts){const locals=(await this.localProducts.view()).products;for(const p of locals){if(!p.remoteProductId||p.source?.status!=='matched')continue;const sources=(snapshot?.products||[]).filter(s=>sameSourceIdentity(s,p.source.row)),site=records.find(w=>w.remoteProductId===p.remoteProductId);if(sources.length!==1||!site)continue;const source=sources[0];if(!mappings.some(m=>m.status==='正常'&&sameSourceIdentity(m,source)&&norm(m.businessId)===norm(site.productNumber)))mappings.push({...source,businessId:site.productNumber,status:'正常',platformLocalId:p.id});}}
+
     const active=mappings.filter(m=>m.status==='正常'&&m.businessId);
     return {document,snapshot,mappings,records,index:{sources:grouped(snapshot?.products||[],sourceIdentityName),models:grouped(snapshot?.products||[],p=>sourceModel(p.sourceName)),relations:grouped(active,sourceIdentityName),business:grouped(active,m=>norm(m.businessId)),sites:grouped(records,p=>norm(p.productNumber))}};
   }

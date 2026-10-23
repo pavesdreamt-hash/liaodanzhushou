@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('manualChat',Object.freeze({request:payload=>inv
 contextBridge.exposeInMainWorld('orderTextFiles',Object.freeze({save:payload=>invoke('order-template:export',payload)}));
 contextBridge.exposeInMainWorld('manualReplyTranslation',Object.freeze({request:payload=>invoke('manual-reply-translation',payload)}));
 contextBridge.exposeInMainWorld('quickReplies',Object.freeze({list:()=>invoke('quick-replies:list'),save:payload=>invoke('quick-replies:save',payload),remove:payload=>invoke('quick-replies:remove',payload)}));
+contextBridge.exposeInMainWorld('localProducts',Object.freeze({request:payload=>invoke('local-products:request',payload)}));
 contextBridge.exposeInMainWorld('adsPowerInbox',Object.freeze({
   scan:()=>invoke('adspower:scan'),
   translate:payload=>invoke('adspower:translate',payload),

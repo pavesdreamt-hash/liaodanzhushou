@@ -1,0 +1,59 @@
+import path from 'node:path';
+import {readFile} from 'node:fs/promises';
+import {randomUUID,createHash} from 'node:crypto';
+import {stableHash} from '../core/files.mjs';
+import {batchWebsite} from './batch-edit.mjs';
+
+const rawProduct=r=>r?.productVO||r?.product||r;
+const fingerprint=r=>stableHash({key:r.key,source:r.sourceFingerprint,local:r.local?.updatedAt,remote:r.remoteProductId,website:r.website,images:r.images.map(i=>i.sha256||i.file)});
+const escapeHtml=s=>String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+export class WebsiteProductBridge{
+  constructor({unified,localProducts,catalog,connection}){Object.assign(this,{unified,localProducts,catalog,connection});this.plans=new Map();this.busy=false;}
+  async serial(fn){if(this.busy)throw Error('网站商品操作正在执行，请稍后');this.busy=true;try{return await fn();}finally{this.busy=false;}}
+  async checked(p){const row=await this.unified.detail(p.key);if(fingerprint(row)!==p.fingerprint)throw Error('商品资料已变化，请刷新详情后重试');return row;}
+  async info({key}){const row=await this.unified.detail(key),all=await this.unified.view(),catalog=await this.catalog.getView({includeImages:false});return {row,fingerprint:fingerprint(row),candidates:[...new Map([...(catalog.mappingCatalog||[]),...(catalog.archivedProducts||[]),...(catalog.products||[])].map(w=>[w.remoteProductId,w])).values()].map(w=>({id:w.remoteProductId,name:w.sourceName||w.name,code:w.sourceSpu,productNumber:w.productNumber,occupied:all.rows.find(r=>r.key!==key&&(r.source||r.localId)&&r.remoteProductId===w.remoteProductId)?.code||null}))};}
+  async ensureLocal(row){return row.local||this.unified.save({key:row.key,expectedSource:row.sourceFingerprint,changes:{}});}
+  async link(p){return this.serial(async()=>{
+    if(p.confirmed!==true)throw Error('请确认网站对应商品');const row=await this.checked(p),info=await this.info(p),target=info.candidates.find(w=>w.id===p.remoteProductId);
+    if(!target)throw Error('请从已采集网站商品中选择');if(target.occupied)throw Error(`网站商品 ID ${target.id} 已由其它平台商品“${target.occupied}”对应，请先处理原对应关系`);
+    if(row.remoteProductId===target.id)return {key:row.key,remoteProductId:target.id,status:'already-linked'};
+    if(row.remoteProductId&&row.remoteProductId!==p.remoteProductId&&row.local?.remoteProductId!==row.remoteProductId)throw Error('已有来源对应，请先在“核对来源对应表”中更正');
+    if(row.source){const data=await this.unified.batch.snapshot(),legacy=data.mappings.filter(m=>m.status==='正常'&&!m.platformLocalId&&m.sourceKey===row.source.sourceKey);if(legacy.some(m=>m.businessId!==target.productNumber))throw Error('存在来源对应，请先在“核对来源对应表”中更正');}
+    const raw=await this.connection.productDetail(target.id);if(String(rawProduct(raw)?.id)!==target.id)throw Error('网站回读ID不一致');await this.checked(p);
+    const local=await this.ensureLocal(row);await this.catalog.rememberWebsiteProduct(raw);await this.localProducts.setWebsite(local.id,{expectedUpdatedAt:local.updatedAt,remoteProductId:target.id});return {key:row.key,remoteProductId:target.id,status:'linked'};
+  });}
+  async unlink(p){return this.serial(async()=>{if(p.confirmed!==true)throw Error('请确认解除平台记录关联');const row=await this.checked(p);if(!row.local?.remoteProductId)throw Error('该对应保存在来源对应表，请在那里更正');await this.localProducts.setWebsite(row.local.id,{expectedUpdatedAt:row.local.updatedAt,remoteProductId:null});return {saved:true};});}
+  async read(p){const row=await this.unified.detail(p.key);if(!row.remoteProductId)throw Error('尚未关联网站');return this.catalog.readOne({remoteProductId:row.remoteProductId,readProduct:id=>this.connection.productDetail(id),reclassify:true});}
+  async plan(p){const row=await this.unified.detail(p.key);if(row.remoteProductId)throw Error('该商品已关联网站，无需重复导入');if(row.source&&row.blocked&&row.blocked!=='网站对应关系未确认')throw Error('请先核对来源身份与已有网站对应：'+row.blocked);if(row.local?.websiteImport)throw Error('已有网站导入记录，请先点击“核对导入结果”，避免重复创建');
+    if(row.priceAed===null||!Number.isFinite(row.priceAed)||row.priceAed<0)throw Error('请先填写本机售价');if(!Number.isSafeInteger(row.stockQuantity)||row.stockQuantity<0)throw Error('请先填写本机库存');
+    const token=randomUUID(),plan={token,key:row.key,fingerprint:fingerprint(row),expires:Date.now()+30*60*1000};this.plans.set(token,plan);
+    return {token,name:row.local?.name||row.sourceName||row.code,code:row.code,salePriceAed:row.priceAed,costPriceAed:row.costPriceAed,stockQuantity:row.stockQuantity,imageCount:row.imageCount,videoCount:row.videoCount,publishStatus:0};
+  }
+  async findCreated(code){const found=[];for(let pageNum=1;pageNum<=100;pageNum++){const result=await this.connection.listProductsPage({pageNum,pageSize:100});for(const w of result.products)if(w.spuCode===code)found.push(w);if(result.products.length<100||result.totalCount!==null&&pageNum*100>=result.totalCount)break;if(pageNum===100)throw Error('网站商品目录过大，请在网站核对导入结果后手动关联');}if(found.length>1)throw Error('网站出现多个相同导入标识，请人工关联');return found[0]||null;}
+  async complete(local,raw){const product=rawProduct(raw),id=String(product?.id||'');if(!id)throw Error('网站未返回新商品ID，请核对导入结果');
+    // Persist the known ID before readback, so a timeout cannot lead to a duplicate create.
+    local=await this.localProducts.setWebsite(local.id,{expectedUpdatedAt:local.updatedAt,websiteImport:{...local.websiteImport,status:'created',remoteProductId:id}});
+    const read=rawProduct(await this.connection.productDetail(id));if(String(read?.id)!==id||read.spuCode!==local.websiteImport.code)throw Error('网站回读商品身份不一致');const target=local.websiteImport.target,web=batchWebsite(read);if(target&&(web.publishStatus!==0||web.variants.length!==1||web.variants[0].salePrice!==target.salePriceAed||web.variants[0].stockQuantity!==target.stockQuantity))throw Error('网站已创建，但回读售价、库存或上下架未符合目标；网站商品ID '+id);
+    await this.catalog.rememberWebsiteProduct(read);await this.localProducts.setWebsite(local.id,{expectedUpdatedAt:local.updatedAt,remoteProductId:id,websiteImport:{...local.websiteImport,status:'completed',remoteProductId:id}});return {remoteProductId:id};
+  }
+  async execute(p){return this.serial(async()=>{
+    const plan=this.plans.get(p.token);if(!plan||plan.expires<Date.now()||p.confirmed!==true)throw Error('导入确认已过期，请重新预览');const row=await this.checked(plan);if(row.remoteProductId||row.local?.websiteImport)throw Error('已有网站对应或导入记录，请重新读取');
+    const local=await this.ensureLocal(row),code='LDA-'+local.id;
+    const guarded=await this.unified.detail(row.key),guard=fingerprint(guarded);const existing=await this.findCreated(code);await this.checked({key:row.key,fingerprint:guard});if(existing){const recovered=await this.localProducts.setWebsite(local.id,{expectedUpdatedAt:local.updatedAt,websiteImport:{status:'submitted',code,target:{salePriceAed:row.priceAed,stockQuantity:row.stockQuantity}}});return this.complete(recovered,existing);}
+    const images=[];let size=0;for(const image of row.images){const base=image.kind==='local'?path.join(this.localProducts.mediaDirectory,image.localId):this.catalog.mediaDirectory;if(path.basename(image.file)!==image.file)throw Error('图片路径无效');const bytes=await readFile(path.join(base,image.file));if(image.sha256&&createHash('sha256').update(bytes).digest('hex')!==image.sha256)throw Error('本机图片内容已变化，请重新导入图片');size+=bytes.length;if(size>25*1024*1024)throw Error('图片总量超过25MB，请减少后重试');images.push({attachment:bytes.toString('base64'),fileName:image.file,position:images.length+1,alt:row.code});}
+    const data={title:row.local?.name||row.sourceName||row.code,spuCode:code,currencyCode:'AED',publishStatus:0,productLongDesc:escapeHtml(row.description).replace(/\n/g,'<br>'),productImages:images,productVariants:[{skuCode:row.code,salePrice:row.priceAed,...(row.costPriceAed===null?{}:{purchasePrice:row.costPriceAed}),availableStockQuantity:row.stockQuantity,isTrackInventory:1,inventoryPolicy:'deny'}]};
+    await this.checked({key:row.key,fingerprint:guard});const marked=await this.localProducts.setWebsite(local.id,{expectedUpdatedAt:local.updatedAt,websiteImport:{status:'submitted',code,at:new Date().toISOString(),target:{salePriceAed:row.priceAed,stockQuantity:row.stockQuantity}}});this.plans.delete(p.token);
+    let created;try{created=await this.connection.createProduct(data);}catch(e){if(e.code==='SHOPPLUS_REQUEST_FAILED'){await this.localProducts.setWebsite(marked.id,{expectedUpdatedAt:marked.updatedAt,websiteImport:null});throw Error('网站未接受导入：'+e.message+'。请修正后重新预览导入。');}throw Error('导入结果尚未完成核对：'+e.message+'。请点击“核对导入结果”，不要重复新建。');}
+    try{return await this.complete(marked,created);}catch(e){throw Error('导入结果尚未完成核对：'+e.message+'。请点击“核对导入结果”，不要重复新建。');}
+  });}
+  async recover(p){return this.serial(async()=>{const row=await this.checked(p),local=row.local,run=local?.websiteImport;if(!run)throw Error('没有待核对的导入记录');if(run.status==='completed')return {remoteProductId:local.remoteProductId};const raw=run.remoteProductId?await this.connection.productDetail(run.remoteProductId):await this.findCreated(run.code);if(!raw)throw Error('当前网站目录尚未找到此导入标识，请稍后再核对或在网站后台确认；系统不会重复提交');return this.complete(local,raw);});}
+  async edit(p){return this.serial(async()=>{const row=await this.checked(p),keys=Object.keys(p.changes||{});if(keys.length!==1||!['name','description','floorPriceAed','costPriceAed'].includes(keys[0]))throw Error('请选择一个资料项目修改');const key=keys[0],value=p.changes[key];
+    if(row.remoteProductId){if(key==='costPriceAed'){if(row.source||!row.local)throw Error('来源成本只读');await this.localProducts.save({...row.local,expectedUpdatedAt:row.local.updatedAt,costPriceAed:value});return {saved:true};}const w=row.website;await this.catalog.update({remoteProductId:row.remoteProductId,name:key==='name'?value:w.name||w.sourceName,floorPrice:key==='floorPriceAed'?value:w.floorPriceAed??'',description:key==='description'?value:w.description||''});}
+    else{if(key==='floorPriceAed'||key==='costPriceAed'&&row.source)throw Error('此字段由来源资料提供');await this.unified.save({key:row.key,expectedSource:row.sourceFingerprint,expectedLocalUpdatedAt:row.local?.updatedAt,changes:p.changes});}return {saved:true};
+  });}
+  async action(p){return this.serial(async()=>{const row=await this.checked(p);if(!row.remoteProductId||row.source)throw Error('请使用已确认来源商品的原操作流程');if(p.confirmed!==true)throw Error('请确认网站操作');const before=await this.connection.productDetail(row.remoteProductId),web=batchWebsite(before),saved=batchWebsite({id:row.remoteProductId,publishStatus:row.publishStatus,variants:row.website.variants});const relevant=w=>({id:w.remoteProductId,publishStatus:w.publishStatus,variants:w.variants.map(v=>({id:v.id,stock:v.stockQuantity,price:v.salePrice})).sort((a,b)=>a.id.localeCompare(b.id))});if(stableHash(relevant(web))!==stableHash(relevant(saved)))throw Error('网站状态已变化，请读取商品记录后重试');let raw;await this.checked(p);
+    if(p.kind==='publish'||p.kind==='unpublish')raw=await this.connection.updateProductPublishStatus({productId:row.remoteProductId,publishStatus:p.kind==='publish'?1:0});
+    else{const variant=web.variants.find(v=>v.id===p.variantId);if(!variant)throw Error('请选择已读取的网站规格');if(p.kind==='stock')raw=await this.connection.updateVariantInventory({productId:row.remoteProductId,variantId:variant.id,stockQuantity:p.value});else if(p.kind==='price')raw=await this.connection.updateVariantPrices({productId:row.remoteProductId,variants:[{id:variant.id,salePrice:p.value}]});else throw Error('未知操作');}
+    const after=batchWebsite(raw),target=(p.kind==='publish'?1:0),chosen=after.variants.find(v=>v.id===p.variantId);if(after.remoteProductId!==row.remoteProductId||(['publish','unpublish'].includes(p.kind)?after.publishStatus!==target:!chosen||Number(p.value)!==(p.kind==='price'?chosen.salePrice:chosen.stockQuantity)))throw Error('网站回读未符合目标，请先读取商品记录核对');await this.catalog.recordWebsiteUpdate({remoteProductId:row.remoteProductId,raw,manualLock:true});return {saved:true};
+  });}
+}

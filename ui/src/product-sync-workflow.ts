@@ -1,6 +1,6 @@
 type Step='source'|'website'|'details';
 type State={catalog:any;changes:any;workflow:any;pending:any[]};
-type Options={doc:Document;box:HTMLDialogElement;result:HTMLElement;state:()=>State;apply:(result:any)=>void;saveWorkflow:(workflow:any)=>void;daily:()=>Promise<any>;collect:()=>Promise<any>;refresh:()=>Promise<any>;showChanges:()=>void};
+type Options={images?:()=>void;doc:Document;box:HTMLDialogElement;result:HTMLElement;state:()=>State;apply:(result:any)=>void;saveWorkflow:(workflow:any)=>void;daily:()=>Promise<any>;collect:()=>Promise<any>;refresh:()=>Promise<any>;showChanges:()=>void};
 const definitions=[['source','1、商品库存表同步','同步商品来源库存表与当前网站库存，进行相互对比，修改不对应商品。','一键同步','daily-source-sync'],['website','2、读取网站在售商品','修改变化商品后，读取网站当前在售商品，进行商品同步和二次核对。','开始读取','collect'],['details','3、同步商品细节资料','更新在售商品的细节信息，包括名称、售价、成本价、建议售价、库存和时间等。','同步资料','refresh']] as const;
 export function openProductSyncWorkflow(o:Options){
   const {doc,box,result}=o,grid=doc.createElement('section'),notice=doc.createElement('p'),foot=doc.createElement('footer'),close=doc.createElement('button'),changes=doc.createElement('button');
@@ -16,5 +16,6 @@ export function openProductSyncWorkflow(o:Options){
     finally{stop?.();output.dataset.running='false';busy=false;paint();}
   };
   for(const [key,title,copy,label,id]of definitions){const card=doc.createElement('section'),heading=doc.createElement('h3'),description=doc.createElement('p'),state=key==='source'?result:doc.createElement('p'),actions=doc.createElement('div'),button=doc.createElement('button');card.className=`product-sync-option${key==='source'?' is-primary':''}`;heading.textContent=title;description.textContent=copy;state.className=`product-step-status${key==='source'?' product-sync-result daily-sync-running':''}`;state.hidden=false;state.setAttribute('role','status');state.setAttribute('aria-live','polite');button.id=`ui011-manager-${id}`;button.textContent=label;button.className=key==='source'?'primary':'';button.onclick=()=>{void run(key);};actions.className='product-sync-actions';actions.append(button);if(key==='source'){changes.id='ui011-manager-changes';changes.textContent='查看同步变化';changes.onclick=()=>{box.close();o.showChanges();};actions.append(changes);}card.append(heading,description,state,actions);grid.append(card);buttons.set(key,button);statuses.set(key,state);}
+  if(o.images){const images=doc.createElement('button');images.textContent='同步商品图片';images.onclick=()=>{if(!busy)o.images?.();};foot.prepend(images);}
   close.onclick=()=>box.close();box.addEventListener('cancel',event=>{if(busy)event.preventDefault();});paint();box.showModal();
 }

@@ -20,6 +20,8 @@ import orderLayoutCss from './order-layout.css?raw';
 import {installOrderLayout,type OrderLayoutDesktop} from './order-layout';
 import unifiedCss from './unified-layout.css?raw';
 import inventoryBatchCss from './inventory-batch.css?raw';
+import localProductsCss from './local-products.css?raw';
+import unifiedInventoryCss from './unified-inventory.css?raw';
 import replyCss from './reply-tools.css?raw';
 import mediaDialogCss from './media-dialog.css?raw';
 import productMediaCss from './product-media.css?raw';
@@ -72,6 +74,7 @@ function ConfirmedApp(){
   const [page,setPage]=useState<Page>(requested&&requested in pages?requested:'workbench');
   const [selectedOrderId,setSelectedOrderId]=useState<string|null>(null);
   const [selectedProductId,setSelectedProductId]=useState<string|null>(null);
+  const [productRevision,setProductRevision]=useState(0);
   const [selectedProfitDay,setSelectedProfitDay]=useState<string|null>(null);
   const pendingOrderAction=useRef<'import'|'new'|undefined>(undefined);
   const frame=useRef<HTMLIFrameElement>(null);
@@ -100,8 +103,10 @@ function ConfirmedApp(){
       +(page==='fb-chat'?moduleStyle('facebook-chat',facebookChatCss):'')
       +moduleStyle('empty-workspace',emptyCss)
       +(restoredPages.has(page)?moduleStyle('restored-pages',restoredCss):'')
-      +(page==='inventory'?moduleStyle('inventory-batch',inventoryBatchCss):'')
-      +(['source','inventory'].includes(page)?moduleStyle('source-mapping',sourceMappingCss):'')
+      +(['inventory','product'].includes(page)?moduleStyle('inventory-batch',inventoryBatchCss):'')
+      +(['inventory','product'].includes(page)?moduleStyle('local-products',localProductsCss):'')
+      +(['source','inventory','product'].includes(page)?moduleStyle('source-mapping',sourceMappingCss):'')
+      +(['inventory','product'].includes(page)?moduleStyle('unified-inventory',unifiedInventoryCss):'')
       +moduleStyle('hover-hints',hoverHintsCss);
   },[page]);
   const setup=()=>{
@@ -175,13 +180,13 @@ function ConfirmedApp(){
     if(restoredPages.has(page)){
       disposers.push(installRestoredPage(doc,win,page as 'inventory'|'source'|'profit'|'assistant'|'settings'|'product'|'profit-detail',{
         productId:selectedProductId||undefined,day:selectedProfitDay||undefined,
-        openProduct:id=>{setSelectedProductId(id);setPage('product');},
+        openProduct:id=>{setSelectedProductId(id);setProductRevision(v=>v+1);setPage('product');},
         openInventory:()=>setPage('inventory'),
         openSource:()=>setPage('source'),
         openDay:day=>{setSelectedProfitDay(day);setPage('profit-detail');},
         openOrder:id=>{setSelectedOrderId(id);setPage('order');}
       }));
-      if(page==='product'&&!selectedProductId?.startsWith('shopplus:'))disposers.push(installProductPictures(doc,page));
+      if(page==='product'&&!selectedProductId?.startsWith('shopplus:')&&!selectedProductId?.startsWith('unified:'))disposers.push(installProductPictures(doc,page));
     }
     if(page==='orders'){
       disposers.push(installOrdersPage(doc,{openOrder:id=>{setSelectedOrderId(id);setPage('order');},initialAction:pendingOrderAction.current,openSettings:()=>setPage('settings')}));
@@ -242,7 +247,7 @@ function ConfirmedApp(){
       if(next){event.preventDefault();event.stopImmediatePropagation();setPage(next);}
     },true);
   };
-  const iframe=<iframe key={`${page}:${page==='order'?selectedOrderId||'':page==='product'?selectedProductId||'':page==='profit-detail'?selectedProfitDay||'':''}`} ref={frame} className="confirmed-frame" title="聊单助手" srcDoc={html} onLoad={setup}/>;
+  const iframe=<iframe key={`${page}:${page==='order'?selectedOrderId||'':page==='product'?(selectedProductId||'')+':'+productRevision:page==='profit-detail'?selectedProfitDay||'':''}`} ref={frame} className="confirmed-frame" title="聊单助手" srcDoc={html} onLoad={setup}/>;
   if(!merged)return iframe;
   const dragLayers=!dragArea.blocked&&(page==='workbench'?dragArea.workbenchRects.map((rect,index)=><div key={`${rect.left}:${rect.top}:${rect.width}:${rect.height}:${index}`} className="order-window-drag" aria-hidden="true" style={{left:rect.left,top:rect.top,width:rect.width,height:rect.height,right:'auto'}}/>):page==='fb-chat'?<div className="order-window-drag fb-window-drag" aria-hidden="true" style={{left:96,right:0,height:56}}/>:<div className="order-window-drag" aria-hidden="true" style={{right:dragArea.right,height:56}}/>);
   return <div className="desktop-shell">{iframe}{dragLayers}</div>;

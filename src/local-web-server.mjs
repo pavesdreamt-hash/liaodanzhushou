@@ -1,6 +1,7 @@
 import http from 'node:http';
 import path from 'node:path';
-import {chmod,readFile,writeFile} from 'node:fs/promises';
+import {chmod,lstat,readFile,writeFile} from 'node:fs/promises';
+import {createReadStream} from 'node:fs';
 import {randomBytes} from 'node:crypto';
 
 const TYPES=new Map([
@@ -56,9 +57,10 @@ const BRIDGE=`(()=>{
   // The locked workbench is a same-origin srcdoc child. Give its controlled
   // renderer only these request facades; every request remains bound to this
   // loopback origin and the per-instance token in invoke().
-  window.shopPlusProductPilot=Object.freeze({catalog:payload=>invoke('orders:shopplus-product-catalog',payload),localMedia:payload=>invoke('orders:shopplus-product-local-media',payload),collect:payload=>invoke('orders:sync-shopplus-products',payload),syncMappingCatalog:()=>invoke('orders:sync-shopplus-mapping-catalog'),refresh:()=>invoke('orders:refresh-shopplus-products'),collectMedia:()=>invoke('orders:sync-shopplus-product-media'),collectSourcePricing:()=>invoke('orders:integrate-shopplus-source-pricing'),reconcileSourceData:()=>invoke('orders:reconcile-shopplus-source-data'),applySourceReconciliation:()=>invoke('orders:apply-shopplus-source-reconciliation'),update:payload=>invoke('orders:update-shopplus-product',payload),updatePublishStatus:payload=>invoke('orders:update-shopplus-publish-status',payload),updateVariantInventory:payload=>invoke('orders:update-shopplus-variant-inventory',payload)});
+  window.shopPlusProductPilot=Object.freeze({catalog:payload=>invoke('orders:shopplus-product-catalog',payload),localMedia:payload=>invoke('orders:shopplus-product-local-media',payload),collect:payload=>invoke('orders:sync-shopplus-products',payload),syncMappingCatalog:()=>invoke('orders:sync-shopplus-mapping-catalog'),refresh:()=>invoke('orders:refresh-shopplus-products'),collectMedia:payload=>invoke('orders:sync-shopplus-product-media',payload),collectSourcePricing:()=>invoke('orders:integrate-shopplus-source-pricing'),reconcileSourceData:()=>invoke('orders:reconcile-shopplus-source-data'),applySourceReconciliation:()=>invoke('orders:apply-shopplus-source-reconciliation'),update:payload=>invoke('orders:update-shopplus-product',payload),updatePublishStatus:payload=>invoke('orders:update-shopplus-publish-status',payload),updateVariantInventory:payload=>invoke('orders:update-shopplus-variant-inventory',payload)});
   window.manualChat=Object.freeze({request:payload=>invoke('manual-chat',payload)});
   window.manualReplyTranslation=Object.freeze({request:payload=>invoke('manual-reply-translation',payload)});
+  window.localProducts=Object.freeze({request:payload=>invoke('local-products:request',payload)});
   window.quickReplies=Object.freeze({list:()=>invoke('quick-replies:list'),save:payload=>invoke('quick-replies:save',payload),remove:payload=>invoke('quick-replies:remove',payload)});
 })();`;
 
@@ -68,7 +70,7 @@ function binaryBody(request,{limit=50*1024*1024}={}){return new Promise((resolve
 function uploadFilename(request){const header=request.headers['x-file-name'];if(typeof header!=='string'||!header)return '';try{return decodeURIComponent(header);}catch{return '';}}
 
 export class LocalWebServer{
-  constructor({rendererDirectory,sourceDirectory,productMediaDirectory=null,dispatch,log=()=>{},preferredPort=0,tokenFile=null}){this.rendererDirectory=rendererDirectory;this.sourceDirectory=sourceDirectory;this.productMediaDirectory=productMediaDirectory;this.dispatch=dispatch;this.log=log;this.preferredPort=preferredPort;this.tokenFile=tokenFile;this.token=randomBytes(32).toString('hex');this.clients=new Set();this.flushWaiters=new Map();}
+  constructor({rendererDirectory,sourceDirectory,productMediaDirectory=null,localProductMediaDirectory=null,dispatch,log=()=>{},preferredPort=0,tokenFile=null}){this.rendererDirectory=rendererDirectory;this.sourceDirectory=sourceDirectory;this.productMediaDirectory=productMediaDirectory;this.localProductMediaDirectory=localProductMediaDirectory;this.dispatch=dispatch;this.log=log;this.preferredPort=preferredPort;this.tokenFile=tokenFile;this.token=randomBytes(32).toString('hex');this.clients=new Set();this.flushWaiters=new Map();}
   async loadToken(){if(!this.tokenFile)return this.token;const saved=await readFile(this.tokenFile,'utf8').catch(error=>error.code==='ENOENT'?'':Promise.reject(error));if(/^[a-f0-9]{64}$/.test(saved.trim()))return saved.trim();await writeFile(this.tokenFile,this.token,{encoding:'utf8',mode:0o600});await chmod(this.tokenFile,0o600);return this.token;}
   async start(){if(this.server)return this.url;this.token=await this.loadToken();this.server=http.createServer((request,response)=>this.handle(request,response).catch(error=>{this.log('local-web','本地网页请求失败',{message:error.message});if(!response.headersSent)json(response,500,{ok:false,error:{stage:'本地服务',code:'LOCAL_WEB_FAILED',message:'本地服务请求失败'}});else response.end();}));await new Promise((resolve,reject)=>{this.server.once('error',reject);this.server.listen(this.preferredPort,'127.0.0.1',resolve);});const address=this.server.address();this.origin=`http://127.0.0.1:${address.port}`;this.url=`${this.origin}/?token=${this.token}`;this.log('local-web','本地管理页面已启动',{port:address.port});return this.url;}
   emit(type,value){const event=`event: ${type}\ndata: ${JSON.stringify(value)}\n\n`;for(const client of this.clients){try{client.write(event);}catch{this.clients.delete(client);}}}
@@ -77,6 +79,21 @@ export class LocalWebServer{
   authorized(request,url){return request.headers['x-app-token']===this.token||url.searchParams.get('token')===this.token;}
   async handle(request,response){const url=new URL(request.url,this.origin||'http://127.0.0.1');if(request.method==='POST'&&url.pathname.startsWith('/api/')){if(request.headers.origin!==this.origin||!this.authorized(request,url))return json(response,403,{ok:false,error:{stage:'安全检查',code:'LOCAL_WEB_FORBIDDEN',message:'请从应用菜单栏打开管理页面'}});const channel=decodeURIComponent(url.pathname.slice(5)),payload=channel==='orders:upload-excel'?{filename:uploadFilename(request),content:await binaryBody(request)}:await safeBody(request,channel==='orders:importAssistantHistory'?6*1024*1024:1024*1024);if(channel==='app:assistant-flushed'){this.flushWaiters.get(payload?.id)?.(payload.ok===true);return json(response,200,{ok:true});}return json(response,200,await this.dispatch(channel,payload));}
     if(request.method==='GET'&&url.pathname==='/events'){if(!this.authorized(request,url))return json(response,403,{ok:false});response.writeHead(200,{'content-type':'text/event-stream; charset=utf-8','cache-control':'no-store','connection':'keep-alive','x-accel-buffering':'no'});response.write(': connected\n\n');this.clients.add(response);request.on('close',()=>this.clients.delete(response));return;}
+    if(['GET','HEAD'].includes(request.method)&&url.pathname.startsWith('/local-product-media/')){
+      if(!this.authorized(request,url)||!this.localProductMediaDirectory)return json(response,403,{ok:false});
+      const relative=url.pathname.slice('/local-product-media/'.length);
+      if(!/^[a-f0-9-]{36}\/[a-f0-9]{64}\.(?:jpg|mp4|mov|m4v|webm)$/u.test(relative))return json(response,404,{ok:false});
+      const file=path.join(this.localProductMediaDirectory,relative),info=await lstat(file).catch(e=>e.code==='ENOENT'?null:Promise.reject(e));
+      if(!info?.isFile()||info.isSymbolicLink())return json(response,404,{ok:false});
+      const type=relative.endsWith('.jpg')?'image/jpeg':relative.endsWith('.mov')?'video/quicktime':relative.endsWith('.webm')?'video/webm':'video/mp4';
+      let start=0,end=info.size-1,status=200;const range=request.headers.range;
+      if(range){const match=/^bytes=(\d*)-(\d*)$/u.exec(range);if(!match||!match[1]&&!match[2]){response.writeHead(416,{'content-range':`bytes */${info.size}`});response.end();return;}
+        start=match[1]?Number(match[1]):Math.max(0,info.size-Number(match[2]));end=match[1]&&match[2]?Math.min(Number(match[2]),info.size-1):info.size-1;
+        if(!Number.isSafeInteger(start)||!Number.isSafeInteger(end)||start<0||start>end||start>=info.size){response.writeHead(416,{'content-range':`bytes */${info.size}`});response.end();return;}status=206;
+      }
+      response.writeHead(status,{'content-type':type,'content-length':Math.max(0,end-start+1),'accept-ranges':'bytes','cache-control':'private, max-age=86400','x-content-type-options':'nosniff',...(status===206?{'content-range':`bytes ${start}-${end}/${info.size}`}:{})});
+      if(request.method==='HEAD'||!info.size){response.end();return;}createReadStream(file,{start,end}).on('error',()=>response.destroy()).pipe(response);return;
+    }
     if(request.method!=='GET')return json(response,405,{ok:false});
     if(url.pathname.startsWith('/product-media/')){if(!this.authorized(request,url)||!this.productMediaDirectory)return json(response,403,{ok:false});const filename=decodeURIComponent(url.pathname.slice('/product-media/'.length));if(!/^product-[a-f0-9-]+\.jpg$/i.test(filename))return json(response,404,{ok:false});const file=path.join(this.productMediaDirectory,filename);const body=await readFile(file).catch(error=>error.code==='ENOENT'?null:Promise.reject(error));if(!body)return json(response,404,{ok:false});response.writeHead(200,{'content-type':'image/jpeg','content-length':body.length,'cache-control':'private, max-age=86400','x-content-type-options':'nosniff'});response.end(body);return;}
     if(url.pathname==='/browser-bridge.js'){response.writeHead(200,{'content-type':TYPES.get('.js'),'cache-control':'no-store','x-content-type-options':'nosniff'});response.end(BRIDGE);return;}
@@ -84,6 +101,6 @@ export class LocalWebServer{
     // The locked UI is embedded through srcdoc and carries its own styles and
     // interaction script. srcdoc inherits this policy, while external scripts
     // and non-local application resources remain blocked.
-    const headers={'content-type':TYPES.get(path.extname(file))||'application/octet-stream','content-length':body.length,'cache-control':'no-store','x-content-type-options':'nosniff','referrer-policy':'no-referrer','content-security-policy':"default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://pps.whatsapp.net https://mmg.whatsapp.net; connect-src 'self'; frame-src 'self' https://www.google.com https://maps.google.com https://*.google.com; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"};response.writeHead(200,headers);response.end(body);
+    const headers={'content-type':TYPES.get(path.extname(file))||'application/octet-stream','content-length':body.length,'cache-control':'no-store','x-content-type-options':'nosniff','referrer-policy':'no-referrer','content-security-policy':"default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; media-src 'self'; img-src 'self' data: https://pps.whatsapp.net https://mmg.whatsapp.net; connect-src 'self'; frame-src 'self' https://www.google.com https://maps.google.com https://*.google.com; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"};response.writeHead(200,headers);response.end(body);
   }
 }

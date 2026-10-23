@@ -58,12 +58,12 @@ declare global {
       submitMapping?: (answers: unknown, confirmFirstSync: boolean, options?:{localOnly?:boolean;sourceAt?:string;mappingFingerprint?:string}) => Promise<{ok: boolean; data?: unknown; error?: {message?: string}}>;
     };
     shopPlusProductPilot?: {
-      catalog: (payload?: {inventory?:boolean;phase?:'list';productDetail?:boolean}) => Promise<{ok: boolean; data?: unknown; error?: {message?: string}}>;
+      catalog: (payload?: {inventory?:boolean;phase?:'list';productDetail?:boolean;unifiedKey?:string;remoteProductId?:string}) => Promise<{ok: boolean; data?: unknown; error?: {message?: string}}>;
       localMedia: (payload:{remoteProductId:string;primaryOnly?:boolean}) => Promise<{ok:boolean;data?:unknown;error?:{message?:string}}>;
       collect: (payload?: unknown) => Promise<{ok: boolean; data?: unknown; error?: {message?: string}}>;
       syncMappingCatalog: () => Promise<{ok: boolean; data?: unknown; error?: {message?: string}}>;
       refresh: () => Promise<{ok: boolean; data?: unknown; error?: {message?: string}}>;
-      collectMedia: (payload?: {remoteProductIds?:string[]}) => Promise<{ok: boolean; data?: unknown; error?: {message?: string}}>;
+      collectMedia: (payload?: {remoteProductIds?:string[];includeArchived?:boolean}) => Promise<{ok: boolean; data?: unknown; error?: {message?: string}}>;
       importMedia: (payload: {remoteProductId:string}) => Promise<{ok: boolean; data?: unknown; error?: {message?: string}}>;
       collectSourcePricing: () => Promise<{ok: boolean; data?: unknown; error?: {message?: string}}>;
       reconcileSourceData: () => Promise<{ok: boolean; data?: unknown; error?: {message?: string}}>;
@@ -72,6 +72,7 @@ declare global {
       updatePublishStatus?: (payload: unknown) => Promise<{ok: boolean; data?: unknown; error?: {message?: string}}>;
       updateVariantInventory?: (payload: unknown) => Promise<{ok: boolean; data?: unknown; error?: {message?: string}}>;
     };
+    localProducts?: {request:(payload:any)=>Promise<{ok:boolean;data?:any;error?:{message?:string}}>} ;
   }
 }
 

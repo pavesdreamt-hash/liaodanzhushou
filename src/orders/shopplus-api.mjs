@@ -132,6 +132,11 @@ export class ShopPlusConnection {
     return {products:Array.isArray(data?.productVOs)?data.productVOs:[],totalCount:Number.isFinite(Number(data?.totalCount))?Number(data.totalCount):null,pageNum,pageSize};
   }
   async productDetail(productId,{timeoutMs}={}){return await this.request('products.detail',{id:identifier(productId,'ShopPlus 商品 ID')},timeoutMs===undefined?{}:{timeoutMs});}
+  // Official products.add 1.0: https://openapi.shoplus.net/doc . Never retry a create.
+  async createProduct(data){
+    if(!data?.title||data.publishStatus!==0||!Array.isArray(data.productVariants)||data.productVariants.length!==1)throw shopPlusApiError('导入资料不完整','SHOPPLUS_CREATE_INVALID');
+    return this.request('products.add',data,{timeoutMs:120000,retries:0});
+  }
   async updateProductPublishStatus({productId,publishStatus,timeoutMs=SHOPPLUS_LISTING_WRITE_TIMEOUT_MS,readbackTimeoutMs=SHOPPLUS_LISTING_READBACK_TIMEOUT_MS}={}){
     const id=identifier(productId,'ShopPlus 商品 ID'),status=Number(publishStatus);
     if(![0,1].includes(status))throw shopPlusApiError('上架状态只能是 0（下架）或 1（上架）','SHOPPLUS_PUBLISH_STATUS_INVALID');

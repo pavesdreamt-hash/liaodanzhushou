@@ -3,9 +3,9 @@ import {fileRevision} from '../core/file-revision.mjs';
 
 // Inventory entry needs local rows before the more expensive reminder reconciliation.
 // Other callers keep the complete catalog (including galleries) by default.
-export async function inventoryPageView({catalog,batch,store,sourceChanges,workflow,connection},request={}){
+export async function inventoryPageView({catalog,batch,store,sourceChanges,workflow,connection,unified},request={}){
   const light=request?.inventory===true;
-  if(request?.productDetail===true)return {catalog:await catalog.getView(),status:await connection.status()};
+  if(request?.productDetail===true){const view=await catalog.getView(),detail=unified&&(request.unifiedKey||request.remoteProductId)?request.unifiedKey?await unified.detail(request.unifiedKey):(await unified.view({catalog:view})).rows.find(r=>r.remoteProductId===request.remoteProductId):null;return {catalog:view,status:await connection.status(),...(detail?{unifiedDetail:detail}:{})};}
   if(light&&request.phase==='list'){
     const view=await catalog.getView({includeImages:false});
     const document=await store.read();
@@ -38,14 +38,15 @@ export function createInventoryPageView(deps){
       return data;
     })();inFlight=task;try{return await task;}finally{if(inFlight===task)inFlight=null;}
   };
+  const decorate=async result=>deps.unified?{...result,unified:await deps.unified.view({catalog:result.catalog})}:result;
   return async(request={})=>{
     if(request?.productDetail===true||request?.inventory!==true)return inventoryPageView(deps,request);
     if(request.phase==='list'){
       const before=await revision(),result=await inventoryPageView(deps,request),after=await revision();
-      if(cached&&same(before,after)&&same(after,cached.revision))return {...result,...structuredClone(cached.data),inventorySummaryPending:false,inventorySummaryReused:true};
-      return result;
+      if(cached&&same(before,after)&&same(after,cached.revision))return decorate({...result,...structuredClone(cached.data),inventorySummaryPending:false,inventorySummaryReused:true});
+      return decorate(result);
     }
     const result=await summary();
-    return {...result,catalog:await deps.catalog.getView({includeImages:false}),workflow:await deps.workflow.view(),status:await deps.connection.status(),inventorySummaryPending:false};
+    return decorate({...result,catalog:await deps.catalog.getView({includeImages:false}),workflow:await deps.workflow.view(),status:await deps.connection.status(),inventorySummaryPending:false});
   };
 }
