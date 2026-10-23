@@ -145,6 +145,21 @@ export class ShopPlusConnection {
     try{return await this.productDetail(id,{timeoutMs:readbackTimeoutMs});}
     catch(error){throw shopPlusApiError('上架／下架请求已提交，但网站回读未完成；请先核对建议中心，勿重复执行','SHOPPLUS_PUBLISH_READBACK_UNCERTAIN');}
   }
+  // Official selective SPU update: https://openapi.shoplus.net/doc (2026-10-23).
+  async updateProductContent({productId,changes}={}){
+    if(!changes||!Object.keys(changes).length||Object.keys(changes).some(k=>!['title','productShortDesc','productLongDesc'].includes(k)))throw shopPlusApiError('不支持的网站资料字段');
+    const result=await this.request('products.updateSpuSelective',{id:identifier(productId,'ShopPlus 商品 ID'),...changes},{timeoutMs:SHOPPLUS_LISTING_WRITE_TIMEOUT_MS,retries:0});
+    if(result?.result!==true)throw shopPlusApiError('网站未确认资料更新，请刷新读取后核对');
+    return result;
+  }
+  async updateProductFields({productId,variants}={}){
+    if(!Array.isArray(variants)||variants.length!==1)throw shopPlusApiError('请选择一个明确规格');
+    const v=variants[0],patch={id:identifier(v.id,'ShopPlus 变体 ID')};
+    if(v.salePrice!==undefined){const n=Number(v.salePrice);if(v.salePrice===null||v.salePrice===''||!Number.isFinite(n)||n<0||n>10000000||Math.abs(n*100-Math.round(n*100))>0.00001)throw shopPlusApiError('售价格式不正确');patch.salePrice=n;}
+    if(v.availableStockQuantity!==undefined)patch.availableStockQuantity=inventoryQuantity(v.availableStockQuantity);
+    if(Object.keys(patch).length===1)throw shopPlusApiError('请选择规格修改字段');
+    return this.request('products.skus.addOrUpdate',{productId:identifier(productId,'ShopPlus 商品 ID'),updateProductVariants:[patch]},{timeoutMs:SHOPPLUS_LISTING_WRITE_TIMEOUT_MS,retries:0});
+  }
   async updateVariantInventory({productId,variantId,stockQuantity}={}){
     const id=identifier(productId,'ShopPlus 商品 ID'),variant=identifier(variantId,'ShopPlus 变体 ID'),quantity=inventoryQuantity(stockQuantity);
     await this.request('products.skus.addOrUpdate',{productId:id,updateProductVariants:[{id:variant,availableStockQuantity:quantity}]});

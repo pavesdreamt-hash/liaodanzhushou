@@ -129,7 +129,7 @@ function candidate(raw){
     sourceUpdatedAt:text(raw?.updatedAt??raw?.updateTime??'',80)||null,
     sourceUrl:safeUrl(raw?.productUrl??raw?.url??raw?.websiteUrl),
     sourceName:text(raw?.title??raw?.name??raw?.productName,240)||remoteProductId,
-    sourceShortDescription:text(raw?.productShortDesc??raw?.shortDescription,12000)||null,
+    sourceShortDescription:text(typeof (raw?.productShortDesc??raw?.shortDescription)==='object'?JSON.stringify(raw.productShortDesc??raw.shortDescription):raw?.productShortDesc??raw?.shortDescription,12000)||null,
     sourceLongDescription:text(raw?.productLongDesc??raw?.longDescription??raw?.description,60000)||null,
     websitePriceAed:stock.price,
     stockQuantity:stock.quantity,
@@ -664,7 +664,7 @@ export class ShopPlusProductCatalog {
   });}
   async recordWebsiteUpdate({remoteProductId,raw,action,manualLock}={}){
     return this.serial(async()=>{
-      await this.load();const id=text(remoteProductId,160),activeIndex=this.state.products.findIndex(product=>product.remoteProductId===id),archivedIndex=(this.state.archivedProducts||[]).findIndex(product=>product.remoteProductId===id),previous=activeIndex>=0?this.state.products[activeIndex]:(this.state.archivedProducts||[])[archivedIndex],next=candidate(raw);
+      await this.load();const id=text(remoteProductId,160),activeIndex=this.state.products.findIndex(product=>product.remoteProductId===id),archivedIndex=(this.state.archivedProducts||[]).findIndex(product=>product.remoteProductId===id),previous=(activeIndex>=0?this.state.products[activeIndex]:(this.state.archivedProducts||[])[archivedIndex])||(this.state.mappingCatalog||[]).find(product=>product.remoteProductId===id),next=candidate(raw);
       if(!previous||!next||next.remoteProductId!==id)throw catalogError('网站回读商品与当前本机记录不一致','SHOPPLUS_PRODUCT_READBACK_MISMATCH');
       const at=this.now().toISOString(),updated=retainedProduct(next,previous,at),target=action?.targetPublishStatus;
       updated.listingControl={...(previous.listingControl||{}),...(manualLock===undefined?{}:{manualLock:Boolean(manualLock)}),lastAction:action?{at,type:text(action.type,40)||'website_update',beforePublishStatus:[0,1].includes(action.beforePublishStatus)?action.beforePublishStatus:null,targetPublishStatus:[0,1].includes(target)?target:null,beforeStockQuantity:Number.isSafeInteger(action.beforeStockQuantity)?action.beforeStockQuantity:null,targetStockQuantity:Number.isSafeInteger(action.targetStockQuantity)?action.targetStockQuantity:null,note:text(action.note,240)||null}:previous.listingControl?.lastAction||null};

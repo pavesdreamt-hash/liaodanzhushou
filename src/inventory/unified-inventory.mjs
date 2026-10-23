@@ -4,6 +4,7 @@ import {stableHash} from '../core/files.mjs';
 import {sameSourceIdentity,sourceRows} from '../sync/source-changes.mjs';
 import {sourceModel} from '../mapping/source-key.mjs';
 import {sourcePrice} from '../../shared/source-price.mjs';
+import {localMaster,checkLocalPrice} from './product-master.mjs';
 
 const amount=v=>v===null||v===undefined||String(v).trim()===''?null:Number.isFinite(Number(v))?Number(v):null;
 const availability=v=>['有货','无货'].includes(v)?v:null;
@@ -40,19 +41,30 @@ export class UnifiedInventory{
       for(const l of local)usedLocal.add(l.id);if(website)usedWeb.add(website.remoteProductId);
       jobs.push(make(source,local,website,sourceKey(source),website?null:ctx.blocked));
     }
-    for(const local of locals)if(!usedLocal.has(local.id)){const web=local.remoteProductId?data.records.find(w=>w.remoteProductId===local.remoteProductId):null;if(web)usedWeb.add(web.remoteProductId);jobs.push(make(null,[local],web,'local:'+local.id,web?null:'来源资料待核对'));};
+    for(const local of locals)if(!usedLocal.has(local.id)){const web=local.remoteProductId?data.records.find(w=>w.remoteProductId===local.remoteProductId):null;if(web)usedWeb.add(web.remoteProductId);jobs.push(make(null,[local],web,local.masterKey||'local:'+local.id,web?null:'来源资料待核对'));};
     const savedWeb=new Set([...(catalog.products||[]),...(catalog.archivedProducts||[])].map(p=>p.remoteProductId));
     for(const web of data.records)if(savedWeb.has(web.remoteProductId)&&!usedWeb.has(web.remoteProductId))jobs.push(make(null,[],web,'website:'+web.remoteProductId,'来源与网站对应待核对'));
     const rows=await Promise.all(jobs);
+    for(const row of rows)row.master=localMaster(row);
     rows.sort((a,b)=>(a.sourceRow??Infinity)-(b.sourceRow??Infinity));
     return {rows,sourceCount:sources.length,localCount:locals.length,sourceCapturedAt:data.snapshot?.capturedAt||null,sourceQuality:data.snapshot?.quality?.passed===true,stats:{total:rows.length,available:rows.filter(r=>r.sourceStock==='有货').length,synced:rows.filter(r=>r.sourceStock==='有货'&&r.remoteProductId).length,low:rows.filter(r=>r.sourceStock==='有货'&&r.remoteProductId&&r.stockQuantity!==null&&r.stockQuantity<2).length}};
   }
   async detail(key){const row=(await this.view()).rows.find(r=>r.key===key);if(!row)throw Error('商品资料已变化，请返回库存页刷新');return row;}
-  async save({key,expectedLocalUpdatedAt,expectedSource,changes}={}){
+  async saveMaster({key,expectedLocalUpdatedAt,expectedSource,changes={},priceApproval}={}){
+    const row=await this.detail(key),p=row.local,m=row.master;
+    if(row.sourceFingerprint!==expectedSource||(p?.updatedAt??null)!==(expectedLocalUpdatedAt??null))throw Error('本机或来源资料已变化，请刷新详情后保存');
+    const allowed=['name','salePriceAed','availability','sellingPoints','description'];if(Object.keys(changes).some(k=>!allowed.includes(k)))throw Error('不支持的本机资料字段');
+    if(Object.hasOwn(changes,'availability')&&!['有货','无货','待核对'].includes(changes.availability))throw Error('请明确选择本机库存状态');
+    if(Object.hasOwn(changes,'salePriceAed'))checkLocalPrice(changes.salePriceAed,row.costPriceAed,priceApproval);
+    const product=await this.localProducts.save({...p,...m,id:p?.id,expectedUpdatedAt:p?.updatedAt,displayCode:row.code,masterKey:row.key,costPriceAed:row.costPriceAed,stockQuantity:p?.stockQuantity??row.stockQuantity??10,...changes,...(p?{}:{sourceRow:row.sourceRow??''})},{initialRemoteProductId:!p&&!row.source?row.remoteProductId:null});
+    return product;
+  }
+  async save({key,expectedLocalUpdatedAt,expectedSource,changes,priceApproval}={}){
     const row=await this.detail(key);if(row.remoteProductId)throw Error('已同步网站的商品请使用网站售价/库存操作');
     if(row.source&&stableHash(row.source)!==expectedSource)throw Error('来源资料已变化，请重新打开商品后保存');
     if(row.local&&row.local.updatedAt!==expectedLocalUpdatedAt)throw Error('商品已更新，请重新打开后保存');
     const allowed=['name','costPriceAed','salePriceAed','stockQuantity','description'];if(!changes||Object.keys(changes).some(k=>!allowed.includes(k)))throw Error('不支持的商品修改字段');
+    if(Object.hasOwn(changes,'salePriceAed'))checkLocalPrice(changes.salePriceAed,row.costPriceAed,priceApproval);
     const p=row.local,product={id:p?.id,expectedUpdatedAt:p?.updatedAt,name:p?.name||row.sourceName||row.code,costPriceAed:row.costPriceAed,salePriceAed:row.priceAed,stockQuantity:row.stockQuantity??10,description:row.description,...changes,...(p?{}:{sourceRow:row.sourceRow??''})};
     return this.localProducts.save(product);
   }

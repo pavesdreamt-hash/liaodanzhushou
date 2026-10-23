@@ -48,17 +48,71 @@
 #ui032 .page-head>.actions{width:100%;justify-content:flex-start;flex-wrap:wrap;gap:8px}
 #ui032 .page-head .inventory-product-tools{margin:0;flex:1;display:flex;flex-wrap:wrap;gap:8px}
 #ui032.inventory-split-detail .page-head .actions>:is(#u32-edit,#u32-edit-cancel,#u32-listing,#u32-adjust-inventory){display:none}
-#ui032 .product-identifiers{margin:0;padding:16px;background:var(--panel);border:1px solid var(--line);border-radius:12px;display:grid;grid-template-columns:140px minmax(0,1fr);gap:8px 14px;font-size:12px;line-height:1.5;color:var(--text)}
-#ui032 .product-identifiers dt{color:#524a61}#ui032 .product-identifiers dd{margin:0;overflow-wrap:anywhere}
+#ui032.inventory-split-detail .left-info .info-line{display:grid;grid-template-columns:118px minmax(0,1fr);align-items:start;gap:14px;font-size:12px;line-height:1.5}
+#ui032.inventory-split-detail .left-info .info-line :is(span,strong,dt,dd){min-width:0;margin:0;font-size:inherit;overflow-wrap:anywhere}
+#ui032.inventory-split-detail .left-info .info-line :is(span,dt){color:#524a61}
+#ui032 .product-identifiers{margin:0;padding:0;border-top:1px solid var(--line);color:var(--text)}
 #ui032 :is(input[readonly],textarea[readonly],select:disabled){color:var(--text);-webkit-text-fill-color:var(--text);opacity:1;background:var(--panel-soft)}
 #ui032 :is(.field label small,.source-note,.source-item em){color:#655c73}
 .product-import-preview{display:grid;grid-template-columns:100px minmax(0,1fr);gap:12px}.product-import-preview dd{margin:0;overflow-wrap:anywhere}
 .product-link-dialog select{width:100%;min-height:240px}.product-link-dialog option{padding:10px}
 #ui032 .product-title-row{display:flex;align-items:center;gap:8px}
-@media(max-width:940px){#ui032 .page-head .inventory-product-tools{gap:6px}#ui032 .product-identifiers{grid-template-columns:118px minmax(0,1fr)}}
+@media(max-width:940px){#ui032 .page-head .inventory-product-tools{gap:6px}}
 
 #ui032 .inventory-product-reference:empty{display:none}
 #ui032 .product-title-row .top-availability{margin-left:8px}
+/* Keep detail navigation, product code/help and availability on one header row. */
+#ui032 .page-head{margin-top:0}
+#ui032 .product-heading-line{display:flex;align-items:flex-start;gap:16px;width:100%;min-width:0}
+#ui032 .product-heading-line .crumb{flex:none;flex-wrap:nowrap;min-height:32px}
+#ui032 .product-heading-copy{flex:1;min-width:0}
+#ui032 .product-heading-line .product-title-row{min-width:0}
+#ui032 .product-heading-line .product-title-row h1{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#ui032 .product-heading-line .top-availability{flex:none}
+@media(max-width:620px){#ui032 .product-heading-line{gap:10px}#ui032 .product-heading-line .crumb>:not(.crumb-back){display:none}}
+/* 4.0.4: local master and website publication are separate, shared detail panels. */
+#ui032.local-first-detail [hidden]{display:none!important}
+#ui032.local-first-detail .page-head>.actions{display:none}
+#ui032.local-first-detail .product-heading-line{align-items:center;gap:12px}
+#ui032.local-first-detail .product-heading-line>.inventory-product-tools{flex:none;margin-left:auto;flex-wrap:nowrap;gap:7px}
+#ui032.local-first-detail .master-header-button{display:inline-flex;align-items:center;gap:5px;min-height:32px;padding:6px 9px;font-size:12px;white-space:nowrap}
+#ui032.local-first-detail .master-header-button svg{width:15px;height:15px}
+#ui032.local-first-detail .workspace{grid-template-columns:minmax(220px,25%) minmax(0,1fr);gap:14px}
+#ui032 .master-panels{display:grid;gap:14px;min-width:0}
+#ui032 .master-three{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;padding:14px}
+#ui032 .master-two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;padding:0 14px 14px}
+#ui032 .master-field{min-width:0}
+#ui032 .master-panels h3{font-size:12px;font-weight:500;color:var(--muted);display:flex;align-items:center;justify-content:space-between;margin:0 0 9px}
+#ui032 .master-panels small{font-size:11px;font-weight:400}
+#ui032 .master-value{display:flex;align-items:center;gap:7px;padding:8px 9px;min-height:36px;background:var(--panel-soft);border-radius:7px;font-size:12px}
+#ui032 .master-value>span{color:var(--muted);flex:none}
+#ui032 .master-value.is-local{background:var(--purple-soft)}
+#ui032 .master-value.is-local>span{color:var(--purple)}
+#ui032 .master-value strong{min-width:0;flex:1;overflow-wrap:anywhere;font-size:12px}
+#ui032 [data-master-edit]{display:inline-grid;place-items:center;padding:3px;border:0;background:transparent;color:var(--purple);flex:none}
+#ui032 [data-master-edit] svg{width:15px;height:15px}
+#ui032 .master-copy{white-space:pre-wrap;overflow-wrap:anywhere;min-height:100px;padding:12px;border:1px solid var(--line);border-radius:7px;background:var(--panel-soft);font-size:12px;line-height:1.6}
+#ui032 .master-source-value{background:var(--panel-soft);border:1px solid var(--line);border-radius:8px;padding:12px;min-width:0}
+#ui032 .master-source-value>span{display:block;color:var(--muted);font-size:12px;margin-bottom:8px}
+#ui032 .master-source-value strong{font-size:18px;overflow-wrap:anywhere}
+#ui032 :is(.master-website-actions,.master-copy-links,.master-media-actions,.master-extra-actions){display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 14px}
+#ui032 :is(.master-website-actions,.master-copy-links,.master-media-actions,.master-extra-actions) button{font-size:12px}
+#ui032 :is(.master-website-actions,.master-media-actions,.master-extra-actions) button{padding:6px 9px;min-height:30px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--purple);cursor:pointer}
+#ui032 :is(.master-website-actions,.master-media-actions,.master-extra-actions) button:disabled{color:var(--muted);opacity:.55;cursor:default}
+#ui032 .master-field h3{justify-content:flex-start;gap:5px;font-size:12px;font-weight:500}
+#ui032 .master-two h3{font-size:12px;font-weight:500}
+#ui032 .master-two h3 button{margin-left:auto}
+#ui032 .master-copy-links button{border:0;background:transparent;color:var(--purple);padding:0}
+#ui032 .master-copy-links span{font-size:12px;color:var(--muted);margin-left:auto}
+#ui032 .master-empty{padding:14px;font-size:12px;color:var(--muted)}
+#ui032.local-first-detail .left-info .info-line{grid-template-columns:80px minmax(0,1fr);gap:8px;padding:5px 0;border:0;font-size:12px}
+#ui032.local-first-detail .product-identifiers{border:0;padding:0}
+#ui032 .master-group-title{font-size:12px;display:flex;gap:7px;align-items:center;margin:0 0 8px;font-weight:500}
+#ui032 .master-group-title:not(:first-child){margin-top:20px}
+#ui032 .master-group-title>span{font-size:11px;color:var(--purple);background:var(--purple-soft);padding:1px 5px;border-radius:4px}
+.master-sync-dialog{max-height:85vh;overflow:auto}.master-sync-field{padding:12px 0;border-top:1px solid #e5e0ee}.master-sync-field label{display:flex;align-items:center;gap:8px}.master-sync-field input[type=checkbox]{width:16px;min-height:16px}.master-sync-field p{font-size:12px;white-space:pre-wrap;overflow-wrap:anywhere;color:#665b75}.master-sync-field :is(select,input:not([type=checkbox])){width:100%}
+@media(max-width:1100px){#ui032.local-first-detail .product-heading-line .crumb>:not(.crumb-back){display:none}#ui032.local-first-detail .product-heading-line .top-availability{font-size:11px;padding:4px 7px;margin-left:0}#ui032.local-first-detail .workspace{grid-template-columns:210px minmax(0,1fr)}#ui032 .master-three{gap:8px;padding:12px}#ui032 .master-value{gap:4px;padding:7px}}
+@media(max-width:760px){#ui032.local-first-detail .product-heading-line{flex-wrap:wrap}#ui032.local-first-detail .product-heading-line>.inventory-product-tools{width:100%;margin:0}#ui032.local-first-detail .workspace{grid-template-columns:1fr}#ui032 .master-three,#ui032 .master-two{grid-template-columns:1fr}}
 #ui032 .inventory-product-tools button{cursor:pointer;transition:background-color .12s,color .12s,border-color .12s,box-shadow .12s}
 #ui032 .inventory-product-tools button:not(:disabled):hover{background:var(--purple-soft);border-color:var(--purple)}
 #ui032 .inventory-product-tools button:focus-visible{outline:2px solid var(--purple);outline-offset:2px}

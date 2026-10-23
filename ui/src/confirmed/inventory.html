@@ -79,12 +79,12 @@
     #ui011-inventory .source-pending-actions button{min-height:30px;padding:0 10px;color:#8b5714;background:#fff;border:1px solid #e8c590;border-radius:6px;font-size:11px;white-space:nowrap}
     #ui011-inventory .source-pending-actions .source-batch-entry{color:var(--accent);border-color:var(--accent-line)}
     #ui011-inventory .daily-sync-running{display:flex;align-items:center;gap:7px;margin:9px 0;color:var(--accent);font-size:11px;font-weight:600}#ui011-inventory .daily-sync-running .spin{display:inline-grid;place-items:center;width:16px;height:16px;font-size:20px;line-height:1}
-    #ui011-inventory .toolbar{padding:12px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--line)}
-    #ui011-inventory .search{min-width:180px;flex:1;position:relative}
+    #ui011-inventory .toolbar{padding:12px;display:flex;align-items:center;flex-wrap:wrap;gap:8px;border-bottom:1px solid var(--line)}
+    #ui011-inventory .search{min-width:0;max-width:480px;flex:1 1 280px;position:relative}
     #ui011-inventory .search svg{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--muted)}
     #ui011-inventory .search input,#ui011-inventory .toolbar select{width:100%;height:34px;color:var(--text);background:var(--surface);border:1px solid var(--line);border-radius:8px}
     #ui011-inventory .search input{padding:0 10px 0 33px}
-    #ui011-inventory .toolbar select{width:120px;padding:0 8px}
+    #ui011-inventory .toolbar select{width:180px;max-width:100%;flex:0 0 auto;padding:0 28px 0 10px}
     #ui011-inventory .result-count{padding:9px 13px;color:var(--muted);background:var(--surface-2);border-bottom:1px solid var(--line);font-size:10px}
     #ui011-inventory .table-wrap{min-height:0;flex:1;overflow:auto}
     #ui011-inventory table{width:100%;border-collapse:collapse;table-layout:fixed;min-width:680px}
@@ -141,6 +141,7 @@
       #ui011-inventory .shell{display:block}#ui011-inventory .sidebar{min-height:0;padding:7px 10px;flex-direction:row;overflow-x:auto;border-right:0;border-bottom:1px solid var(--line)}#ui011-inventory .nav-group{display:contents}#ui011-inventory .nav-group+.nav-group{margin:0}#ui011-inventory .nav-item{width:42px;flex:0 0 42px}#ui011-inventory .main{padding:15px 12px 20px}#ui011-inventory .workspace{height:auto;min-height:0;flex:0 0 auto;grid-template-columns:1fr}#ui011-inventory .list-card{height:500px}#ui011-inventory .overview{height:auto}#ui011-inventory .sync-popover{right:0;top:86px}
     }
     @media(max-width:560px){
+      #ui011-inventory .search{width:100%;max-width:none;flex:none}
       #ui011-inventory .preview-label,#ui011-inventory .version,#ui011-inventory .user{display:none}#ui011-inventory .page-head{flex-direction:column;align-items:flex-start}#ui011-inventory .page-actions{width:100%;justify-content:flex-start}#ui011-inventory .inventory-title-row{align-items:flex-start;flex-direction:column;gap:6px}#ui011-inventory .stats{grid-template-columns:1fr}#ui011-inventory .toolbar{align-items:stretch;flex-direction:column}#ui011-inventory .toolbar select{width:100%}#ui011-inventory .list-footer{align-items:flex-start;flex-wrap:wrap}.list-page-summary{width:100%;margin-right:0}.list-sort{margin-right:auto}#ui011-inventory .sync-popover{left:0;right:auto;top:125px;width:min(100%,300px)}
     }
     /* 2.1.6：仅扩展商品概览外卡片，保留卡片内已确认的紧凑结构。 */

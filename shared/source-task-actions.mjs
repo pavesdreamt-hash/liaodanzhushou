@@ -21,3 +21,17 @@ export function sourceTaskOperationReason(row,kind){
   if(target===1&&(!row.validVariants||row.variants.some(v=>v.stockQuantity===null)||!row.variants.some(v=>v.stockQuantity>0)))return '请先读取规格并补充网站库存，再上架';
   return '';
 }
+
+// Manual single-product controls follow the website state. Source availability
+// remains advice; the source-driven task queue above keeps its own restrictions.
+export function manualProductListingReason(row,kind){
+  if(!row?.remoteProductId)return '尚未同步网站，请先关联已有网站商品或导入网站';
+  if(row.blocked)return row.blocked;
+  if(![0,1].includes(row.publishStatus))return '网站上下架状态未知，请先读取商品记录';
+  if(row.publishStatus===(kind==='publish'?1:0))return kind==='publish'?'网站已上架，无需重复上架':'网站已下架，无需重复下架';
+  return '';
+}
+export function manualProductListingWarning(row,kind){
+  const stock=row.sourceStock||row.source?.stock;
+  return kind==='publish'?(stock==='无货'?'来源当前无货，本次仍将人工上架网站商品，请确认。':stock!=='有货'?'来源有货状态尚未确认，本次将人工上架，请确认。':''):(stock==='有货'?'来源当前有货，本次仍将人工下架网站商品，请确认。':stock!=='无货'?'来源状态尚未确认，本次将人工下架，请确认。':'');
+}

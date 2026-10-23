@@ -49,6 +49,7 @@ import {LocalWebServer} from './local-web-server.mjs';
 import {SHOPPLUS_FILE_FILTER_EXTENSIONS,shopPlusExtension,validateShopPlusUpload} from './orders/shopplus-file.mjs';
 import {ShopPlusConnection} from './orders/shopplus-api.mjs';
 import {ShopPlusProductCatalog} from './inventory/shopplus-product-catalog.mjs';
+import {checkLocalPrice} from './inventory/product-master.mjs';
 import {LocalProducts,encodeLocalProductImage} from './inventory/local-products.mjs';
 import {createInventoryPageView} from './inventory/page-view.mjs';
 import {UnifiedInventory} from './inventory/unified-inventory.mjs';
@@ -412,7 +413,7 @@ async function bootstrap(){
   const websiteBridge=new WebsiteProductBridge({unified:unifiedInventory,localProducts,catalog:shopPlusProductCatalog,connection:shopPlusConnection});
   handler('local-products:request',async payload=>{
     const action=payload?.action;
-    const bridgeActions={'website-unlink':'unlink','website-read':'read','website-info':'info','website-link':'link','website-plan':'plan','website-import':'execute','website-recover':'recover','website-edit':'edit','website-action':'action'};
+    const bridgeActions={'master-save':'masterSave','master-read':'masterRead','master-sync':'masterSync','website-unlink':'unlink','website-read':'read','website-info':'info','website-link':'link','website-plan':'plan','website-import':'execute','website-recover':'recover','website-edit':'edit','website-action':'action'};
     if(Object.hasOwn(bridgeActions,action))return websiteBridge[bridgeActions[action]](payload);
     if(action==='inventory-view')return unifiedInventory.view();
     if(action==='inventory-detail')return unifiedInventory.detail(payload.key);
@@ -425,7 +426,7 @@ async function bootstrap(){
     }
     if(action==='start-import')return localProducts.startImport({token:payload.token});
     if(action==='progress')return localProducts.progress({id:payload.id});
-    if(action==='save')return localProducts.save(payload.product||{});
+    if(action==='save'){const p=payload.product||{};if(p.salePriceAed!==null&&p.salePriceAed!==undefined&&String(p.salePriceAed).trim()!=='')checkLocalPrice(p.salePriceAed,p.costPriceAed,payload.priceApproval);return localProducts.save(p);}
     if(action==='export-missing')return localProducts.missingImagesTxt();
     if(action==='retry-media')return localProducts.retryMedia(payload.id);
     if(action==='select-media'){
