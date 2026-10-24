@@ -7,6 +7,8 @@ import {ShopPlusProductCatalog,SHOPPLUS_PRODUCT_ACTIVE_CATALOG_PAGE_SIZE,SHOPPLU
 
 const product=({id,title,stock,price=300,publishStatus=1,imageUrl,imageUrls,description=`Fictional description for ${title}`})=>({id,title,spuCode:`SPU-${id}`,publishStatus,productLongDesc:description,productImgDTOs:(imageUrls|| (imageUrl?[imageUrl]:[])).map(imgUrl=>({imgUrl})),productVariantDTOs:[{salePrice:String(price),productVariantInventoryDTO:{availableStockQuantity:stock}}]});
 const headers=values=>({get:key=>values[String(key).toLowerCase()]??null});
+// Seed a pre-removal record; the current application no longer writes floor prices.
+const legacyFloor=async(catalog,id,value)=>{await catalog.load();const item=[...catalog.state.products,...(catalog.state.archivedProducts||[])].find(p=>p.remoteProductId===id);assert.ok(item);item.floorPriceAed=value;await catalog.persist();};
 
 test('ShopPlus 商品试采集只保存两款有库存商品，超过 3 MB 的图片不保存原图',async()=>{
   const directory=await mkdtemp(path.join(os.tmpdir(),'shopplus-product-catalog-'));
@@ -36,7 +38,8 @@ test('ShopPlus 商品试采集只保存两款有库存商品，超过 3 MB 的�
     assert.equal(bigBodyRead,false,'Content-Length 达到上限时不得读取图片正文');
     assert.equal((await readdir(path.join(directory,'media'))).length,1,'仅缓存小于 3 MB 的一张图片');
     assert.equal(imageReads,2);
-    await catalog.update({remoteProductId:'fictional-small',name:'Fictional Small Edited',floorPrice:'180',description:'Local fictional description'});
+    await catalog.update({remoteProductId:'fictional-small',name:'Fictional Small Edited',description:'Local fictional description'});
+    await legacyFloor(catalog,'fictional-small',180);
     const second=await catalog.collect({listPage});
     assert.equal(imageReads,2,'目标已满足时不得重新下载图片');
     assert.equal(second.products[0].name,'Fictional Small Edited');
@@ -73,7 +76,8 @@ test('用户明确选择后可补充至五款，并可只读更新已采集商�
     const catalog=new ShopPlusProductCatalog({directory,now:()=>new Date('2026-09-26T11:00:00.000Z')});
     const first=await catalog.collect({target:2,listPage:pageFrom(initial)});
     assert.equal(first.products.length,2);
-    await catalog.update({remoteProductId:'fictional-batch-1',name:'Local Name One',floorPrice:'180',description:'Local introduction one'});
+    await catalog.update({remoteProductId:'fictional-batch-1',name:'Local Name One',description:'Local introduction one'});
+    await legacyFloor(catalog,'fictional-batch-1',180);
     await catalog.integrateSourcePricing({sourceProducts:[{businessId:first.products[0].productNumber,sourceName:'Website One',cost:'100',suggestedPrice:'200'}]});
     const requests=[];
     const expanded=await catalog.collect({target:5,listPage:async payload=>{requests.push(payload);return pageFrom(initial)(payload);}});
@@ -149,7 +153,8 @@ test('全量目录分页读取时只保存已上架且有库存商品，超过�
   try{
     const catalog=new ShopPlusProductCatalog({directory,fetchImpl:async()=>{throw new Error('full active catalog must not read images');},now:()=>new Date('2026-09-26T14:00:00.000Z')});
     const legacy=await catalog.collect({target:2,listPage:async()=>({products:[product({id:'legacy-inactive',title:'Legacy inactive',stock:2,publishStatus:1})]})});
-    await catalog.update({remoteProductId:legacy.products[0].remoteProductId,name:'Keep local name',floorPrice:'195',description:'Keep local description'});
+    await catalog.update({remoteProductId:legacy.products[0].remoteProductId,name:'Keep local name',description:'Keep local description'});
+    await legacyFloor(catalog,legacy.products[0].remoteProductId,195);
     const result=await catalog.collectPublishedInStock({listPage:async({pageNum,pageSize})=>{requests.push({pageNum,pageSize});return {products:rows.slice((pageNum-1)*pageSize,pageNum*pageSize),totalCount:rows.length};}});
     assert.deepEqual(requests,Array.from({length:Math.ceil(rows.length/SHOPPLUS_PRODUCT_ACTIVE_CATALOG_PAGE_SIZE)},(_,index)=>({pageNum:index+1,pageSize:SHOPPLUS_PRODUCT_ACTIVE_CATALOG_PAGE_SIZE})));
     assert.equal(result.products.length,205,'不再沿用旧的一百款截断');
@@ -326,4 +331,15 @@ test('超过 3 MB 的网站图片只保存缩略图，不保存原图',async()=>
     let originalRead=false;const catalog=new ShopPlusProductCatalog({directory,now:()=>new Date('2026-09-30T10:00:00.000Z'),thumbnailEncoder:async({bytes})=>{originalRead=bytes.length===SHOPPLUS_PRODUCT_IMAGE_MAX_BYTES;return {bytes:Buffer.alloc(1200,7)};},fetchImpl:async()=>new Response(Buffer.alloc(SHOPPLUS_PRODUCT_IMAGE_MAX_BYTES),{status:200,headers:{'content-type':'image/jpeg','content-length':String(SHOPPLUS_PRODUCT_IMAGE_MAX_BYTES)}})}),raw=product({id:'fictional-thumbnail',title:'Thumbnail Product',stock:3,imageUrl:'https://images.example.invalid/thumbnail.jpg'});
     const result=await catalog.collect({listPage:async()=>({products:[raw]})}),image=result.products[0].image;assert.equal(originalRead,true);assert.equal(image.status,'cached');assert.equal(image.thumbnail,true);assert.equal(image.originalByteLength,SHOPPLUS_PRODUCT_IMAGE_MAX_BYTES);assert.equal(image.byteLength,1200);assert.equal((await readdir(path.join(directory,'media'))).length,1);
   }finally{await rm(directory,{recursive:true,force:true});}
+});
+
+test('removed floor writes reject atomically while unrelated edits preserve legacy values',async t=>{
+ const directory=await mkdtemp(path.join(os.tmpdir(),'removed-floor-'));t.after(()=>rm(directory,{recursive:true,force:true}));
+ const catalog=new ShopPlusProductCatalog({directory,fetchImpl:async()=>{throw Error('no network');}});
+ await catalog.collect({listPage:async()=>({products:[product({id:'legacy-floor',title:'Original',stock:2})]})});
+ await legacyFloor(catalog,'legacy-floor',180);const before=await readFile(catalog.file,'utf8');
+ for(const field of ['floorPrice','floorPriceAed'])await assert.rejects(catalog.update({remoteProductId:'legacy-floor',name:'Must not save',[field]:90}),{code:'SHOPPLUS_PRODUCT_FLOOR_REMOVED'});
+ assert.equal(await readFile(catalog.file,'utf8'),before);
+ await catalog.update({remoteProductId:'legacy-floor',name:'New name',description:'New description'});
+ const stored=JSON.parse(await readFile(catalog.file,'utf8')).products[0];assert.equal(stored.floorPriceAed,180);assert.equal(stored.localName,'New name');assert.equal(stored.localDescription,'New description');
 });

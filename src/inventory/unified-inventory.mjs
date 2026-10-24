@@ -5,6 +5,7 @@ import {sameSourceIdentity,sourceRows} from '../sync/source-changes.mjs';
 import {sourceModel} from '../mapping/source-key.mjs';
 import {sourcePrice} from '../../shared/source-price.mjs';
 import {localMaster,checkLocalPrice} from './product-master.mjs';
+import {readMasterRecovery} from './master-sync-recovery.mjs';
 
 const amount=v=>v===null||v===undefined||String(v).trim()===''?null:Number.isFinite(Number(v))?Number(v):null;
 const availability=v=>['有货','无货'].includes(v)?v:null;
@@ -49,7 +50,7 @@ export class UnifiedInventory{
     rows.sort((a,b)=>(a.sourceRow??Infinity)-(b.sourceRow??Infinity));
     return {rows,sourceCount:sources.length,localCount:locals.length,sourceCapturedAt:data.snapshot?.capturedAt||null,sourceQuality:data.snapshot?.quality?.passed===true,stats:{total:rows.length,available:rows.filter(r=>r.sourceStock==='有货').length,synced:rows.filter(r=>r.sourceStock==='有货'&&r.remoteProductId).length,low:rows.filter(r=>r.sourceStock==='有货'&&r.remoteProductId&&r.stockQuantity!==null&&r.stockQuantity<2).length}};
   }
-  async detail(key){const row=(await this.view()).rows.find(r=>r.key===key);if(!row)throw Error('商品资料已变化，请返回库存页刷新');return row;}
+  async detail(key){const row=(await this.view()).rows.find(r=>r.key===key);if(!row)throw Error('商品资料已变化，请返回库存页刷新');row.syncRecovery=await readMasterRecovery(this.localProducts.directory,row.remoteProductId);return row;}
   async saveMaster({key,expectedLocalUpdatedAt,expectedSource,changes={},priceApproval}={}){
     const row=await this.detail(key),p=row.local,m=row.master;
     if(row.sourceFingerprint!==expectedSource||(p?.updatedAt??null)!==(expectedLocalUpdatedAt??null))throw Error('本机或来源资料已变化，请刷新详情后保存');

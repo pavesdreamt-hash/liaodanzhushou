@@ -13,7 +13,7 @@ test('chat product search reads only active local products and exposes a narrow 
   assert.deepEqual(result.lastSuccessfulReadAt,'2026-09-30T01:02:03.000Z');
   assert.equal(result.products.length,1);
   assert.deepEqual(result.products[0],{
-    remoteProductId:'fictional-rose-1',name:'Rose Gift Box',productNumber:'SP-ROSE-001',sourceSpu:'RS-001',stockKnown:true,stockQuantity:7,sourceStock:'有货',websitePriceAed:129.5,costPriceAed:51,suggestedPriceAed:169,floorPriceAed:99,image:{status:'cached'}
+    remoteProductId:'fictional-rose-1',name:'Rose Gift Box',productNumber:'SP-ROSE-001',sourceSpu:'RS-001',stockKnown:true,stockQuantity:7,sourceStock:'有货',websitePriceAed:129.5,costPriceAed:51,suggestedPriceAed:169,image:{status:'cached'}
   });
   assert.equal(JSON.stringify(view),before,'the read-only projection must not mutate the loaded catalog view');
   assert.equal(projectChatProductCatalog(view,{query:'archived'}).products.length,0,'archivedProducts must never be a chat source');

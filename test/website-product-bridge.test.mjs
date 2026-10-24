@@ -37,3 +37,5 @@ test('人工上下架回读目标之外的价格或库存变化不保存为成�
  const f=await setup(t),row=(await f.unified.view()).rows.find(r=>r.remoteProductId==='1002'),info=await fresh(f,row.key),update=f.connection.updateProductPublishStatus;f.connection.updateProductPublishStatus=async p=>{const raw=await update(p);raw.productVariantDTOs[0].salePrice=999;return raw;};
  await assert.rejects(f.bridge.action({key:row.key,fingerprint:info.fingerprint,kind:'unpublish',confirmed:true}),/售价或规格库存发生变化/);assert.equal((await f.unified.detail(row.key)).publishStatus,1);
 });
+
+test('removed detail floor edit cannot write catalog or website',async t=>{const f=await setup(t),row=(await f.unified.view()).rows.find(r=>r.remoteProductId==='1002'),info=await fresh(f,row.key),before=JSON.stringify(await f.catalog.getView());await assert.rejects(f.bridge.edit({key:row.key,fingerprint:info.fingerprint,changes:{floorPriceAed:100}}),/资料项目/);assert.equal(JSON.stringify(await f.catalog.getView()),before);assert.equal(f.creates(),0);});

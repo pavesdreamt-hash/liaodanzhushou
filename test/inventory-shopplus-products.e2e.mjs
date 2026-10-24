@@ -347,7 +347,7 @@ test('商品库存页仅在明确操作后读取全部已上架有货目录，�
   assert.ok(Math.abs(preview.width-preview.height)<2,'商品概览预览框保持正方形');
   assert.equal(preview.objectFit,'contain','商品图片完整显示，不裁切填满预览框');
   assert.match(await frame.locator('#ui011-product-number').textContent()||'',/SP-KY40-BLK-000001/);
-  assert.deepEqual(await frame.locator('.overview-grid label').allTextContents(),['成本价（AED）','建议售价（AED）','底价设置（AED）','库存数量']);
+  assert.deepEqual(await frame.locator('.overview-grid label').allTextContents(),['成本价（AED）','建议售价（AED）','库存数量']);
   assert.deepEqual(await frame.locator('.overview-grid').evaluate(grid=>({label:getComputedStyle(grid.querySelector('label')).fontSize,value:getComputedStyle(grid.querySelector('strong')).fontSize})),{label:'11px',value:'14px'},'商品概览资料字段字号保持可读');
   await frame.locator('#ui011-rows tr').nth(1).click();
   await frame.getByText('图片待人工确认',{exact:true}).waitFor();

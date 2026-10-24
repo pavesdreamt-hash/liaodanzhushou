@@ -4,7 +4,7 @@ import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 const root=new URL('../',import.meta.url),rootPath=fileURLToPath(new URL('.',root)),pkg=JSON.parse(await readFile(new URL('package.json',root),'utf8'));
 if(!/^\d+\.\d+\.\d+$/.test(pkg.version))throw new Error('Application version must use semantic numeric form');
-for(const path of ['src/main.mjs','src/preload.cjs','renderer/index.html','renderer/app.js','renderer/app.css','ui/src/main.tsx','ui/src/styles.css','resources/google-oauth.json','USER-GUIDE.md'])
+for(const path of ['assets/product-poster-footer.jpg','src/main.mjs','src/preload.cjs','renderer/index.html','renderer/app.js','renderer/app.css','ui/src/main.tsx','ui/src/styles.css','resources/google-oauth.json','USER-GUIDE.md'])
   if(!(await stat(new URL(path,root))).isFile())throw new Error(`Missing ${path}`);
 const oauthResource=join(rootPath,'resources/google-oauth.json'),oauthText=await readFile(oauthResource,'utf8'),oauth=JSON.parse(oauthText);
 if(!oauth.installed?.client_id?.endsWith('.apps.googleusercontent.com')||typeof oauth.installed?.client_secret!=='string')throw new Error('Bundled Desktop OAuth resource is invalid');

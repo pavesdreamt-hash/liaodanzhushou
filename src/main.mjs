@@ -53,6 +53,7 @@ import {checkLocalPrice} from './inventory/product-master.mjs';
 import {LocalProducts,encodeLocalProductImage} from './inventory/local-products.mjs';
 import {createInventoryPageView} from './inventory/page-view.mjs';
 import {UnifiedInventory} from './inventory/unified-inventory.mjs';
+import {posterCandidates,decodePosterExport,readPosterTemplate} from './inventory/product-poster.mjs';
 import {projectChatProductCatalog} from './orders/chat-product-catalog.mjs';
 const directory=path.dirname(fileURLToPath(import.meta.url)),PRODUCTION_WEB_PORT=43877;
 const wait=milliseconds=>new Promise(resolve=>setTimeout(resolve,milliseconds));
@@ -416,6 +417,17 @@ async function bootstrap(){
     const bridgeActions={'master-save':'masterSave','master-read':'masterRead','master-sync':'masterSync','website-unlink':'unlink','website-read':'read','website-info':'info','website-link':'link','website-plan':'plan','website-import':'execute','website-recover':'recover','website-edit':'edit','website-action':'action'};
     if(Object.hasOwn(bridgeActions,action))return websiteBridge[bridgeActions[action]](payload);
     if(action==='inventory-view')return unifiedInventory.view();
+    if(action==='poster-template')return readPosterTemplate(path.join(app.getAppPath(),'assets','product-poster-footer.jpg'));
+    if(action==='poster-plan')return posterCandidates(await unifiedInventory.view());
+    if(action==='poster-export'){
+      const current=posterCandidates(await unifiedInventory.view());
+      const images=decodePosterExport(payload,current);
+      const stamp=new Date().toISOString().replace(/[:.]/gu,'-').slice(0,19)+'-'+randomUUID().slice(0,8);
+      if(testMode&&testSaveDirectory){const folder=path.resolve(testSaveDirectory.slice('--orders-test-save-directory='.length));await mkdir(folder,{recursive:true});const files=[];for(let i=0;i<images.length;i++){const file=path.join(folder,`现货商品合集-${stamp}-${String(i+1).padStart(2,'0')}.jpg`);await writeFile(file,images[i],{flag:'wx'});files.push(file);}return {canceled:false,files};}
+      if(images.length===1){const choice=await saveDialog({title:'保存商品合集图',defaultPath:path.join(app.getPath('downloads'),`现货商品合集-${stamp}.jpg`),filters:[{name:'JPEG 图片',extensions:['jpg']}]});if(choice.canceled||!choice.filePath)return {canceled:true};await writeFile(choice.filePath,images[0]);return {canceled:false,files:[choice.filePath]};}
+      const choice=await openDialog({title:`选择保存 ${images.length} 张合集图的文件夹`,properties:['openDirectory','createDirectory']});if(choice.canceled||!choice.filePaths?.[0])return {canceled:true};
+      const files=[];for(let i=0;i<images.length;i++){const file=path.join(choice.filePaths[0],`现货商品合集-${stamp}-${String(i+1).padStart(2,'0')}.jpg`);await writeFile(file,images[i],{flag:'wx'});files.push(file);}return {canceled:false,files};
+    }
     if(action==='inventory-detail')return unifiedInventory.detail(payload.key);
     if(action==='inventory-save')return unifiedInventory.save(payload);
     if(action==='view')return localProducts.view();

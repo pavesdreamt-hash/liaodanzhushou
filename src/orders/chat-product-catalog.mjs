@@ -60,7 +60,6 @@ function projectProduct(product,{includeImage=false}={}){
     websitePriceAed:amount(product?.websitePriceAed),
     costPriceAed:amount(product?.costPriceAed),
     suggestedPriceAed:amount(product?.suggestedPriceAed),
-    floorPriceAed:amount(product?.floorPriceAed),
     image:imageProjection(product,{includeImage})
   };
 }

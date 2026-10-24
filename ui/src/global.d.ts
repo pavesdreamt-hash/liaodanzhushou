@@ -1,7 +1,7 @@
 export {};
 
 type ChatProductCatalogPayload={token:string;query?:string;remoteProductId?:string;includeImage?:boolean};
-type ChatProductCatalogItem={remoteProductId:string;name:string;productNumber:string|null;sourceSpu:string|null;stockKnown:boolean;stockQuantity:number|null;sourceStock:'有货'|'无货'|null;websitePriceAed:number|null;costPriceAed:number|null;suggestedPriceAed:number|null;floorPriceAed:number|null;image?:{status:'cached'|'unavailable'|'manual_review'|'none';dataUrl?:string;mimetype?:string;filename?:string}};
+type ChatProductCatalogItem={remoteProductId:string;name:string;productNumber:string|null;sourceSpu:string|null;stockKnown:boolean;stockQuantity:number|null;sourceStock:'有货'|'无货'|null;websitePriceAed:number|null;costPriceAed:number|null;suggestedPriceAed:number|null;image?:{status:'cached'|'unavailable'|'manual_review'|'none';dataUrl?:string;mimetype?:string;filename?:string}};
 type ChatProductCatalogResult={products:ChatProductCatalogItem[];lastSuccessfulReadAt:string|null};
 type AdsPowerScanFragment={id:string;text:string};
 type AdsPowerScanPage={pageId:string;title:string;error?:string;fragments:AdsPowerScanFragment[]};

@@ -99,6 +99,7 @@
 #ui032 :is(.master-website-actions,.master-copy-links,.master-media-actions,.master-extra-actions) button{font-size:12px}
 #ui032 :is(.master-website-actions,.master-media-actions,.master-extra-actions) button{padding:6px 9px;min-height:30px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--purple);cursor:pointer}
 #ui032 :is(.master-website-actions,.master-media-actions,.master-extra-actions) button:disabled{color:var(--muted);opacity:.55;cursor:default}
+#ui032 .master-extra-actions:empty{display:none}
 #ui032 .master-field h3{justify-content:flex-start;gap:5px;font-size:12px;font-weight:500}
 #ui032 .master-two h3{font-size:12px;font-weight:500}
 #ui032 .master-two h3 button{margin-left:auto}
@@ -140,3 +141,8 @@
 .product-link-dialog.live-dialog .product-link-feedback[data-state=error]{color:#a82d2d;border-color:#f2b8b8;background:#fff0f0}
 .product-link-dialog.live-dialog button[aria-busy=true]{opacity:1;cursor:wait}
 @media(max-height:650px){.product-link-dialog.live-dialog{padding:16px;gap:8px}.product-link-dialog.live-dialog .product-link-feedback{max-height:100px}}
+
+.master-sync-notice{margin:0 0 14px;padding:10px 12px;border-radius:8px;background:#fff7e6;color:#795211;font-size:12px;line-height:1.6;overflow-wrap:anywhere}
+.master-sync-dialog[open]{display:flex;flex-direction:column;overflow:hidden}.master-sync-dialog>div{min-height:0;overflow-y:auto;padding-right:4px}.master-sync-dialog>footer{flex-shrink:0}.master-sync-dialog .master-sync-field label{justify-content:flex-start}
+#ui032.local-first-detail .live-page-status:empty{display:none}
+.master-sync-dialog :is(input,select,textarea){box-sizing:border-box;max-width:100%}

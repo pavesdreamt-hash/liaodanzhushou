@@ -22,6 +22,7 @@ import unifiedCss from './unified-layout.css?raw';
 import inventoryBatchCss from './inventory-batch.css?raw';
 import localProductsCss from './local-products.css?raw';
 import unifiedInventoryCss from './unified-inventory.css?raw';
+import productPosterCss from './product-poster.css?raw';
 import replyCss from './reply-tools.css?raw';
 import mediaDialogCss from './media-dialog.css?raw';
 import productMediaCss from './product-media.css?raw';
@@ -107,6 +108,7 @@ function ConfirmedApp(){
       +(['inventory','product'].includes(page)?moduleStyle('local-products',localProductsCss):'')
       +(['source','inventory','product'].includes(page)?moduleStyle('source-mapping',sourceMappingCss):'')
       +(['inventory','product'].includes(page)?moduleStyle('unified-inventory',unifiedInventoryCss):'')
+      +(page==='inventory'?moduleStyle('product-poster',productPosterCss):'')
       +moduleStyle('hover-hints',hoverHintsCss);
   },[page]);
   const setup=()=>{

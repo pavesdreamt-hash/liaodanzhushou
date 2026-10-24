@@ -170,6 +170,7 @@
             <button class="button" id="ui011-task-details" type="button"><i data-lucide="list-todo"></i>商品待办</button>
             <button class="button" id="ui011-source-library" type="button"><i data-lucide="database"></i>来源同步与核对</button>
             <button class="button" id="ui011-image-manager" type="button"><i data-lucide="images"></i>图片管理</button>
+            <button class="button" id="ui011-product-poster" type="button"><i data-lucide="layout-grid"></i>制作商品合集图</button>
             <button class="button button-primary" id="ui011-product-manager" type="button"><i data-lucide="refresh-cw"></i><span>商品同步与更新</span></button>
           </div>
           <section class="sync-popover" id="ui011-popover" hidden>
@@ -205,10 +206,10 @@
 
           <aside class="card overview" aria-label="商品概览">
             <div class="overview-head"><span class="overview-title-wrap"><span class="overview-title"><i data-lucide="package-search"></i>商品概览</span><button class="overview-help" id="ui011-overview-help" type="button" aria-label="库存说明"><i data-lucide="circle-help"></i></button></span></div>
-            <div class="overview-info" id="ui011-overview-info" hidden>这里仅显示本次有库存的商品试采集结果。成本价和建议售价将来由成本表导入；底价与商品介绍可在产品详情页保存到本机，不会写回网站。</div>
+            <div class="overview-info" id="ui011-overview-info" hidden>这里仅显示本次有库存的商品试采集结果。成本价和建议售价将来由成本表导入；商品介绍可在产品详情页保存到本机，不会写回网站。</div>
             <div class="overview-photo" id="ui011-overview-photo"><i data-lucide="package"></i></div>
             <div class="overview-identity"><h2 id="ui011-overview-name">—</h2><p class="product-code" id="ui011-product-number">商品编号：—</p><span class="badge is-in" id="ui011-overview-stock">有库存</span></div>
-            <div class="overview-grid"><div class="overview-field"><label>成本价（AED）</label><strong id="ui011-cost">—</strong></div><div class="overview-field"><label>建议售价（AED）</label><strong id="ui011-suggested">—</strong></div><div class="overview-field"><label>底价设置（AED）</label><strong id="ui011-floor">—</strong></div><div class="overview-field"><label>库存数量</label><strong id="ui011-stock-value">—</strong></div></div>
+            <div class="overview-grid"><div class="overview-field"><label>成本价（AED）</label><strong id="ui011-cost">—</strong></div><div class="overview-field"><label>建议售价（AED）</label><strong id="ui011-suggested">—</strong></div><div class="overview-field"><label>库存数量</label><strong id="ui011-stock-value">—</strong></div></div>
             <div class="chat-state" id="ui011-chat-state"><i data-lucide="circle-check"></i><div><strong id="ui011-review-title">等待商品采集</strong><p id="ui011-review-copy">仅在实际读取成功后显示商品资料。</p></div></div>
             <div class="overview-actions"><button class="button button-primary" id="ui011-full-details" type="button"><i data-lucide="arrow-up-right"></i>进入产品详情页</button></div>
             <section class="overview-description" aria-label="产品简介"><strong>产品简介</strong><p id="ui011-overview-description">尚未采集产品简介。</p></section>

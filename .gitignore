@@ -49,3 +49,6 @@ artifacts/
 
 # User requested project-local App delivery, kept out of source control.
 /交付/
+
+# User-provided local poster artwork is packaged locally, never uploaded to Git.
+/assets/product-poster-footer.jpg

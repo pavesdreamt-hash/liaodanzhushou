@@ -587,12 +587,12 @@ export class ShopPlusProductCatalog {
       this.state.reconciliation={...pending,status:'applied',appliedAt:at};await this.persist();return this.view();
     });
   }
-  async update({remoteProductId,name,floorPrice,description}={}){
+  async update({remoteProductId,name,description,...removed}={}){
+    if(Object.hasOwn(removed,'floorPrice')||Object.hasOwn(removed,'floorPriceAed'))throw catalogError('独立底价设置已取消，请参考建议售价','SHOPPLUS_PRODUCT_FLOOR_REMOVED');
     return this.serial(async()=>{
       await this.load();const id=text(remoteProductId,160),activeIndex=this.state.products.findIndex(product=>product.remoteProductId===id),archivedIndex=(this.state.archivedProducts||[]).findIndex(product=>product.remoteProductId===id),collection=activeIndex>=0?this.state.products:this.state.archivedProducts,index=activeIndex>=0?activeIndex:archivedIndex;if(index<0)throw catalogError('找不到待核对商品','SHOPPLUS_PRODUCT_NOT_FOUND');
       const product=collection[index];
       if(name!==undefined){const next=text(name,240);if(!next)throw catalogError('商品名称不能为空','SHOPPLUS_PRODUCT_NAME_INVALID');product.localName=next;}
-      if(floorPrice!==undefined){if(floorPrice===null||String(floorPrice).trim()==='')product.floorPriceAed=null;else{const value=number(floorPrice);if(value===null||value<0||value>10_000_000)throw catalogError('底价必须是有效的 AED 金额','SHOPPLUS_PRODUCT_FLOOR_INVALID');product.floorPriceAed=Math.round(value*100)/100;}}
       if(description!==undefined){const next=text(description,60000);product.localDescription=next||null;}
       product.updatedAt=this.now().toISOString();await this.persist();return this.view();
     });
