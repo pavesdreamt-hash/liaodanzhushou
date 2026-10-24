@@ -23,6 +23,6 @@
 
 本轮未重验原生可见文件选择/保存对话框、桌面IPC、网站写入或整套App；17项历史全量失败没有宣称修复。原图白底保持。默认宣传素材以用户提供内容为准，本轮未独立验证宣传文案或证书内容。
 
-本轮为4.0.6～4.1.0第五次交付，源码/测试/文档待本轮整理提交推送收据；App、生成JPG、默认业务图片、依赖、凭据和正式资料均不纳入Git。
+本轮为4.0.6～4.1.0第五次交付，46项源码/测试/文档已提交并推送4dfd2cf，远端main已核对，详见GIT-SYNC-4.1.0-RECEIPT.md；App、生成JPG、默认业务图片、依赖、凭据和正式资料均不纳入Git。
 
 证据目录：artifacts/poster-footer-4.1.0/ 下 check.log、tests.log、package.log、real-package.log、package-proof.json、package-result.json、real-package-result.json、real-preview.png、real-dialog.png、snapshot-proof.json、cleanup-proof.json。
