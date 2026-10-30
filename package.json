@@ -15,6 +15,7 @@
     "build:shared": "node scripts/whatsapp-compat.mjs && node scripts/build-shared.mjs",
     "check:shared": "node scripts/whatsapp-compat.mjs && node scripts/build-shared.mjs --check",
     "test": "npm run build:shared && node --test --test-timeout=30000 test/*.test.mjs",
+    "test:ci": "node --test --test-timeout=30000 test/address-delivery-verification.test.mjs test/mapping-candidate-occupancy.test.mjs test/master-sync-rules.test.mjs test/order-layout-model.test.mjs test/windows-platform.test.mjs",
     "test:orders": "node --test --test-timeout=30000 test/orders.test.mjs",
     "test:electron-orders": "node --test --test-concurrency=1 --test-timeout=60000 test/electron-order-ui.e2e.mjs test/order-dialog-responsive.e2e.mjs test/electron-browser-workspace.e2e.mjs test/assistant-layout.e2e.mjs",
     "test:electron-real-isolation": "node --test --test-timeout=120000 test/electron-real-isolation.e2e.mjs",
