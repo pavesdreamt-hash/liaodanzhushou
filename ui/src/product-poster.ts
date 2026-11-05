@@ -5,14 +5,16 @@ type Product={key:string;code:string;name:string;sourceRow:number|null;image:{fi
 type Plan={sourceCapturedAt:string|null;sourceQuality:boolean;sourceInStock:number;eligible:Product[];missingImage:{key:string;code:string}[];unresolved:number};
 type Settings={title:string;mode:'all'|'category';sheets:number;orientation:'landscape'|'portrait';color:string;categories:Record<string,string>;assets:Record<string,string>};
 const key='liaodan-product-poster-v1';
-const defaults=():Settings=>({title:'现货商品合集',mode:'all',sheets:1,orientation:'landscape',color:'#50127d',categories:{},assets:{}});
-const read=():Settings=>{try{const value=JSON.parse(localStorage.getItem(key)||'null');return value&&typeof value==='object'?{...defaults(),...value,categories:value.categories||{},assets:value.assets||{}}:defaults();}catch{return defaults();}};
+const defaultTitle='In-Stock Collection';
+const restoredTitle=(value:unknown)=>typeof value==='string'&&value.trim()&&value.trim()!=='现货商品合集'?value.trim():defaultTitle;
+const defaults=():Settings=>({title:defaultTitle,mode:'all',sheets:1,orientation:'landscape',color:'#50127d',categories:{},assets:{}});
+const read=():Settings=>{try{const value=JSON.parse(localStorage.getItem(key)||'null');return value&&typeof value==='object'?{...defaults(),...value,title:restoredTitle(value.title),categories:value.categories||{},assets:value.assets||{}}:defaults();}catch{return defaults();}};
 const save=(value:Settings)=>{try{localStorage.setItem(key,JSON.stringify(value));}catch{throw Error('本机海报设置保存空间不足，请移除不用的背景或底部素材后重试');}};
 const el=<K extends keyof HTMLElementTagNameMap>(doc:Document,tag:K,text='',className='')=>{const node=doc.createElement(tag);node.textContent=text;if(className)node.className=className;return node;};
 const clamp=(n:number,min:number,max:number)=>Math.max(min,Math.min(max,n));
 
 export function posterPages(products:Product[],settings:Settings){
-  const count=clamp(Math.floor(Number(settings.sheets)||1),1,24),groups=settings.mode==='category'?[...new Set(products.map(p=>settings.categories[p.key]?.trim()||'未分类'))].map(name=>({name,items:products.filter(p=>(settings.categories[p.key]?.trim()||'未分类')===name)})):[{name:'',items:products}];
+  const count=clamp(Math.floor(Number(settings.sheets)||1),1,24),groups=settings.mode==='category'?[...new Set(products.map(p=>settings.categories[p.key]?.trim()||'Uncategorized'))].map(name=>({name,items:products.filter(p=>(settings.categories[p.key]?.trim()||'Uncategorized')===name)})):[{name:'',items:products}];
   const pages:{name:string;items:Product[]}[]=[];
   for(const group of groups){for(let i=0;i<count;i++){const start=Math.floor(group.items.length*i/count),end=Math.floor(group.items.length*(i+1)/count);if(end>start)pages.push({name:group.name,items:group.items.slice(start,end)});}}
   if(pages.length>24)throw Error('分类与张数合计超过24张，请减少每类张数');
@@ -62,8 +64,8 @@ async function drawPoster(canvas:HTMLCanvasElement,page:{name:string;items:Produ
   const footerImage=footerSource?await loadImage(footerSource):null;
   const scale=w/(landscape?6000:4200),header=350*scale,footer=footerImage?Math.min(h*.35,w*footerImage.naturalHeight/footerImage.naturalWidth):landscape?820*scale:1000*scale,pad=110*scale,gap=16*scale;
   ctx.fillStyle='#180a2aa8';ctx.fillRect(0,0,w,header);
-  ctx.fillStyle='#fff';ctx.textAlign='center';ctx.font=`700 ${148*scale}px -apple-system, PingFang SC, sans-serif`;ctx.fillText(settings.title||'现货商品合集',w/2,205*scale,w-2*pad);
-  ctx.font=`500 ${58*scale}px -apple-system, PingFang SC, sans-serif`;ctx.fillText([page.name,`现货 ${page.items.length} 款`,total>1?`${number}/${total}`:''].filter(Boolean).join('  ·  '),w/2,286*scale,w-2*pad);
+  ctx.fillStyle='#fff';ctx.textAlign='center';ctx.font=`700 ${148*scale}px -apple-system, PingFang SC, sans-serif`;ctx.fillText(settings.title||defaultTitle,w/2,205*scale,w-2*pad);
+  ctx.font=`500 ${58*scale}px -apple-system, PingFang SC, sans-serif`;ctx.fillText([page.name,`${page.items.length} ${page.items.length===1?'Product':'Products'} in Stock`,total>1?`${number}/${total}`:''].filter(Boolean).join('  ·  '),w/2,286*scale,w-2*pad);
   const areaY=header+36*scale,areaH=h-header-footer-68*scale,areaW=w-2*pad,ratio=landscape?1.27:.8,columns=Math.max(1,Math.ceil(Math.sqrt(page.items.length*areaW/areaH/ratio))),rows=Math.ceil(page.items.length/columns),cellW=Math.min((areaW-gap*(columns-1))/columns,680*scale),cellH=Math.min((areaH-gap*(rows-1))/rows,740*scale),gridLeft=(w-columns*cellW-(columns-1)*gap)/2;
   const failures:{index:number;code:string}[]=[];let next=0;
   const drawItem=async(p:Product,i:number)=>{
@@ -80,9 +82,9 @@ async function drawPoster(canvas:HTMLCanvasElement,page:{name:string;items:Produ
   // A reference footer contains text and certificates: preserve the entire strip.
   if(footerImage){contain(ctx,footerImage,0,fy,w,footer);footerImage.src='';}
   else{
-    const panels=[{name:'工厂直供',sub:'Factory Direct',asset:settings.assets.factory},{name:'快速配送',sub:'Fast Delivery',asset:settings.assets.delivery}];
+    const panels=[{name:'Factory Direct',asset:settings.assets.factory},{name:'Fast Delivery',asset:settings.assets.delivery}];
     panels.forEach((_part,i)=>{const x=i*w/2;ctx.fillStyle=i?'#7a174d':'#32105c';ctx.fillRect(x,fy,w/2,footer);});
-    for(let i=0;i<2;i++){const part=panels[i],x=i*w/2;if(part.asset){const image=await loadImage(part.asset);cover(ctx,image,image.naturalWidth,image.naturalHeight,x,fy,w/2,footer);ctx.fillStyle='#180622aa';ctx.fillRect(x,fy,w/2,footer);}ctx.fillStyle='#fff';ctx.textAlign='center';ctx.font=`700 ${104*scale}px -apple-system, PingFang SC, sans-serif`;ctx.fillText(part.name,x+w/4,fy+footer*.54,w/2-90*scale);ctx.font=`500 ${57*scale}px -apple-system, sans-serif`;ctx.fillText(part.sub,x+w/4,fy+footer*.69,w/2-90*scale);}
+    for(let i=0;i<2;i++){const part=panels[i],x=i*w/2;if(part.asset){const image=await loadImage(part.asset);cover(ctx,image,image.naturalWidth,image.naturalHeight,x,fy,w/2,footer);ctx.fillStyle='#180622aa';ctx.fillRect(x,fy,w/2,footer);}ctx.fillStyle='#fff';ctx.textAlign='center';ctx.font=`700 ${104*scale}px -apple-system, PingFang SC, sans-serif`;ctx.fillText(part.name,x+w/4,fy+footer*.54,w/2-90*scale);}
   }
   return failures.sort((a,b)=>a.index-b.index).map(f=>f.code);
 }
@@ -94,7 +96,7 @@ export async function openProductPoster(doc:Document){
   const setBusy=(value:boolean)=>{busy=value;for(const input of box.querySelectorAll<HTMLInputElement|HTMLButtonElement|HTMLSelectElement>('input,select,button'))input.disabled=value;previewButton.disabled=value||!pages.length;exportButton.disabled=value||!previewReady||!pages.length;};
   const persist=()=>{previewReady=false;try{save(settings);result.textContent='设置已更改，请重新生成预览后导出。';}catch(error){result.textContent=(error as Error).message;}setBusy(false);};
   const field=(label:string,input:HTMLElement)=>{const wrap=el(doc,'label',label);wrap.append(input);controls.append(wrap);return wrap;};
-  const title=el(doc,'input') as HTMLInputElement;title.value=settings.title;title.maxLength=32;title.onchange=()=>{settings.title=title.value.trim()||'现货商品合集';persist();};field('标题',title);
+  const title=el(doc,'input') as HTMLInputElement;title.value=settings.title;title.maxLength=32;title.onchange=()=>{settings.title=title.value.trim()||defaultTitle;title.value=settings.title;persist();};field('标题',title);
   const mode=el(doc,'select') as HTMLSelectElement;for(const [value,label] of [['all','全部商品'],['category','按分类']] as const){const option=el(doc,'option',label);option.value=value;mode.append(option);}mode.value=settings.mode;mode.onchange=()=>{settings.mode=mode.value as Settings['mode'];persist();renderPages();};field('排版方式',mode);
   const sheets=el(doc,'input') as HTMLInputElement;sheets.type='number';sheets.min='1';sheets.max='24';sheets.value=String(settings.sheets);sheets.onchange=()=>{settings.sheets=clamp(Number(sheets.value)||1,1,24);sheets.value=String(settings.sheets);persist();renderPages();};field('张数（按分类时为每类）',sheets);
   const orientation=el(doc,'select') as HTMLSelectElement;for(const [value,label] of [['landscape','横向'],['portrait','竖向']] as const){const option=el(doc,'option',label);option.value=value;orientation.append(option);}orientation.value=settings.orientation;orientation.onchange=()=>{settings.orientation=orientation.value as Settings['orientation'];persist();};field('画面方向',orientation);
