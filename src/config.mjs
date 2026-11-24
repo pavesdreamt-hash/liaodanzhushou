@@ -4,7 +4,7 @@
 export const APP_NAME='Liaodan Assistant Live';
 export const DISPLAY_NAME='聊单助手';
 export const SOURCE_URL='https://www.kdocs.cn/l/ccFsTP9rvhmp';
-export const SOURCE_SHEET='Sheet1';
+export const SOURCE_SHEET='产品';
 export const TARGET_SPREADSHEET_ID='1VMkplU-fcuF2-2BimrduNpmgCKJiUeNoMduGlqxHC4c';
 export const TARGET_SPREADSHEET_URL=`https://docs.google.com/spreadsheets/d/${TARGET_SPREADSHEET_ID}/edit`;
 export const TARGET_TITLE='商品库存';

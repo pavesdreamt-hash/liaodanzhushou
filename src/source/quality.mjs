@@ -4,7 +4,7 @@ import {SOURCE_RULES,SOURCE_URL,SOURCE_SHEET,CORE_COLUMNS} from '../config.mjs';
 import {AppError} from '../core/errors.mjs';
 const countNames=records=>{const map=new Map();for(const r of records)map.set(coreText(r.sourceName),(map.get(coreText(r.sourceName))||0)+1);return map;};
 const sourceNameGroup=value=>coreText(value).normalize('NFKC').replace(/\s+/g,' ').toLocaleLowerCase('zh-CN');
-const businessSignature=record=>['cost','suggestedPrice','stock','additionalInfo'].map(field=>coreText(record?.[field])).join('\u0000');
+const businessSignature=record=>['cost','suggestedPrice','stock'].map(field=>coreText(record?.[field])).join('\u0000');
 function mergedNames(result){
   const inherited=new Map();for(const merge of result.coverage?.mergeCandidates||[]){
     const match=/^A(\d+):A(\d+)$/.exec(merge.range||'');if(!match)continue;
@@ -27,7 +27,8 @@ export function sourceProducts(recordsOrResult){
   for(const record of records.filter(record=>coreText(record.sourceName))){const key=sourceNameGroup(record.sourceName);if(!groups.has(key))groups.set(key,[]);groups.get(key).push(record);}
   return [...groups.values()].map(group=>{
     const rows=[...group].sort((a,b)=>a.sourceRow-b.sourceRow),first=rows[0],signatures=new Set(rows.map(businessSignature));
-    return {...first,sourceRows:rows.map(row=>({sourceRow:row.sourceRow,sourceName:row.sourceName,cost:row.cost,suggestedPrice:row.suggestedPrice,stock:row.stock,additionalInfo:row.additionalInfo,imageFingerprint:row.imageFingerprint||''})),
+    const additionalInfo=[...new Set(rows.map(row=>cleanDisplay(row.additionalInfo)).filter(Boolean))].join('；');
+    return {...first,additionalInfo,sourceRows:rows.map(row=>({sourceRow:row.sourceRow,sourceName:row.sourceName,cost:row.cost,suggestedPrice:row.suggestedPrice,stock:row.stock,additionalInfo:row.additionalInfo,imageFingerprint:row.imageFingerprint||''})),
       sourceRowCount:rows.length,imageFingerprints:rows.map(row=>row.imageFingerprint).filter(Boolean),hasConflictingBusinessFields:signatures.size>1};
   }).sort((a,b)=>a.sourceRow-b.sourceRow);
 }
@@ -80,5 +81,6 @@ export function makeSourceSnapshot(collection,quality,{capturedAt=new Date().toI
       ...(collection.manifest.probeVersion?{probeVersion:collection.manifest.probeVersion}:{}),
       ...(collection.manifest.scrollDelta?{scrollDelta:collection.manifest.scrollDelta}:{}),
       ...(collection.manifest.coverageRepair?{coverageRepair:{initialMissing:collection.manifest.coverageRepair.initialMissing,reads:collection.manifest.coverageRepair.reads,remaining:collection.manifest.coverageRepair.remaining}}:{}),
+      ...(collection.manifest.conflictChecks?.length?{conflictChecks:collection.manifest.conflictChecks}:{}),
       captureRetries:collection.manifest.captureRetries||0}};
 }

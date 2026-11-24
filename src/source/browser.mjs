@@ -3,7 +3,7 @@ import {access} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 import path from 'node:path';
 import {installLayoutProbe} from '../../shared/layout-probe.mjs';
-import {decodeLayout} from '../../shared/reconstruct.mjs';
+import {decodeLayout,columnNumber} from '../../shared/reconstruct.mjs';
 import {AppError} from '../core/errors.mjs';
 import {findChrome} from '../core/chrome-path.mjs';
 const delay=ms=>new Promise(r=>setTimeout(r,ms));
@@ -101,17 +101,34 @@ export const loginKdocs=(profile,url,options)=>workspace.login(profile,url,optio
 export const openKdocs=(profile,url,options)=>workspace.openForCollection(profile,url,options);
 export async function goTo(page,address){
   if(!/^[A-Z]{1,3}[1-9]\d{0,5}$/.test(address))throw new Error('单元格地址超出安全范围');
-  const box=page.locator('input.edit-box');
-  for(let attempt=1;attempt<=3;attempt++){
-    await box.fill(address);await box.press('Enter');
-    try{await page.waitForFunction(address=>{const input=document.querySelector('input.edit-box'),active=document.activeElement;return input?.value?.toUpperCase()===address&&(active?.classList?.contains('edit-proxy-runs')||active===document.querySelector('#et_canvas'));},address,{timeout:3000});await delay(450);
-      if((await box.inputValue()).toUpperCase()===address&&await box.evaluate(()=>document.activeElement?.classList?.contains('edit-proxy-runs')||document.activeElement===document.querySelector('#et_canvas')))return;
-    }catch(error){if(page.isClosed?.())throw error;}
+  // KDocs now rejects even its currently selected cell when Enter is pressed
+  // in the address box. Move the sheet selection with read-only keyboard keys
+  // and verify the selected address after every movement instead.
+  const box=page.locator('input.edit-box'),target=/^([A-Z]+)(\d+)$/.exec(address),targetColumn=columnNumber(target[1]),targetRow=Number(target[2]);
+  const read=async()=>{const value=(await box.inputValue()).trim().toUpperCase(),match=/^([A-Z]+)(\d+)$/.exec(value);
+    if(!match)throw new AppError(`来源表当前单元格地址无效：${value}`,{stage:'KDocs采集',code:'KDOCS_NAVIGATION_UNVERIFIED'});
+    return {address:value,column:columnNumber(match[1]),row:Number(match[2])};};
+  const press=async(key,previous)=>{await page.keyboard.press(key);let next=await read();if(next.address===previous.address){await delay(100);next=await read();}return next;};
+  await page.locator('#edit_proxy_runs').focus();let current=await read(),budget=0,pageMove=true;
+  if(targetRow<=2||current.row-targetRow>50){current=await press('Meta+Home',current);budget++;}
+  while(current.row!==targetRow&&budget<800){
+    const delta=targetRow-current.row,key=pageMove&&Math.abs(delta)>=8?(delta>0?'PageDown':'PageUp'):(delta>0?'ArrowDown':'ArrowUp');
+    const next=await press(key,current);budget++;
+    if(next.row===current.row){if(key.startsWith('Page')){pageMove=false;continue;}break;}
+    if(key.startsWith('Page')&&(targetRow-next.row)*(targetRow-current.row)<0)pageMove=false;
+    current=next;
   }
+  if(current.row===targetRow&&current.column>targetColumn&&targetColumn-1<current.column-targetColumn){current=await press('Home',current);budget++;}
+  while(current.row===targetRow&&current.column!==targetColumn&&budget<800){
+    const next=await press(current.column<targetColumn?'ArrowRight':'ArrowLeft',current);budget++;
+    if(next.address===current.address)break;current=next;
+  }
+  await delay(450);
+  if((await read()).address===address)return;
   throw new AppError(`来源表尚未确认定位到 ${address}，请稍后重试；上次有效资料保留`,{stage:'KDocs采集',code:'KDOCS_NAVIGATION_UNVERIFIED'});
 }
 export async function usedEnd(page){
-  await goTo(page,'A1');await page.keyboard.press('Meta+End');await delay(1500);
+  await page.locator('#edit_proxy_runs').focus();await page.keyboard.press('Meta+End');await delay(1500);
   const box=page.locator('input.edit-box'),first=(await box.inputValue()).toUpperCase();await delay(300);const next=(await box.inputValue()).toUpperCase();
   if(first!==next||await box.evaluate(input=>document.activeElement===input))throw new AppError('来源末端定位尚未稳定，已停止采集并保留上次有效资料',{stage:'KDocs采集',code:'KDOCS_ENDPOINT_UNSTABLE'});
   return next;

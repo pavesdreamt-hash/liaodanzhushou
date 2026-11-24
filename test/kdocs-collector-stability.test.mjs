@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {mkdtemp,mkdir,readFile,writeFile,rm,readdir} from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
-import {collectKdocs,sourceStartPosition,sourceSweepState} from '../src/source/collector.mjs';
+import {collectKdocs,sourceStartPosition,sourceSweepState,sourceSampleRows} from '../src/source/collector.mjs';
 import {repairSourceCoverage} from '../src/source/coverage-repair.mjs';
 import {columnLabel} from '../shared/reconstruct.mjs';
 
@@ -17,6 +17,15 @@ test('frozen leading headers select a body cell and body rows expose real scroll
  assert.equal(next.stalled,0);assert.equal(next.noNewRows,0);assert.equal(next.atEnd,false);
  assert.equal(sourceStartPosition(decoded([208,209,210]),'S215').address,'A1');
  const frozenColumns={...bottom,columns:['A','B','R','S'].map(column=>({column}))};assert.equal(sourceStartPosition(frozenColumns,'S215').address,'C3');
+});
+test('independent source samples never navigate to a merged name continuation',()=>{
+ const named=Array.from({length:30},(_,index)=>({sourceRow:index+2,nameInheritedFromMerge:index===14||index===22}));
+ const samples=sourceSampleRows(named);
+ assert.equal(samples.length,20);
+ assert.equal(samples.includes(16),false);
+ assert.equal(samples.includes(24),false);
+ assert.equal(samples[0],2);
+ assert.equal(samples.at(-1),31);
 });
 test('coverage repair completes more than 80 successful reads without an off-by-one failure',async()=>{
  const layouts=[],seen=[],manifest={};
@@ -43,7 +52,7 @@ function rawFrame(firstBody,label){
 async function collectionFixture(t,options={}){
  const base=await mkdtemp(path.join(os.tmpdir(),'kdocs-stability-')),paths={failed:path.join(base,'failed'),snapshots:path.join(base,'snapshots')};await Promise.all(Object.values(paths).map(p=>mkdir(p)));t.after(()=>rm(base,{recursive:true,force:true}));
  let body=206,retried=false,sheetReads=0;const navigation=[],progress=[],sheet={isVisible:async()=>true,click:async()=>{}};
- const page={getByText:()=>({all:async()=>++sheetReads<=(options.sheetReadyAfter||0)?[]:[sheet]}),locator:()=>({boundingBox:async()=>({x:0,y:135,width:1435,height:614})}),mouse:{move:async()=>{},wheel:async()=>{body=Math.min(206,body+8);}}};
+ const page={getByText:text=>{assert.equal(text,'产品');return {all:async()=>++sheetReads<=(options.sheetReadyAfter||0)?[]:[sheet]};},locator:()=>({boundingBox:async()=>({x:0,y:135,width:1435,height:614})}),mouse:{move:async()=>{},wheel:async()=>{body=Math.min(206,body+8);}}};
  const browserOps={openKdocs:async()=>({page}),delay:async()=>{},usedEnd:async()=>{body=206;return options.endAddress||'S215';},goTo:async(_page,address)=>{navigation.push(address);const row=Number(address.match(/\d+/)[0]);if(!options.staleTop&&row>=3&&(row<body||row>body+9))body=Math.max(3,row-9);},captureLayout:async(_page,label)=>{if(options.transientFrame&&label==='sweep-001'&&!retried){retried=true;return {label,events:[],canvas:{width:1435,height:614}};}return rawFrame(body,label);}};
  return {base,paths,browserOps,navigation,progress};
 }

@@ -8,6 +8,7 @@ import {sourceRecords,validateCollection,makeSourceSnapshot} from './quality.mjs
 import {timestampName,writeJSON} from '../core/files.mjs';
 import {AppError,appError} from '../core/errors.mjs';
 import {repairSourceCoverage} from './coverage-repair.mjs';
+import {reconcileSourceConflicts} from './conflict-repair.mjs';
 const sameCore=(a,b)=>['A','D','E','F','G'].every(c=>coreText(a?.[c])===coreText(b?.[c]));
 const rowNumber=value=>{const parsed=Number(value);return Number.isSafeInteger(parsed)&&parsed>0?parsed:0;};
 const frozenPrefix=values=>{const rows=[...new Set(values)].filter(value=>value>0).sort((a,b)=>a-b);if(rows[0]!==1)return [];let end=1;while(rows[end]===end+1)end++;return end<rows.length?rows.slice(0,end):[];};
@@ -18,6 +19,10 @@ export function sourceStartPosition(layout,endpoint){
  const frozenRows=frozenPrefix((layout?.rows||[]).map(row=>rowNumber(row.row))),frozenColumns=frozenPrefix((layout?.columns||[]).map(col=>columnNumber(col.column)));
  const row=Math.min(Number(match[2]),(frozenRows.at(-1)||0)+1),column=columnLabel(Math.min(columnNumber(match[1]),(frozenColumns.at(-1)||0)+1));
  return {address:`${column}${row}`,row,column,frozenRows,frozenColumns:frozenColumns.map(columnLabel)};
+}
+export function sourceSampleRows(named,count=20){
+ const candidates=named.filter(record=>!record.nameInheritedFromMerge);
+ return [...new Set(Array.from({length:count},(_,i)=>candidates[Math.round(i*(candidates.length-1)/Math.max(1,count-1))]?.sourceRow).filter(Boolean))];
 }
 // Canvas rows near the bottom may be only partly drawn.  A row-number hit is
 // enough to stop scrolling because the subsequent coverage repair still reads
@@ -57,10 +62,10 @@ export async function collectKdocs({profile,paths,previous=null,onProgress=()=>{
     for(let attempt=0;attempt<20;attempt++){
       visible=[];for(const candidate of await page.getByText(SOURCE_SHEET,{exact:true}).all())if(await candidate.isVisible())visible.push(candidate);
       if(visible.length)break;
-      if(!attempt)onProgress({stage:'KDocs采集',message:'来源页面正在加载，等待确认Sheet1...'});
+      if(!attempt)onProgress({stage:'KDocs采集',message:`来源页面正在加载，等待确认“${SOURCE_SHEET}”工作表...`});
       await wait(500);
     }
-    if(visible.length!==1)throw new AppError('无法唯一确认Sheet1',{stage:'KDocs采集',code:'WRONG_SHEET'});
+    if(visible.length!==1)throw new AppError(`无法唯一确认“${SOURCE_SHEET}”工作表，请检查来源文档的工作表名称`,{stage:'KDocs采集',code:'WRONG_SHEET'});
     await visible[0].click();await wait(900);
     onProgress({stage:'KDocs采集',message:'正在确定库存表末端...'});
     manifest.initialEnd=await endpointAddress(page);const match=/^([A-Z]+)(\d+)$/.exec(manifest.initialEnd||'');
@@ -104,8 +109,12 @@ export async function collectKdocs({profile,paths,previous=null,onProgress=()=>{
     }
     manifest.imageChecks=imageRows.map(row=>({row,address:`C${row}`,fingerprint:imageFingerprints[`C${row}`].fingerprint,passed:true}));
     const named=preImageRecords;
-    const sampleRows=[];for(let i=0;i<20;i++)sampleRows.push(named[Math.round(i*(named.length-1)/19)]?.sourceRow);
-    for(const row of [...new Set(sampleRows)]){
+    // KDocs selects the anchor of a merged A-cell even when a continuation row
+    // is requested. Sample product anchor rows so the selected address remains
+    // verifiable; continuation rows are still covered by the full scan and
+    // their individual images are fingerprinted above.
+    const sampleRows=sourceSampleRows(named);
+    for(const row of sampleRows){
       onProgress({stage:'KDocs复核',message:`正在独立复核第 ${row} 行（${manifest.sampleChecks.length+1}/20）`});
       await navigate(page,`A${row}`);const revisits=[];
       for(const col of ['A','D','E','F','G']){
@@ -117,7 +126,10 @@ export async function collectKdocs({profile,paths,previous=null,onProgress=()=>{
     }
     manifest.finalEnd=await endpointAddress(page);const after=await capture('endpoint-after');layouts.push(after);
     manifest.endpointVerified=manifest.finalEnd===manifest.initialEnd&&after.completeRows.includes(endRow)&&after.completeColumns.includes(endColumn);
-    const result=combineLayouts(layouts,manifest.initialEnd);result.imageFingerprints=imageFingerprints;
+    const result=await reconcileSourceConflicts({layouts,endpoint:manifest.initialEnd,manifest,
+      read:async(address,index)=>{onProgress({stage:'KDocs复核',message:`正在复核有争议的单元格 ${address}（${index}/2）`});await navigate(page,address);return capture(`conflict-${address}-${index}`);}});
+    if(manifest.conflictChecks.length){manifest.finalEnd=await endpointAddress(page);manifest.endpointVerified=manifest.finalEnd===manifest.initialEnd;}
+    result.imageFingerprints=imageFingerprints;
     const collection={manifest,result},quality=validateCollection(collection,previous,{...SOURCE_RULES,rejectConflictingDuplicateNames:true}),snapshot=makeSourceSnapshot(collection,quality);
     const file=path.join(paths.snapshots,timestampName('source',new Date(snapshot.capturedAt)));await writeJSON(file,snapshot);
     onProgress({stage:'KDocs采集',message:`已采集 ${quality.rawNamedRows} 行资料，整理为 ${quality.namedProducts} 个来源商品...`});
